@@ -24,6 +24,7 @@
             border: 6px solid;
             transition: background-color 0.3s, border-color 0.3s;
             position: relative; /* Necessário para posicionar o input */
+            cursor: pointer;
         }
         /* Cores condicionais baseadas em classes */
         .ring-red { background-color: #EF4444; border-color: #DC2626; }
@@ -76,7 +77,7 @@
 
         <!-- Container para os cards dos clientes -->
         <div id="clients-container" class="space-y-6">
-            <!-- O card do cliente modelo será clonado aqui -->
+            <!-- Os cards dos clientes salvos serão carregados aqui -->
         </div>
 
         <!-- Template do Card do Cliente (invisível) -->
@@ -101,41 +102,27 @@
                     <!-- Seção de Desempenho -->
                     <div class="flex-grow w-full">
                         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
-                            <!-- Anel de Meta Ads -->
                             <div class="performance-item flex flex-col items-center">
-                                <div class="performance-ring" data-score="8">
-                                    <span class="score-display">8/10</span>
-                                </div>
+                                <div class="performance-ring" data-metric="meta-ads" data-score="8"><span class="score-display">8/10</span></div>
                                 <label class="mt-2 font-semibold text-sm text-gray-600">META ADS</label>
                             </div>
-                            <!-- Anel de Google Ads -->
                             <div class="performance-item flex flex-col items-center">
-                                <div class="performance-ring" data-score="5">
-                                    <span class="score-display">5/10</span>
-                                </div>
+                                <div class="performance-ring" data-metric="google-ads" data-score="5"><span class="score-display">5/10</span></div>
                                 <label class="mt-2 font-semibold text-sm text-gray-600">GOOGLE ADS</label>
                             </div>
-                            <!-- Anel de Comunicação -->
                             <div class="performance-item flex flex-col items-center">
-                                <div class="performance-ring" data-score="3">
-                                    <span class="score-display">3/10</span>
-                                </div>
+                                <div class="performance-ring" data-metric="comunicacao" data-score="3"><span class="score-display">3/10</span></div>
                                 <label class="mt-2 font-semibold text-sm text-gray-600">COMUNICAÇÃO</label>
                             </div>
-                            <!-- Anel de Demandas -->
                             <div class="performance-item flex flex-col items-center">
-                                <div class="performance-ring" data-score="9">
-                                    <span class="score-display">9/10</span>
-                                </div>
+                                <div class="performance-ring" data-metric="demandas" data-score="9"><span class="score-display">9/10</span></div>
                                 <label class="mt-2 font-semibold text-sm text-gray-600">DEMANDAS</label>
                             </div>
                         </div>
                     </div>
                      <!-- Botão de Remover -->
                     <div class="flex-shrink-0">
-                        <button class="remove-client-btn text-red-500 hover:text-red-700 font-semibold py-2 px-4">
-                            Remover
-                        </button>
+                        <button class="remove-client-btn text-red-500 hover:text-red-700 font-semibold py-2 px-4">Remover</button>
                     </div>
                 </div>
             </div>
@@ -147,28 +134,91 @@
             const clientsContainer = document.getElementById('clients-container');
             const addClientBtn = document.getElementById('add-client-btn');
             const clientCardTemplate = document.getElementById('client-card-template');
+            const STORAGE_KEY = 'clientsDashboardData_v2'; // Chave de armazenamento
 
-            // Função para atualizar a cor do anel com base na nota
-            function updateRingColor(ringElement, score) {
-                // Remove as classes de cor antigas
-                ringElement.classList.remove('ring-red', 'ring-yellow', 'ring-green');
+            // --- FUNÇÕES DE DADOS ---
 
-                // Adiciona a classe de cor correta
-                if (score >= 1 && score <= 3) {
-                    ringElement.classList.add('ring-red');
-                } else if (score >= 4 && score <= 7) {
-                    ringElement.classList.add('ring-yellow');
-                } else if (score >= 8 && score <= 10) {
-                    ringElement.classList.add('ring-green');
+            // Salva todos os dados dos cards no localStorage
+            function saveData() {
+                try {
+                    const clientCards = document.querySelectorAll('.client-card');
+                    const dataToSave = [];
+                    clientCards.forEach(card => {
+                        const clientData = {
+                            id: card.dataset.id,
+                            name: card.querySelector('.client-name').value,
+                            platform: card.querySelector('.platform-name').value,
+                            logo: card.querySelector('.client-logo').src,
+                            scores: {}
+                        };
+                        card.querySelectorAll('.performance-ring').forEach(ring => {
+                            clientData.scores[ring.dataset.metric] = ring.dataset.score;
+                        });
+                        dataToSave.push(clientData);
+                    });
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+                    console.log('Dados salvos com sucesso:', dataToSave);
+                } catch (error) {
+                    console.error('Falha ao salvar os dados:', error);
+                }
+            }
+
+            // Carrega os dados do localStorage e cria os cards
+            function loadData() {
+                try {
+                    const savedData = JSON.parse(localStorage.getItem(STORAGE_KEY));
+                    console.log('Dados carregados:', savedData);
+                    if (savedData && Array.isArray(savedData)) {
+                        clientsContainer.innerHTML = ''; // Limpa o container antes de carregar
+                        savedData.forEach(clientData => createClientCard(clientData));
+                    }
+                } catch (error) {
+                    console.error('Falha ao carregar os dados:', error);
                 }
             }
             
-            // Função para criar um novo card de cliente
-            function createClientCard() {
+            // --- FUNÇÕES DE UI ---
+
+            // Atualiza a cor do anel com base na nota
+            function updateRingColor(ringElement, score) {
+                ringElement.classList.remove('ring-red', 'ring-yellow', 'ring-green');
+                const numericScore = parseInt(score, 10);
+                if (numericScore >= 1 && numericScore <= 3) ringElement.classList.add('ring-red');
+                else if (numericScore >= 4 && numericScore <= 7) ringElement.classList.add('ring-yellow');
+                else if (numericScore >= 8 && numericScore <= 10) ringElement.classList.add('ring-green');
+            }
+            
+            // Cria um novo card de cliente
+            function createClientCard(data = null) {
                 const cardClone = clientCardTemplate.content.cloneNode(true);
                 const clientCard = cardClone.querySelector('.client-card');
                 
-                // Lógica para upload da logo
+                // Define um ID único para o card
+                const cardId = data ? data.id : `client-${Date.now()}`;
+                clientCard.dataset.id = cardId;
+
+                // Preenche o card com dados (se existirem) ou valores padrão
+                if (data) {
+                    clientCard.querySelector('.client-name').value = data.name;
+                    clientCard.querySelector('.platform-name').value = data.platform;
+                    // Evita problemas com logos quebradas se a imagem for local
+                    if (data.logo && data.logo.startsWith('data:image')) {
+                        clientCard.querySelector('.client-logo').src = data.logo;
+                    }
+                    clientCard.querySelectorAll('.performance-ring').forEach(ring => {
+                        const metric = ring.dataset.metric;
+                        const score = data.scores[metric] || 0;
+                        ring.dataset.score = score;
+                        ring.querySelector('.score-display').textContent = `${score}/10`;
+                    });
+                }
+
+                // --- Adiciona os Event Listeners ---
+
+                clientCard.querySelectorAll('input[type="text"]').forEach(input => {
+                    input.addEventListener('input', saveData);
+                });
+
                 const logoInput = clientCard.querySelector('.logo-input');
                 const clientLogo = clientCard.querySelector('.client-logo');
                 logoInput.addEventListener('change', () => {
@@ -176,24 +226,20 @@
                         const reader = new FileReader();
                         reader.onload = (e) => {
                             clientLogo.src = e.target.result;
+                            saveData();
                         };
                         reader.readAsDataURL(logoInput.files[0]);
                     }
                 });
 
-                // Lógica para edição das notas
                 const performanceRings = clientCard.querySelectorAll('.performance-ring');
                 performanceRings.forEach(ring => {
-                    // Inicializa a cor
-                    updateRingColor(ring, parseInt(ring.dataset.score, 10));
-
+                    updateRingColor(ring, ring.dataset.score);
                     ring.addEventListener('click', () => {
-                        const scoreDisplay = ring.querySelector('.score-display');
-                        if (!scoreDisplay) return; // Se já estiver editando, não faz nada
-
+                        if (ring.querySelector('input')) return;
                         const currentScore = ring.dataset.score;
+                        const scoreDisplay = ring.querySelector('.score-display');
                         
-                        // Cria o input para edição
                         const input = document.createElement('input');
                         input.type = 'number';
                         input.min = '0';
@@ -201,47 +247,55 @@
                         input.value = currentScore;
                         input.className = 'score-input-visible';
 
-                        // Substitui o span pelo input
-                        ring.innerHTML = '';
-                        ring.appendChild(input);
+                        scoreDisplay.replaceWith(input);
                         input.focus();
                         input.select();
 
-                        // Função para finalizar a edição
                         const finishEditing = () => {
                             let newScore = parseInt(input.value, 10);
                             if (isNaN(newScore) || newScore < 0) newScore = 0;
                             if (newScore > 10) newScore = 10;
 
                             ring.dataset.score = newScore;
-                            ring.innerHTML = `<span class="score-display">${newScore}/10</span>`;
+                            const newScoreDisplay = document.createElement('span');
+                            newScoreDisplay.className = 'score-display';
+                            newScoreDisplay.textContent = `${newScore}/10`;
+                            
+                            input.replaceWith(newScoreDisplay);
                             updateRingColor(ring, newScore);
+                            saveData();
                         };
 
-                        // Finaliza ao perder o foco ou apertar Enter
                         input.addEventListener('blur', finishEditing);
-                        input.addEventListener('keydown', (e) => {
-                            if (e.key === 'Enter') {
-                                input.blur();
-                            }
-                        });
+                        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
                     });
                 });
 
-                // Adiciona o event listener para o botão de remover
-                const removeBtn = clientCard.querySelector('.remove-client-btn');
-                removeBtn.addEventListener('click', () => {
+                clientCard.querySelector('.remove-client-btn').addEventListener('click', () => {
                     clientCard.remove();
+                    saveData();
                 });
 
                 clientsContainer.appendChild(clientCard);
             }
 
-            // Event listener para o botão de adicionar cliente
-            addClientBtn.addEventListener('click', createClientCard);
+            // --- INICIALIZAÇÃO ---
             
-            // Cria um card inicial para começar
-            createClientCard();
+            // Verifica se o localStorage está disponível
+            try {
+                localStorage.setItem('__test__', 'test');
+                localStorage.removeItem('__test__');
+            } catch (e) {
+                console.error('LocalStorage não está disponível. As alterações não serão salvas.');
+                alert('Atenção: O armazenamento do navegador está desativado. Suas alterações não poderão ser salvas.');
+            }
+
+            addClientBtn.addEventListener('click', () => {
+                createClientCard();
+                saveData();
+            });
+            
+            loadData();
         });
     </script>
 
