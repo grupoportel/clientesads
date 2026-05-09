@@ -755,7 +755,11 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
 <!-- TOAST -->
 <div class="toast-container" id="toastContainer"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
 <script>
+// Aqui começa o seu código (onde você colou o bloco de cima)...
 // ═══════════════════════════════════
 // CUSTOM DIALOGS (To avoid native alert/confirm blocks)
 // ═══════════════════════════════════
@@ -788,18 +792,45 @@ function handlePrompt(submit) {
 }
 
 // ═══════════════════════════════════
-// DATA LAYER
+// DATA LAYER (FIREBASE EM TEMPO REAL)
 // ═══════════════════════════════════
-const STORAGE_KEY = 'crm_local_v2';
 let db = { leads: [], groups: [], lastId: 0 };
-let currentStatusFilter = null;
-let currentNichoFilter  = null;
-let currentGroupFilter  = null;
-let currentSort = { key: null, dir: 1 };
-let currentView = 'table';
-let editingId   = null;
-let statusTargetId = null;
-let detailId    = null;
+
+// 1. Cole a sua configuração aqui:
+const firebaseConfig = {
+  apiKey: "AIzaSyCTjJ2x_uJbjDTZzrkgHxP8RyTVqj4swkE", // Peguei da sua imagem
+  authDomain: "crm---grupo-portel.firebaseapp.com",
+  databaseURL: "https://crm---grupo-portel-default-rtdb.firebaseio.com", // ADICIONE ESTA LINHA!
+  projectId: "crm---grupo-portel",
+  storageBucket: "crm---grupo-portel.firebasestorage.app",
+  messagingSenderId: "1070269671191",
+  appId: "1:1070269671191:web:2ea382e76a06f0b0947952"
+};
+
+// 2. Inicializa o Firebase
+firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
+
+// 3. Função Load: Escuta o banco em tempo real
+function load() {
+  database.ref('crm_data').on('value', (snapshot) => {
+    const data = snapshot.val();
+    if (data) {
+      db = data;
+      db.leads = db.leads || [];
+      db.groups = db.groups || [];
+      db.lastId = db.lastId || 0;
+    } else {
+      db = { leads: [], groups: [], lastId: 0 };
+    }
+    renderAll();
+  });
+}
+
+// 4. Função Save: Envia para a nuvem
+function save() {
+  database.ref('crm_data').set(db);
+}
 
 // drag state
 let dragLeadId  = null;
