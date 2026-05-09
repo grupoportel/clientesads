@@ -811,12 +811,19 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
 
-// 3. Função Load: Escuta o banco em tempo real
+// 3. Função Load: Escuta o banco em tempo real e protege os dados
 function load() {
   database.ref('crm_data').on('value', (snapshot) => {
     const data = snapshot.val();
     if (data) {
       db = data;
+      
+      // PREVENÇÃO DE BUG: Garante que os leads sejam sempre uma lista (Array), 
+      // mesmo que o Firebase tente transformar em objeto ao deletar um lead.
+      if (db.leads && !Array.isArray(db.leads)) {
+        db.leads = Object.values(db.leads);
+      }
+      
       db.leads = db.leads || [];
       db.groups = db.groups || [];
       db.lastId = db.lastId || 0;
@@ -1166,8 +1173,9 @@ function saveLead() {
     toast('Lead atualizado!', 'success');
     if (detailId === editingId) { detailId = null; }
   } else {
-    db.lastId++;
-    lead.id = db.lastId;
+    // Usa os milissegundos atuais como ID, garantindo que nunca vai repetir
+    // e nem quebrar a tabela, mesmo que o banco de dados esteja vazio.
+    lead.id = Date.now(); 
     lead.createdAt = new Date().toISOString();
     db.leads.push(lead);
     toast('Lead adicionado!', 'success');
