@@ -863,63 +863,63 @@ const STATUS = {
 };
 
 // ═══════════════════════════════════
-// FILTER & SORT
+// FILTER & SORT (BLINDADO)
 // ═══════════════════════════════════
 function getFiltered() {
-  let list = [...db.leads];
-  const q = document.getElementById('searchInput').value.trim().toLowerCase();
-  if (q) list = list.filter(l =>
-    [l.nome,l.nicho,l.telefone,l.decisor,l.email,l.responsavel,l.cnpj]
-      .some(v => (v||'').toLowerCase().includes(q))
-  );
-  if (currentStatusFilter) list = list.filter(l => (l.status||'nenhuma') === currentStatusFilter);
-  if (currentNichoFilter)  list = list.filter(l => l.nicho === currentNichoFilter);
-  if (currentGroupFilter)  list = list.filter(l => l.grupo === currentGroupFilter);
-  if (currentSort.key) {
-    list.sort((a,b)=>{
-      let av = a[currentSort.key]||'', bv = b[currentSort.key]||'';
-      if (!isNaN(av) && !isNaN(bv)) return (Number(av)-Number(bv))*currentSort.dir;
-      return String(av).localeCompare(String(bv))*currentSort.dir;
-    });
+  try {
+    let list = Array.isArray(db.leads) ? [...db.leads] : [];
+    const searchEl = document.getElementById('searchInput');
+    const q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+    
+    if (q) {
+      list = list.filter(l => {
+        if (!l) return false;
+        // O SEGREDO: O "String(v)" garante que telefones e números não quebrem o sistema
+        return [l.nome, l.nicho, l.telefone, l.decisor, l.email, l.responsavel, l.cnpj]
+          .some(v => String(v || '').toLowerCase().includes(q));
+      });
+    }
+    
+    if (currentStatusFilter) list = list.filter(l => (l.status||'nenhuma') === currentStatusFilter);
+    if (currentNichoFilter)  list = list.filter(l => l.nicho === currentNichoFilter);
+    if (currentGroupFilter)  list = list.filter(l => l.grupo === currentGroupFilter);
+    
+    if (currentSort.key) {
+      list.sort((a,b)=>{
+        let av = a[currentSort.key]||'', bv = b[currentSort.key]||'';
+        if (!isNaN(av) && !isNaN(bv) && av !== '' && bv !== '') {
+          return (Number(av)-Number(bv))*currentSort.dir;
+        }
+        return String(av).localeCompare(String(bv))*currentSort.dir;
+      });
+    }
+    return list;
+  } catch (erro) {
+    console.error("Erro Crítico no Filtro:", erro);
+    return []; // Se falhar, devolve vazio em vez de quebrar o site
   }
-  return list;
 }
 
 function applyFilters() { renderAll(); }
 
-function sortTable(key) {
-  currentSort.dir = currentSort.key === key ? currentSort.dir * -1 : 1;
-  currentSort.key = key;
-  renderAll();
-}
-
-function filterByStatus(status, el) {
-  currentStatusFilter = status;
-  currentGroupFilter  = null;
-  document.querySelectorAll('.sidebar-item').forEach(e => e.classList.remove('active'));
-  el.classList.add('active');
-  renderAll();
-}
-
-function filterNicho(nicho, el) {
-  currentNichoFilter = nicho;
-  document.querySelectorAll('.filter-chip').forEach(e => e.classList.remove('active'));
-  el.classList.add('active');
-  renderAll();
-}
-
 // ═══════════════════════════════════
-// RENDER ALL
+// RENDER ALL (COM ESCUDO ANTI-CRASH)
 // ═══════════════════════════════════
 function renderAll() {
-  updateCounts();
-  updateStats();
-  updateNichoFilters();
-  updateGroups();
-  if (currentView === 'table') renderTable();
-  else renderKanban();
-}
-
+  try {
+    updateCounts();
+    updateStats();
+    updateNichoFilters();
+    updateGroups();
+    
+    if (currentView === 'table') {
+        renderTable();
+    } else {
+        renderKanban();
+    }
+  } catch (erro) {
+    console.error("Erro fatal ao carregar a tela:", erro);
+  }
 // ═══════════════════════════════════
 // TABLE RENDER (BLINDADO)
 // ═══════════════════════════════════
