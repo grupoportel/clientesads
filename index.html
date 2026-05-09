@@ -811,25 +811,31 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
 
-// 3. Função Load: Escuta o banco em tempo real e protege os dados
+// 3. Função Load: Escuta o banco em tempo real e blinda os dados
 function load() {
   database.ref('crm_data').on('value', (snapshot) => {
     const data = snapshot.val();
     if (data) {
       db = data;
       
-      // PREVENÇÃO DE BUG: Garante que os leads sejam sempre uma lista (Array), 
-      // mesmo que o Firebase tente transformar em objeto ao deletar um lead.
+      // BLINDAGEM 1: Se o Firebase transformou o array em objeto, converte de volta
       if (db.leads && !Array.isArray(db.leads)) {
         db.leads = Object.values(db.leads);
       }
       
-      db.leads = db.leads || [];
+      // BLINDAGEM 2: Remove qualquer 'null', 'undefined' ou dado fantasma
+      if (Array.isArray(db.leads)) {
+        db.leads = db.leads.filter(l => l && typeof l === 'object');
+      } else {
+        db.leads = [];
+      }
+      
       db.groups = db.groups || [];
       db.lastId = db.lastId || 0;
     } else {
       db = { leads: [], groups: [], lastId: 0 };
     }
+    
     renderAll();
   });
 }
