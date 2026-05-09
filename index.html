@@ -796,6 +796,17 @@ function handlePrompt(submit) {
 // ═══════════════════════════════════
 let db = { leads: [], groups: [], lastId: 0 };
 
+// --- RECUPERANDO AS VARIÁVEIS DA TELA QUE SUMIRAM ---
+let currentStatusFilter = null;
+let currentNichoFilter  = null;
+let currentGroupFilter  = null;
+let currentSort = { key: null, dir: 1 };
+let currentView = 'table';
+let editingId   = null;
+let statusTargetId = null;
+let detailId    = null;
+// ----------------------------------------------------
+
 // 1. Cole a sua configuração aqui:
 const firebaseConfig = {
   apiKey: "AIzaSyCTjJ2x_uJbjDTZzrkgHxP8RyTVqj4swkE", // Peguei da sua imagem
