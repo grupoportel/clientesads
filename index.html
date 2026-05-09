@@ -921,11 +921,12 @@ function renderAll() {
 }
 
 // ═══════════════════════════════════
-// TABLE RENDER
+// TABLE RENDER (BLINDADO)
 // ═══════════════════════════════════
 function renderTable() {
   const leads = getFiltered();
   const tbody = document.getElementById('tableBody');
+  
   if (!leads.length) {
     tbody.innerHTML = `<tr><td colspan="23" style="text-align:center;padding:60px;color:var(--text3)">
       Nenhum lead encontrado.
@@ -933,48 +934,66 @@ function renderTable() {
     </td></tr>`;
     return;
   }
-  tbody.innerHTML = leads.map((l, i) => {
-    const st  = STATUS[l.status] || STATUS['nenhuma'];
-    const nota = parseFloat(l.nota) || 0;
-    const stars = nota ? ('★'.repeat(Math.round(nota)) + '☆'.repeat(5-Math.round(nota))) : '';
-    const igLink    = igUrl(l.instagram);
-    const igDono    = igUrl(l.ig_dono);
-    const siteLink  = siteUrl(l.site);
-    const delay     = Math.min(i * 0.03, 0.3);
-    return `<tr class="${detailId===l.id?'selected':''}" style="animation-delay:${delay}s">
-      <td><input type="checkbox" class="row-check" data-id="${l.id}"></td>
-      <td class="td-name" onclick="openDetail(${l.id})">
-        <div class="td-name-main">${esc(l.nome)}</div>
-        ${l.nicho?`<div class="td-name-sub">${esc(l.nicho)}</div>`:''}
-      </td>
-      <td>${l.responsavel?`<div style="display:flex;align-items:center;gap:6px"><div class="avatar">${esc(l.responsavel).charAt(0)}</div>${esc(l.responsavel)}</div>`:'<span class="td-empty">—</span>'}</td>
-      <td><button class="status-badge ${st.cls}" onclick="openStatusDropdown(event,${l.id})">${st.label}</button></td>
-      <td>${l.nicho?`<span class="badge-pill">${esc(l.nicho)}</span>`:'<span class="td-empty">—</span>'}</td>
-      <td>${l.telefone?`<a href="tel:${l.telefone.replace(/\D/g,'')}" class="td-link">📞 ${esc(l.telefone)}</a>`:'<span class="td-empty">—</span>'}</td>
-      <td>${l.whatsapp?`<a href="https://wa.me/55${l.whatsapp.replace(/\D/g,'')}" target="_blank" class="td-link">💬 ${esc(l.whatsapp)}</a>`:'<span class="td-empty">—</span>'}</td>
-      <td>${igLink?`<a href="${igLink}" target="_blank" class="td-link">📷 ${esc(l.instagram)}</a>`:'<span class="td-empty">—</span>'}</td>
-      <td>${igDono?`<a href="${igDono}" target="_blank" class="td-link">👤 ${esc(l.ig_dono)}</a>`:'<span class="td-empty">—</span>'}</td>
-      <td>${siteLink?`<a href="${siteLink}" target="_blank" class="td-link">🌐 Site</a>`:'<span class="td-empty">—</span>'}</td>
-      <td>${nota?`<span class="stars" title="${nota}/5">${stars}</span>`:'<span class="td-empty">—</span>'}</td>
-      <td>${l.avals?`<span class="td-mono">${l.avals}</span>`:'<span class="td-empty">—</span>'}</td>
-      <td>${l.decisor?esc(l.decisor):'<span class="td-empty">—</span>'}</td>
-      <td>${l.email?`<a href="mailto:${l.email}" class="td-link">✉️ ${esc(l.email)}</a>`:'<span class="td-empty">—</span>'}</td>
-      <td class="td-mono" style="font-size:11px">${l.cnpj||'<span class="td-empty">—</span>'}</td>
-      <td style="font-size:11px;color:var(--text2)">${l.ultimo_contato?fmtDate(l.ultimo_contato):'<span class="td-empty">—</span>'}</td>
-      <td style="font-size:11px;color:${l.reuniao&&isUpcoming(l.reuniao)?'var(--green)':'var(--text2)'}">${l.reuniao?fmtDate(l.reuniao):'<span class="td-empty">—</span>'}</td>
-      <td style="max-width:140px" class="td-truncate" title="${esc(l.melhores||'')}">${trunc(l.melhores,40)||'<span class="td-empty">—</span>'}</td>
-      <td style="max-width:140px" class="td-truncate" title="${esc(l.oportunidades||'')}">${trunc(l.oportunidades,40)||'<span class="td-empty">—</span>'}</td>
-      <td style="max-width:140px" class="td-truncate" title="${esc(l.pontos||'')}">${trunc(l.pontos,40)||'<span class="td-empty">—</span>'}</td>
-      <td style="max-width:120px" class="td-truncate" title="${esc(l.escalar||'')}">${trunc(l.escalar,35)||'<span class="td-empty">—</span>'}</td>
-      <td style="max-width:140px" class="td-truncate" title="${esc(l.obs||'')}">${trunc(l.obs,40)||'<span class="td-empty">—</span>'}</td>
-      <td>
-        <div class="row-actions">
-          <button class="btn-icon" title="Editar" onclick="openModal(${l.id})">✏️</button>
-          <button class="btn-icon" title="Excluir" onclick="deleteLead(${l.id})">🗑</button>
-        </div>
-      </td>
-    </tr>`;
-  }).join('');
+
+  try {
+    tbody.innerHTML = leads.map((l, i) => {
+      const st  = STATUS[l.status] || STATUS['nenhuma'];
+      
+      // BLINDAGEM DA NOTA: Impede estrelas negativas se a nota for maior que 5
+      const notaRaw = parseFloat(l.nota) || 0;
+      const nota = Math.max(0, Math.min(5, Math.round(notaRaw))); 
+      const stars = nota ? ('★'.repeat(nota) + '☆'.repeat(5-nota)) : '';
+      
+      const igLink    = igUrl(String(l.instagram || ''));
+      const igDono    = igUrl(String(l.ig_dono || ''));
+      const siteLink  = siteUrl(String(l.site || ''));
+      const delay     = Math.min(i * 0.03, 0.3);
+      
+      // BLINDAGEM DE LINKS: Garante que só existam números no WhatsApp/Tel
+      const telLimpo = String(l.telefone || '').replace(/\D/g,'');
+      const wppLimpo = String(l.whatsapp || '').replace(/\D/g,'');
+
+      return `<tr class="${detailId===l.id?'selected':''}" style="animation-delay:${delay}s">
+        <td><input type="checkbox" class="row-check" data-id="${l.id}"></td>
+        <td class="td-name" onclick="openDetail(${l.id})">
+          <div class="td-name-main">${esc(l.nome)}</div>
+          ${l.nicho?`<div class="td-name-sub">${esc(l.nicho)}</div>`:''}
+        </td>
+        <td>${l.responsavel?`<div style="display:flex;align-items:center;gap:6px"><div class="avatar">${esc(l.responsavel).charAt(0)}</div>${esc(l.responsavel)}</div>`:'<span class="td-empty">—</span>'}</td>
+        <td><button class="status-badge ${st.cls}" onclick="openStatusDropdown(event,${l.id})">${st.label}</button></td>
+        <td>${l.nicho?`<span class="badge-pill">${esc(l.nicho)}</span>`:'<span class="td-empty">—</span>'}</td>
+        <td>${l.telefone?`<a href="tel:${telLimpo}" class="td-link">📞 ${esc(l.telefone)}</a>`:'<span class="td-empty">—</span>'}</td>
+        <td>${l.whatsapp?`<a href="https://wa.me/55${wppLimpo}" target="_blank" class="td-link">💬 ${esc(l.whatsapp)}</a>`:'<span class="td-empty">—</span>'}</td>
+        <td>${igLink?`<a href="${igLink}" target="_blank" class="td-link">📷 ${esc(l.instagram)}</a>`:'<span class="td-empty">—</span>'}</td>
+        <td>${igDono?`<a href="${igDono}" target="_blank" class="td-link">👤 ${esc(l.ig_dono)}</a>`:'<span class="td-empty">—</span>'}</td>
+        <td>${siteLink?`<a href="${siteLink}" target="_blank" class="td-link">🌐 Site</a>`:'<span class="td-empty">—</span>'}</td>
+        <td>${notaRaw?`<span class="stars" title="${notaRaw}/5">${stars}</span>`:'<span class="td-empty">—</span>'}</td>
+        <td>${l.avals?`<span class="td-mono">${l.avals}</span>`:'<span class="td-empty">—</span>'}</td>
+        <td>${l.decisor?esc(l.decisor):'<span class="td-empty">—</span>'}</td>
+        <td>${l.email?`<a href="mailto:${l.email}" class="td-link">✉️ ${esc(l.email)}</a>`:'<span class="td-empty">—</span>'}</td>
+        <td class="td-mono" style="font-size:11px">${l.cnpj||'<span class="td-empty">—</span>'}</td>
+        <td style="font-size:11px;color:var(--text2)">${l.ultimo_contato?fmtDate(l.ultimo_contato):'<span class="td-empty">—</span>'}</td>
+        <td style="font-size:11px;color:${l.reuniao&&isUpcoming(l.reuniao)?'var(--green)':'var(--text2)'}">${l.reuniao?fmtDate(l.reuniao):'<span class="td-empty">—</span>'}</td>
+        <td style="max-width:140px" class="td-truncate" title="${esc(l.melhores||'')}">${trunc(l.melhores,40)||'<span class="td-empty">—</span>'}</td>
+        <td style="max-width:140px" class="td-truncate" title="${esc(l.oportunidades||'')}">${trunc(l.oportunidades,40)||'<span class="td-empty">—</span>'}</td>
+        <td style="max-width:140px" class="td-truncate" title="${esc(l.pontos||'')}">${trunc(l.pontos,40)||'<span class="td-empty">—</span>'}</td>
+        <td style="max-width:120px" class="td-truncate" title="${esc(l.escalar||'')}">${trunc(l.escalar,35)||'<span class="td-empty">—</span>'}</td>
+        <td style="max-width:140px" class="td-truncate" title="${esc(l.obs||'')}">${trunc(l.obs,40)||'<span class="td-empty">—</span>'}</td>
+        <td>
+          <div class="row-actions">
+            <button class="btn-icon" title="Editar" onclick="openModal(${l.id})">✏️</button>
+            <button class="btn-icon" title="Excluir" onclick="deleteLead(${l.id})">🗑</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch (erro) {
+    console.error("Erro Crítico ao desenhar a tabela:", erro);
+    tbody.innerHTML = `<tr><td colspan="23" style="text-align:center;padding:40px;color:var(--red);font-weight:bold;">
+      ⚠️ O sistema encontrou um dado inválido ao tentar desenhar a tabela.<br>
+      Abra a visão "Kanban" no topo direito para ver os leads, ou exclua o lead problemático.
+    </td></tr>`;
+  }
 }
 
 // ═══════════════════════════════════
