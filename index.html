@@ -1363,17 +1363,6 @@ function toast(msg, type='success'){
 // INIT
 // ═══════════════════════════════════
 load();
-renderAll();
-
-if (db.leads.length === 0) {
-  db.leads = [
-    { id:1, nome:'CLIPS - Clínica de Psicologia', status:'nenhuma', nicho:'Psicologia', responsavel:'João', decisor:'Sheila e Gilvana', cnpj:'', telefone:'(66) 3015-0955', whatsapp:'(66) 99886-2626', email:'clipspsico@gmail.com', instagram:'@clinicapsicologia', ig_dono:'@dra.sheila', site:'https://www.clinicaclips.com.br', nota:'4.5', avals:'67', ultimo_contato: new Date().toISOString().slice(0,10), reuniao:'', melhores:'Posts de casos clínicos', oportunidades:'Não tem Landing Page', pontos:'Excelente reputação local', escalar:'Tráfego Pago + LP', obs:'Perfil bem engajado', historico:'09/05 - Primeiro contato via DM', grupo:'', createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() },
-    { id:2, nome:'Dra. Marina', status:'reuniao-marc', nicho:'Psicologia Clínica', responsavel:'Maria', decisor:'Marina', cnpj:'', telefone:'(66) 99996-2005', whatsapp:'(66) 99996-2005', email:'marina.psi@gmail.com', instagram:'@dramarina.psi', ig_dono:'@dramarina.psi', site:'', nota:'4', avals:'23', ultimo_contato:'2026-05-07', reuniao:'2026-05-15', melhores:'Reels de dicas de saúde mental', oportunidades:'Site desatualizado', pontos:'Autoridade no tema ansiedade', escalar:'Site moderno + SEO local', obs:'Muito receptiva ao serviço', historico:'07/05 - Ligou, agendou reunião para 15/05', grupo:'', createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() },
-    { id:3, nome:'Dr. Marcelo de Oliveira', status:'interesse', nicho:'Clínica Médica', responsavel:'João', decisor:'Dr. Marcelo', cnpj:'', telefone:'', whatsapp:'(66) 99998-2077', email:'', instagram:'@drmarcelomed', ig_dono:'@drmarcelomed', site:'', nota:'3.5', avals:'129', ultimo_contato:'2026-05-05', reuniao:'', melhores:'Posts informativos sobre diabetes', oportunidades:'Sem estratégia de conteúdo definida', pontos:'Alta demanda local, clínica bem localizada', escalar:'Criação de Landing Page + Captura de leads', obs:'Demonstrou interesse em tráfego pago', historico:'05/05 - DM enviado, abriu mas não respondeu', grupo:'', createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() },
-  ];
-  db.lastId = 3;
-  save(); renderAll();
-}
 </script>
 </body>
 </html>
