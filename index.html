@@ -836,17 +836,6 @@ function save() {
 let dragLeadId  = null;
 let dragTargetStatus = null;
 
-function load() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) db = JSON.parse(raw);
-  } catch(e) {}
-  db.leads  = db.leads  || [];
-  db.groups = db.groups || [];
-  db.lastId = db.lastId || 0;
-}
-function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); }
-
 // ═══════════════════════════════════
 // STATUS CONFIG
 // ═══════════════════════════════════
