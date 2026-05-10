@@ -477,11 +477,13 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
       <span class="sidebar-dot" style="background:var(--s-contrato)"></span> Contrato Fechado <span class="sidebar-count" id="count-contrato">0</span>
     </div>
     <div class="sidebar-divider"></div>
+    <div class="sidebar-divider"></div>
     <div class="sidebar-label">Nichos / Mercados</div>
     <div id="nichosList"></div>
     <div class="sidebar-item" onclick="addNicho()" style="color:var(--text3);font-size:12px">
       <span>＋</span> Novo Nicho
     </div>
+  </div>
 
   <!-- CONTENT -->
   <div class="content" id="mainContent">
@@ -489,6 +491,7 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
     <!-- TABLE VIEW -->
     <div id="tableView" style="display:flex;flex-direction:column;height:100%">
       <div class="stats-bar" id="statsBar"></div>
+      <div class="filters-bar" id="filtersBar"></div>
       <div class="table-wrapper">
         <table id="leadsTable">
           <thead>
@@ -801,7 +804,6 @@ let db = { leads: [], groups: [], lastId: 0 };
 // --- RECUPERANDO AS VARIÁVEIS DA TELA QUE SUMIRAM ---
 let currentStatusFilter = null;
 let currentNichoFilter  = null;
-let currentGroupFilter  = null;
 let currentSort = { key: null, dir: 1 };
 let currentView = 'table';
 let editingId   = null;
@@ -830,25 +832,12 @@ function load() {
     const data = snapshot.val();
     if (data) {
       db = data;
-      
-      // BLINDAGEM 1: Se o Firebase transformou o array em objeto, converte de volta
-      if (db.leads && !Array.isArray(db.leads)) {
-        db.leads = Object.values(db.leads);
-      }
-      
-      // BLINDAGEM 2: Remove qualquer 'null', 'undefined' ou dado fantasma
-      if (Array.isArray(db.leads)) {
-        db.leads = db.leads.filter(l => l && typeof l === 'object');
-      } else {
-        db.leads = [];
-      }
-      
-      db.groups = db.groups || [];
+      db.leads = db.leads || [];
+      db.nichos = db.nichos || db.groups || []; // Aproveita os grupos antigos como nichos
       db.lastId = db.lastId || 0;
     } else {
-      db = { leads: [], groups: [], lastId: 0 };
+      db = { leads: [], nichos: [], lastId: 0 };
     }
-    
     renderAll();
   });
 }
@@ -878,14 +867,6 @@ const STATUS = {
 // ═══════════════════════════════════
 // FILTER & SORT (BLINDADO)
 // ═══════════════════════════════════
-// ═══════════════════════════════════
-// FILTER & SORT (BLINDADO)
-// ═══════════════════════════════════
-const STATUS_ORDER = {
-  'nenhuma': 0, 'interesse': 1, 'retornar': 2, 'segundo': 3,
-  'reuniao-pos': 4, 'reuniao-marc': 5, 'contrato': 6
-};
-
 function getFiltered() {
   try {
     let list = Array.isArray(db.leads) ? [...db.leads] : [];
@@ -895,25 +876,18 @@ function getFiltered() {
     if (q) {
       list = list.filter(l => {
         if (!l) return false;
+        // O SEGREDO: O "String(v)" garante que telefones e números não quebrem o sistema
         return [l.nome, l.nicho, l.telefone, l.decisor, l.email, l.responsavel, l.cnpj]
           .some(v => String(v || '').toLowerCase().includes(q));
       });
     }
     
     if (currentStatusFilter) list = list.filter(l => (l.status||'nenhuma') === currentStatusFilter);
-    if (currentNichoFilter)  list = list.filter(l => l.nicho === currentNichoFilter);
+    if (currentNichoFilter)  list = list.filter(l => l.nicho === currentNichoFilter); // Filtro por nicho
     
     if (currentSort.key) {
       list.sort((a,b)=>{
         let av = a[currentSort.key]||'', bv = b[currentSort.key]||'';
-        
-        // Se a ordenação for por status, usa a ordem lógica do funil
-        if (currentSort.key === 'status') {
-           av = STATUS_ORDER[av] ?? 99;
-           bv = STATUS_ORDER[bv] ?? 99;
-           return (av - bv) * currentSort.dir;
-        }
-
         if (!isNaN(av) && !isNaN(bv) && av !== '' && bv !== '') {
           return (Number(av)-Number(bv))*currentSort.dir;
         }
@@ -923,17 +897,11 @@ function getFiltered() {
     return list;
   } catch (erro) {
     console.error("Erro Crítico no Filtro:", erro);
-    return []; 
+    return []; // Se falhar, devolve vazio em vez de quebrar o site
   }
 }
 
-function filterByStatus(status, el) {
-  currentStatusFilter = status;
-  currentNichoFilter  = null; // Limpa o nicho quando clica no status
-  document.querySelectorAll('.sidebar-item').forEach(e => e.classList.remove('active'));
-  el.classList.add('active');
-  renderAll();
-}
+function applyFilters() { renderAll(); }
 
 // ═══════════════════════════════════
 // RENDER ALL (COM ESCUDO ANTI-CRASH)
@@ -942,7 +910,7 @@ function renderAll() {
   try {
     updateCounts();
     updateStats();
-    updateNichosSidebar(); // <-- Atualizado aqui!
+    updateNichosSidebar(); // Atualiza a barra lateral com os Nichos
     
     if (currentView === 'table') {
         renderTable();
@@ -952,7 +920,7 @@ function renderAll() {
   } catch (erro) {
     console.error("Erro fatal ao carregar a tela:", erro);
   }
-}
+} // <-- OLHA A CHAVE FALTANDO AQUI!
 // ═══════════════════════════════════
 // TABLE RENDER (BLINDADO)
 // ═══════════════════════════════════
@@ -1186,7 +1154,7 @@ function deleteFromDetail() { if (detailId) { deleteLead(detailId); closeDetail(
 // ═══════════════════════════════════
 const FIELDS = ['nome','status','nicho','responsavel','decisor','cnpj','telefone','whatsapp','email',
   'instagram','ig_dono','site','nota','avals','ultimo_contato','reuniao',
-  'melhores','oportunidades','pontos','escalar','obs','historico']; // <-- Apagamos o 'grupo' daqui
+  'melhores','oportunidades','pontos','escalar','obs','historico'];
 
 function openModal(id) {
   editingId = id || null;
@@ -1292,62 +1260,54 @@ function updateStats() {
   </div>`).join('');
 }
 
-function updateNichoFilters() {
-  const nichos = [...new Set(db.leads.map(l=>l.nicho).filter(Boolean))].sort();
-  document.getElementById('filtersBar').innerHTML =
-    `<span style="color:var(--text3);font-size:11px">Nicho:</span>
-    <div class="filter-chip ${!currentNichoFilter?'active':''}" onclick="filterNicho(null,this)">Todos</div>
-    ${nichos.map(n=>`<div class="filter-chip ${currentNichoFilter===n?'active':''}" onclick="filterNicho(${JSON.stringify(n)},this)">${esc(n)}</div>`).join('')}`;
+function filterByStatus(status, el) {
+  currentStatusFilter = status;
+  currentNichoFilter  = null; // Limpa o nicho quando clica num status
+  document.querySelectorAll('.sidebar-item').forEach(e => e.classList.remove('active'));
+  if(el) el.classList.add('active');
+  renderAll();
 }
 
 // ═══════════════════════════════════
-// NICHOS (NOVA LÓGICA LATERAL)
+// NICHOS
 // ═══════════════════════════════════
 function updateNichosSidebar() {
-  // Puxa nichos já existentes nos leads + os criados manualmente
-  const leadNichos = db.leads.map(l => l.nicho).filter(Boolean);
-  db.customNichos = db.customNichos || db.groups || []; // Puxa grupos antigos se existirem
-  
-  const allNichos = [...new Set([...leadNichos, ...db.customNichos])].sort();
-
   const container = document.getElementById('nichosList');
-  container.innerHTML = allNichos.map(n => `
+  if (!container) return;
+  
+  db.nichos = db.nichos || [];
+  container.innerHTML = db.nichos.map(n => `
     <div class="sidebar-item ${currentNichoFilter===n?'active':''}" onclick="filterByNichoSidebar(${JSON.stringify(n)},this)">
       <span>📁</span> ${esc(n)}
       <span class="sidebar-count">${db.leads.filter(l=>l.nicho===n).length}</span>
     </div>`).join('');
 
-  // Atualiza o select de nichos dentro do modal de Novo Lead
-  const modalSelect = document.getElementById('f_nicho');
-  if(modalSelect) {
-     const currentVal = modalSelect.value;
-     modalSelect.innerHTML = '<option value="">— digite ou selecione —</option>' +
-        allNichos.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-     modalSelect.value = currentVal;
+  // Atualiza também o select dentro do Modal
+  const select = document.getElementById('f_nicho');
+  if (select) {
+    const backupValue = select.value;
+    select.innerHTML = '<option value="">— selecione —</option>' + 
+      db.nichos.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    select.value = backupValue;
   }
 }
 
 function filterByNichoSidebar(n, el) {
-  if (currentNichoFilter === n) {
-    currentNichoFilter = null; // Clicou de novo, tira o filtro
-    el.classList.remove('active');
-  } else {
-    currentNichoFilter = n;
-    currentStatusFilter = null; // Limpa o filtro de status para focar no nicho
-    document.querySelectorAll('.sidebar-item').forEach(e => e.classList.remove('active'));
-    el.classList.add('active');
-  }
+  currentNichoFilter = (currentNichoFilter === n) ? null : n;
+  currentStatusFilter = null;
+  document.querySelectorAll('.sidebar-item').forEach(e => e.classList.remove('active'));
+  if (currentNichoFilter) el.classList.add('active');
   renderAll();
 }
 
 function addNicho() {
   myPrompt('Nome do novo nicho:', '', (name) => {
     if (!name?.trim()) return;
-    const clean = name.trim();
-    if (!db.customNichos) db.customNichos = [];
-    if (!db.customNichos.includes(clean)) {
-      db.customNichos.push(clean);
-      save(); renderAll(); toast('Nicho criado!', 'success');
+    db.nichos = db.nichos || [];
+    if (!db.nichos.includes(name.trim())) {
+      db.nichos.push(name.trim());
+      save(); renderAll();
+      toast('Nicho criado!', 'success');
     }
   });
 }
