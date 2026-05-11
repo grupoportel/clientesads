@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Grupo Portel</title>
-<!-- Google Analytics -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
@@ -168,26 +167,23 @@ body { position: relative; z-index: 0; }
 .sidebar-divider{height:1px;background:var(--border);margin:8px 14px}
 
 /* ── CONTENT & SCROLLBARS ── */
-/* Removemos o overflow:auto daqui para que a tabela controle a rolagem e não quebre o layout */
 .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 
-/* A área da tabela precisa ter sua própria rolagem horizontal e vertical controlada */
 .table-wrapper {
   flex: 1;
   overflow-x: auto;
   overflow-y: auto; 
-  padding-bottom: 8px; /* Espaço para a barra horizontal */
+  padding-bottom: 8px; 
 }
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 2000px; /* Garante que a tabela força a rolagem horizontal */
+  min-width: 2000px; 
 }
 
-/* Configuração da Barra de Rolagem (Pode editar o tamanho aqui) */
 ::-webkit-scrollbar { 
-  width: 8px;   /* Largura da barra vertical */
-  height: 12px; /* AQUI VOCÊ MUDA A GROSSURA DA BARRA HORIZONTAL (Aumentei para 12px) */
+  width: 8px;   
+  height: 12px; 
 }
 ::-webkit-scrollbar-track { background: var(--surface); border-radius: 4px; }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
@@ -376,13 +372,34 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
 .metas-sidebar-btn .btn-arrow {margin-left:auto;font-size:10px;opacity:.6;}
 .section-divider {border:none;border-top:1px solid var(--border);margin:0 14px 4px;}
 
+/* ── REDIMENSIONAMENTO DE COLUNAS ── */
+.resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 15px; /* Aumentado de 5px para 15px para facilitar o clique */
+  cursor: col-resize; 
+  user-select: none;
+  height: 100%;
+  z-index: 1;
+}
+
+.resizer:hover, .resizing {
+  border-right: 5px solid var(--accent); /* Linha azul de destaque ao arrastar */
+}
+
+/* Garante que o max-width das células acompanhe a largura da coluna quando expandida */
+#leadsTable td.td-truncate {
+  max-width: 100px; /* Largura inicial */
+  transition: max-width 0.1s;
+}
+
 </style>
 </head>
 <body>
 <div class="bg-grid"></div>
 <div class="ambient-light-saas"></div>
 
-<!-- TOP BAR -->
 <div class="topbar">
   <div class="topbar-left">
     <div class="logo"><div class="logo-dot"></div> CRM <span> Grupo Portel </span></div>
@@ -401,10 +418,8 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
   </div>
 </div>
 
-<!-- MAIN -->
 <div class="main">
 
-  <!-- SIDEBAR -->
   <div class="sidebar">
     <div class="sidebar-label">Pipeline</div>
     <div class="sidebar-item active" id="sb-all" onclick="filterByStatus(null,this)">
@@ -436,7 +451,6 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
     <div class="sidebar-divider"></div>
     <div class="sidebar-divider"></div>
 
-    <!-- METAS BUTTON -->
     <hr class="section-divider">
     <div class="sidebar-label" style="margin-top:6px">Desempenho</div>
     <button class="metas-sidebar-btn" id="metasSidebarBtn" onclick="setView('metas')">
@@ -444,7 +458,6 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
     </button>
   </div>
 
-  <!-- CONTENT -->
   <div class="content" id="mainContent">
     
     <div class="stats-bar" id="statsBar"></div>
@@ -456,6 +469,16 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
       <div class="nicho-drawer-content">
         <div id="nichosList" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
         <button class="filter-chip" onclick="addNicho()" style="border-style: dashed; color: var(--accent2)">＋ Criar Nicho</button>
+      </div>
+    </div>
+
+    <div class="nicho-drawer" id="responsavelDrawer">
+      <div class="nicho-drawer-header" onclick="toggleResponsavelDrawer()">
+        <span class="arrow">▶</span> 👥 Equipe / Responsáveis
+      </div>
+      <div class="nicho-drawer-content">
+        <div id="responsaveisList" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+        <button class="filter-chip" onclick="addResponsavel()" style="border-style: dashed; color: var(--accent2)">＋ Adicionar Pessoa</button>
       </div>
     </div>
 
@@ -498,7 +521,6 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
       <div class="kanban-view" id="kanbanBoard"></div>
     </div>
 
-    <!-- METAS VIEW -->
     <div id="metasView" class="hidden" style="position:relative">
       <div class="metas-header">
         <div class="metas-title">🎯 Metas & Objetivos</div>
@@ -512,15 +534,12 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
         </div>
       </div>
 
-      <!-- KPIs Empresa -->
       <div class="metas-section-title">🏢 Empresa — Visão Geral</div>
       <div class="metas-grid" id="metasEmpresa"></div>
 
-      <!-- Canais -->
       <div class="metas-section-title">📡 Por Canal</div>
       <div class="canal-grid" id="metasCanais"></div>
 
-      <!-- Responsáveis -->
       <div class="metas-section-title">👥 Por Colaborador</div>
       <div class="resp-grid" id="metasResponsaveis"></div>
 
@@ -528,7 +547,6 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
 
   </div>
 
-  <!-- DETAIL PANEL -->
   <div class="detail-panel" id="detailPanel">
     <div class="detail-inner">
       <div class="detail-header">
@@ -551,8 +569,7 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
   </div>
 </div>
 
-<!-- ══ MODAL NOVO/EDITAR ══ -->
-<div class="modal-overlay hidden" id="modalOverlay" onclick="closeModalOnOverlay(event)">
+<div class="modal-overlay hidden" id="modalOverlay">
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title" id="modalTitle">Novo Lead</div>
@@ -600,7 +617,9 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
         </div>
         <div class="form-group">
           <label>Responsável pela Conta</label>
-          <input class="form-control" id="f_responsavel" placeholder="João, Maria…">
+          <select class="form-control" id="f_responsavel">
+            <option value="">— selecione —</option>
+          </select>
         </div>
         <div class="form-group">
           <label>Decisor (Nome)</label>
@@ -712,7 +731,6 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
   </div>
 </div>
 
-<!-- ══ STATUS DROPDOWN ══ -->
 <div class="status-dropdown hidden" id="statusDropdown">
   <div class="status-option" onclick="setStatus('nenhuma')"><span class="status-badge s-nenhuma">● Nenhuma Ação</span></div>
   <div class="status-option" onclick="setStatus('interesse')"><span class="status-badge s-interesse">● Não Tem Interesse</span></div>
@@ -723,7 +741,6 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
   <div class="status-option" onclick="setStatus('contrato')"><span class="status-badge s-contrato">● Contrato Fechado</span></div>
 </div>
 
-<!-- ══ IMPORT/EXPORT ══ -->
 <div class="modal-overlay hidden" id="ieModal" onclick="closeIEOnOverlay(event)">
   <div class="modal" style="max-width:480px">
     <div class="modal-header">
@@ -747,7 +764,6 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
   </div>
 </div>
 
-<!-- ══ CUSTOM CONFIRM MODAL ══ -->
 <div class="modal-overlay hidden" id="customConfirmModal" style="z-index: 10000;">
   <div class="modal small-modal">
     <div class="modal-header">
@@ -764,7 +780,6 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
   </div>
 </div>
 
-<!-- ══ CUSTOM PROMPT MODAL ══ -->
 <div class="modal-overlay hidden" id="customPromptModal" style="z-index: 10000;">
   <div class="modal small-modal">
     <div class="modal-header">
@@ -782,10 +797,8 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
   </div>
 </div>
 
-<!-- TOAST -->
 <div class="toast-container" id="toastContainer"></div>
 
-<!-- ══ METAS EDIT MODAL ══ -->
 <div class="modal-overlay hidden" id="goalsModal" onclick="if(event.target===this)closeGoalsModal()">
   <div class="modal" style="max-width:560px">
     <div class="modal-header">
@@ -793,8 +806,7 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
       <button class="btn-icon" onclick="closeGoalsModal()">✕</button>
     </div>
     <div class="modal-body" id="goalsModalBody">
-      <!-- gerado por JS -->
-    </div>
+      </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeGoalsModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="saveGoals()">💾 Salvar Metas</button>
@@ -806,9 +818,9 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 
 <script>
-// Aqui começa o seu código (onde você colou o bloco de cima)...
+// Aqui começa o seu código
 // ═══════════════════════════════════
-// CUSTOM DIALOGS (To avoid native alert/confirm blocks)
+// CUSTOM DIALOGS
 // ═══════════════════════════════════
 function toggleNichoDrawer() {
   const drawer = document.getElementById('nichoDrawer');
@@ -816,7 +828,13 @@ function toggleNichoDrawer() {
   const arrow = drawer.querySelector('.arrow');
   arrow.textContent = drawer.classList.contains('open') ? '▼' : '▶';
 }
-// Nova função para os nichos
+
+function toggleResponsavelDrawer() {
+  const drawer = document.getElementById('responsavelDrawer');
+  drawer.classList.toggle('open');
+  const arrow = drawer.querySelector('.arrow');
+  arrow.textContent = drawer.classList.contains('open') ? '▼' : '▶';
+}
 
 let confirmCallback = null;
 function myConfirm(message, callback) {
@@ -849,55 +867,51 @@ function handlePrompt(submit) {
 // ═══════════════════════════════════
 // DATA LAYER (FIREBASE EM TEMPO REAL)
 // ═══════════════════════════════════
-let db = { leads: [], groups: [], lastId: 0 };
+let db = { leads: [], nichos: [], responsaveis: [], lastId: 0 };
 
-// --- RECUPERANDO AS VARIÁVEIS DA TELA QUE SUMIRAM ---
 let currentStatusFilter = null;
 let currentNichoFilter  = null;
+let currentResponsavelFilter = null; // Novo filtro de responsável
 let currentSort = { key: null, dir: 1 };
 let currentView = 'table';
 let editingId   = null;
 let statusTargetId = null;
 let detailId    = null;
-// ----------------------------------------------------
 
-// 1. Cole a sua configuração aqui:
 const firebaseConfig = {
-  apiKey: "AIzaSyCTjJ2x_uJbjDTZzrkgHxP8RyTVqj4swkE", // Peguei da sua imagem
+  apiKey: "AIzaSyCTjJ2x_uJbjDTZzrkgHxP8RyTVqj4swkE", 
   authDomain: "crm---grupo-portel.firebaseapp.com",
-  databaseURL: "https://crm---grupo-portel-default-rtdb.firebaseio.com", // ADICIONE ESTA LINHA!
+  databaseURL: "https://crm---grupo-portel-default-rtdb.firebaseio.com", 
   projectId: "crm---grupo-portel",
   storageBucket: "crm---grupo-portel.firebasestorage.app",
   messagingSenderId: "1070269671191",
   appId: "1:1070269671191:web:2ea382e76a06f0b0947952"
 };
 
-// 2. Inicializa o Firebase
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
 
-// 3. Função Load: Escuta o banco em tempo real e blinda os dados
+// Função Load 100% blindada contra erros de Array do Firebase
 function load() {
   database.ref('crm_data').on('value', (snapshot) => {
     const data = snapshot.val();
     if (data) {
       db = data;
-      db.leads = db.leads || [];
-      db.nichos = db.nichos || db.groups || []; // Aproveita os grupos antigos como nichos
-      db.lastId = db.lastId || 0;
+      db.leads = data.leads ? Object.values(data.leads) : [];
+      db.nichos = data.nichos ? Object.values(data.nichos) : (data.groups ? Object.values(data.groups) : []);
+      db.responsaveis = data.responsaveis ? Object.values(data.responsaveis) : [];
+      db.lastId = data.lastId || 0;
     } else {
-      db = { leads: [], nichos: [], lastId: 0 };
+      db = { leads: [], nichos: [], responsaveis: [], lastId: 0 };
     }
     renderAll();
   });
 }
 
-// 4. Função Save: Envia para a nuvem
 function save() {
   database.ref('crm_data').set(db);
 }
 
-// drag state
 let dragLeadId  = null;
 let dragTargetStatus = null;
 
@@ -915,7 +929,7 @@ const STATUS = {
 };
 
 // ═══════════════════════════════════
-// FILTER & SORT (BLINDADO)
+// FILTER & SORT 
 // ═══════════════════════════════════
 function getFiltered() {
   try {
@@ -926,14 +940,14 @@ function getFiltered() {
     if (q) {
       list = list.filter(l => {
         if (!l) return false;
-        // O SEGREDO: O "String(v)" garante que telefones e números não quebrem o sistema
         return [l.nome, l.nicho, l.telefone, l.decisor, l.email, l.responsavel, l.cnpj]
           .some(v => String(v || '').toLowerCase().includes(q));
       });
     }
     
     if (currentStatusFilter) list = list.filter(l => (l.status||'nenhuma') === currentStatusFilter);
-    if (currentNichoFilter)  list = list.filter(l => l.nicho === currentNichoFilter); // Filtro por nicho
+    if (currentNichoFilter)  list = list.filter(l => l.nicho === currentNichoFilter);
+    if (currentResponsavelFilter) list = list.filter(l => l.responsavel === currentResponsavelFilter);
     
     if (currentSort.key) {
       list.sort((a,b)=>{
@@ -947,14 +961,14 @@ function getFiltered() {
     return list;
   } catch (erro) {
     console.error("Erro Crítico no Filtro:", erro);
-    return []; // Se falhar, devolve vazio em vez de quebrar o site
+    return [];
   }
 }
 
 function applyFilters() { renderAll(); }
 
 // ═══════════════════════════════════
-// VIEW TOGGLE (ÚNICO E BLINDADO)
+// VIEW TOGGLE 
 // ═══════════════════════════════════
 function setView(v) {
   currentView = v;
@@ -965,13 +979,11 @@ function setView(v) {
   const metas = document.getElementById('metasView');
   const metasBtn = document.getElementById('metasSidebarBtn');
   
-  // 1. Esconde TODAS as telas (Limpa o palco)
   if (table) { table.classList.add('hidden'); table.style.display = 'none'; }
   if (kanban) kanban.classList.add('hidden');
   if (metas) metas.classList.add('hidden');
   if (metasBtn) metasBtn.classList.remove('active');
 
-  // 2. Mostra apenas a tela que o usuário pediu
   if (v === 'table' && table) {
     table.classList.remove('hidden');
     table.style.display = 'flex';
@@ -980,10 +992,9 @@ function setView(v) {
   if (v === 'metas' && metas) {
     metas.classList.remove('hidden');
     if (metasBtn) metasBtn.classList.add('active');
-    renderMetas(); // <-- AQUI ESTÁ O SEGREDO: Manda desenhar os gráficos!
+    renderMetas(); 
   }
 
-  // 3. Arruma as cores dos botões lá no topo
   const btnTable = document.getElementById('viewTableBtn');
   const btnKanban = document.getElementById('viewKanbanBtn');
   
@@ -994,26 +1005,27 @@ function setView(v) {
 }
 
 // ═══════════════════════════════════
-// RENDER ALL (COM ESCUDO ANTI-CRASH)
+// RENDER ALL 
 // ═══════════════════════════════════
 function renderAll() {
   try {
     updateCounts();
     updateStats();
-    updateNichosSidebar(); // Atualiza a barra lateral com os Nichos
+    updateNichosSidebar(); 
+    updateResponsaveisSidebar(); // Atualiza a nova gaveta da equipe
     
     if (currentView === 'table') {
         renderTable();
-    } else {
+    } else if (currentView === 'kanban') {
         renderKanban();
     }
   } catch (erro) {
     console.error("Erro fatal ao carregar a tela:", erro);
   }
-} // <-- OLHA A CHAVE FALTANDO AQUI!
+}
 
 // ═══════════════════════════════════
-// EDIÇÃO INLINE (DIRETO NA TABELA)
+// EDIÇÃO INLINE 
 // ═══════════════════════════════════
 function inlineEdit(e, id, field) {
   e.stopPropagation();
@@ -1024,11 +1036,15 @@ function inlineEdit(e, id, field) {
   const val = lead[field] || '';
   let inputHtml = '';
   
-  // Cria o campo certo dependendo da coluna
   if (field === 'nicho') {
     inputHtml = `<select id="inl_${id}_${field}" class="form-control" style="padding:4px;height:26px;font-size:11px;min-width:100px">
       <option value="">—</option>
       ${db.nichos.map(n => `<option value="${esc(n)}" ${val===n?'selected':''}>${esc(n)}</option>`).join('')}
+    </select>`;
+  } else if (field === 'responsavel') {
+    inputHtml = `<select id="inl_${id}_${field}" class="form-control" style="padding:4px;height:26px;font-size:11px;min-width:100px">
+      <option value="">—</option>
+      ${(db.responsaveis||[]).map(r => `<option value="${esc(r)}" ${val===r?'selected':''}>${esc(r)}</option>`).join('')}
     </select>`;
   } else if (field === 'ultimo_contato' || field === 'reuniao' || field === 'data_entrada') {
     inputHtml = `<input type="date" id="inl_${id}_${field}" class="form-control" style="padding:4px;height:26px;font-size:11px;min-width:110px" value="${esc(val)}">`;
@@ -1048,7 +1064,6 @@ function inlineEdit(e, id, field) {
     </div>
   `;
   
-  // Foca no input automaticamente
   setTimeout(() => {
      const input = document.getElementById(`inl_${id}_${field}`);
      if(input) { 
@@ -1075,7 +1090,7 @@ function saveInline(id, field, e) {
 }
 
 // ═══════════════════════════════════
-// TABLE RENDER (BLINDADO COM INLINE EDIT)
+// TABLE RENDER 
 // ═══════════════════════════════════
 function renderTable() {
   const leads = getFiltered();
@@ -1092,7 +1107,6 @@ function renderTable() {
   try {
     tbody.innerHTML = leads.map((l, i) => {
       const st  = STATUS[l.status] || STATUS['nenhuma'];
-      // BLINDAGEM DA NOTA: Pega o número e formata com 1 casa decimal (ex: 4.8)
       const notaRaw = parseFloat(l.nota) || 0;
       const notaFormatada = notaRaw ? notaRaw.toFixed(1) : '';
       
@@ -1104,7 +1118,6 @@ function renderTable() {
       const telLimpo = String(l.telefone || '').replace(/\D/g,'');
       const wppLimpo = String(l.whatsapp || '').replace(/\D/g,'');
 
-      // A MÁGICA DO LÁPIS FICA AQUI
       const editable = (field, content) => `
         <div class="cell-wrap">
           <div class="cell-content">${content}</div>
@@ -1130,16 +1143,16 @@ function renderTable() {
         <td>${editable('site', siteLink?`<a href="${siteLink}" target="_blank" class="td-link" onclick="event.stopPropagation()">🌐 Site</a>`:'<span class="td-empty">—</span>')}</td>
         <td>${editable('nota', notaFormatada?`<span style="font-size:14px; font-weight:700; color:var(--yellow); font-family:'DM Mono', monospace;">${notaFormatada}</span>`:'<span class="td-empty">—</span>')}</td>
         <td>${editable('avals', l.avals?`<span class="td-mono">${l.avals}</span>`:'<span class="td-empty">—</span>')}</td>
-        <td>${editable('decisor', l.decisor?esc(l.decisor):'<span class="td-empty">—</span>')}</td>
+        <td class="td-truncate" title="${esc(l.decisor||'')}">${editable('decisor', l.decisor?esc(l.decisor):'<span class="td-empty">—</span>')}</td>
         <td>${editable('email', l.email?`<a href="mailto:${l.email}" class="td-link" onclick="event.stopPropagation()">✉️ ${esc(l.email)}</a>`:'<span class="td-empty">—</span>')}</td>
         <td class="td-mono" style="font-size:11px">${editable('cnpj', l.cnpj||'<span class="td-empty">—</span>')}</td>
         <td style="font-size:11px;color:var(--text2)">${editable('ultimo_contato', l.ultimo_contato?fmtDate(l.ultimo_contato):'<span class="td-empty">—</span>')}</td>
         <td style="font-size:11px;color:${l.reuniao&&isUpcoming(l.reuniao)?'var(--green)':'var(--text2)'}">${editable('reuniao', l.reuniao?fmtDate(l.reuniao):'<span class="td-empty">—</span>')}</td>
-        <td style="max-width:140px" class="td-truncate" title="${esc(l.melhores||'')}">${editable('melhores', trunc(l.melhores,40)||'<span class="td-empty">—</span>')}</td>
-        <td style="max-width:140px" class="td-truncate" title="${esc(l.oportunidades||'')}">${editable('oportunidades', trunc(l.oportunidades,40)||'<span class="td-empty">—</span>')}</td>
-        <td style="max-width:140px" class="td-truncate" title="${esc(l.pontos||'')}">${editable('pontos', trunc(l.pontos,40)||'<span class="td-empty">—</span>')}</td>
-        <td style="max-width:120px" class="td-truncate" title="${esc(l.escalar||'')}">${editable('escalar', trunc(l.escalar,35)||'<span class="td-empty">—</span>')}</td>
-        <td style="max-width:140px" class="td-truncate" title="${esc(l.obs||'')}">${editable('obs', trunc(l.obs,40)||'<span class="td-empty">—</span>')}</td>
+        <td class="td-truncate" title="${esc(l.melhores||'')}">${editable('melhores', esc(l.melhores)||'<span class="td-empty">—</span>')}</td>
+        <td class="td-truncate" title="${esc(l.oportunidades||'')}">${editable('oportunidades', esc(l.oportunidades)||'<span class="td-empty">—</span>')}</td>
+        <td class="td-truncate" title="${esc(l.pontos||'')}">${editable('pontos', esc(l.pontos)||'<span class="td-empty">—</span>')}</td>
+        <td class="td-truncate" title="${esc(l.escalar||'')}">${editable('escalar', esc(l.escalar)||'<span class="td-empty">—</span>')}</td>
+        <td class="td-truncate" title="${esc(l.obs||'')}">${editable('obs', esc(l.obs)||'<span class="td-empty">—</span>')}</td>
         <td>
           <div class="row-actions">
             <button class="btn-icon" title="Editar Completo" onclick="openModal(${l.id})">✏️</button>
@@ -1150,15 +1163,11 @@ function renderTable() {
     }).join('');
   } catch (erro) {
     console.error("Erro Crítico ao desenhar a tabela:", erro);
-    tbody.innerHTML = `<tr><td colspan="23" style="text-align:center;padding:40px;color:var(--red);font-weight:bold;">
-      ⚠️ O sistema encontrou um dado inválido ao tentar desenhar a tabela.<br>
-      Abra a visão "Kanban" no topo direito para ver os leads, ou exclua o lead problemático.
-    </td></tr>`;
   }
 }
 
 // ═══════════════════════════════════
-// KANBAN RENDER + DRAG & DROP
+// KANBAN RENDER 
 // ═══════════════════════════════════
 function renderKanban() {
   const leads  = getFiltered();
@@ -1204,7 +1213,6 @@ function buildKanbanCard(l) {
   </div>`;
 }
 
-// ── Drag handlers ──
 function kanbanDragStart(e, id) {
   dragLeadId = id;
   e.dataTransfer.effectAllowed = 'move';
@@ -1292,7 +1300,6 @@ function openDetail(id) {
 
   document.getElementById('detailNotes').textContent = l.obs || '—';
 
-  // highlight table row
   document.querySelectorAll('#tableBody tr').forEach(r => r.classList.remove('selected'));
   const rows = document.querySelectorAll('#tableBody tr');
   const filtered = getFiltered();
@@ -1333,17 +1340,17 @@ function openModal(id) {
     });
   } else {
     document.getElementById('modalTitle').textContent = 'Novo Lead';
-    const hoje = new Date().toISOString().slice(0,10); // Pega a data de hoje
+    const hoje = new Date().toISOString().slice(0,10); 
     FIELDS.forEach(f => {
       const el = document.getElementById('f_'+f);
       if (el) {
         if (f === 'status') el.value = 'nenhuma';
-        else if (f === 'data_entrada') el.value = hoje; // Preenche automático
+        else if (f === 'data_entrada') el.value = hoje; 
         else el.value = '';
       }
     });
   }
-} // <--- ESTA É A CHAVE MÁGICA QUE SALVA O SISTEMA!
+}
 function closeModal() { document.getElementById('modalOverlay').classList.add('hidden'); editingId = null; }
 function closeModalOnOverlay(e) { if (e.target === document.getElementById('modalOverlay')) closeModal(); }
 
@@ -1363,8 +1370,6 @@ function saveLead() {
     toast('Lead atualizado!', 'success');
     if (detailId === editingId) { detailId = null; }
   } else {
-    // Usa os milissegundos atuais como ID, garantindo que nunca vai repetir
-    // e nem quebrar a tabela, mesmo que o banco de dados esteja vazio.
     lead.id = Date.now(); 
     lead.createdAt = new Date().toISOString();
     db.leads.push(lead);
@@ -1382,7 +1387,17 @@ function openStatusDropdown(e, id) {
   const dd = document.getElementById('statusDropdown');
   dd.classList.remove('hidden');
   const r = e.target.getBoundingClientRect();
-  dd.style.top  = (r.bottom + 4) + 'px';
+  
+  // Calcula a altura da caixinha de opções
+  const dropdownHeight = dd.offsetHeight;
+  let topPos = r.bottom + 4; // Padrão: abre para baixo do botão
+
+  // Se a posição para baixo + o tamanho da caixa passar do limite da tela, abre para cima
+  if (topPos + dropdownHeight > window.innerHeight) {
+      topPos = r.top - dropdownHeight - 4;
+  }
+
+  dd.style.top  = topPos + 'px';
   dd.style.left = Math.min(r.left, window.innerWidth - 210) + 'px';
 }
 function setStatus(status) {
@@ -1399,46 +1414,45 @@ function setStatus(status) {
 }
 document.addEventListener('click', () => document.getElementById('statusDropdown').classList.add('hidden'));
 
-  // ═══════════════════════════════════
-  // COUNTS & STATS
-  // ═══════════════════════════════════
-  function updateCounts() {
-    document.getElementById('count-all').textContent = db.leads.length;
-    Object.keys(STATUS).forEach(k => {
-      const el = document.getElementById('count-'+k);
-      if (el) el.textContent = db.leads.filter(l=>(l.status||'nenhuma')===k).length;
-    });
-  }
+// ═══════════════════════════════════
+// COUNTS & STATS
+// ═══════════════════════════════════
+function updateCounts() {
+  document.getElementById('count-all').textContent = db.leads.length;
+  Object.keys(STATUS).forEach(k => {
+    const el = document.getElementById('count-'+k);
+    if (el) el.textContent = db.leads.filter(l=>(l.status||'nenhuma')===k).length;
+  });
+}
 
-  function updateStats() {
-    const bar = document.getElementById('statsBar');
-    const hoje = new Date().toISOString().slice(0,10);
-    const proxReuniao = db.leads.filter(l => l.reuniao && l.reuniao >= hoje).length;
-    const totalLeads = db.leads.length;
-    const reunioesMarcadas = db.leads.filter(l=>l.status==='reuniao-marc').length;
-    const contratosFechados = db.leads.filter(l=>l.status==='contrato').length;
-    const taxaConv = totalLeads > 0 ? Math.round((contratosFechados/totalLeads)*100) : 0;
+function updateStats() {
+  const bar = document.getElementById('statsBar');
+  const hoje = new Date().toISOString().slice(0,10);
+  const proxReuniao = db.leads.filter(l => l.reuniao && l.reuniao >= hoje).length;
+  const totalLeads = db.leads.length;
+  const reunioesMarcadas = db.leads.filter(l=>l.status==='reuniao-marc').length;
+  const contratosFechados = db.leads.filter(l=>l.status==='contrato').length;
+  const taxaConv = totalLeads > 0 ? Math.round((contratosFechados/totalLeads)*100) : 0;
 
-    bar.innerHTML = `
-      <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(88,101,242,.08);border:1px solid rgba(88,101,242,.2);border-radius:8px;flex-shrink:0">
-        <span style="font-size:10px;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:.5px">📊 Visão Geral</span>
-        <span style="font-size:10px;color:var(--text3)">— todos os períodos</span>
-      </div>` +
-    [
-      { label:'Total de Leads',     value: totalLeads,           color:'var(--accent2)', sub: `${db.leads.filter(l=>l.status==='nenhuma').length} sem ação` },
-      { label:'Reuniões Marcadas',  value: reunioesMarcadas,     color:'var(--green)',   sub: `${proxReuniao} próximas` },
-      { label:'Contratos Fechados', value: contratosFechados,    color:'var(--pink)',    sub: `Taxa: ${taxaConv}%` },
-      { label:'Próximas Reuniões',  value: proxReuniao,          color:'var(--yellow)',  sub: `a partir de hoje` },
-      { label:'Contatos Hoje',      value: db.leads.filter(l=>l.ultimo_contato===hoje).length, color:'var(--cyan)', sub: hoje },
-    ].map(s=>`<div class="stat-card">
-      <div class="stat-label">${s.label}</div>
-      <div class="stat-value" style="color:${s.color}">${s.value}</div>
-      <div style="font-size:10px;color:var(--text3);margin-top:2px">${s.sub}</div>
-    </div>`).join('');
-  }
+  bar.innerHTML = `
+    <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(88,101,242,.08);border:1px solid rgba(88,101,242,.2);border-radius:8px;flex-shrink:0">
+      <span style="font-size:10px;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:.5px">📊 Visão Geral</span>
+      <span style="font-size:10px;color:var(--text3)">— todos os períodos</span>
+    </div>` +
+  [
+    { label:'Total de Leads',     value: totalLeads,           color:'var(--accent2)', sub: `${db.leads.filter(l=>l.status==='nenhuma').length} sem ação` },
+    { label:'Reuniões Marcadas',  value: reunioesMarcadas,     color:'var(--green)',   sub: `${proxReuniao} próximas` },
+    { label:'Contratos Fechados', value: contratosFechados,    color:'var(--pink)',    sub: `Taxa: ${taxaConv}%` },
+    { label:'Próximas Reuniões',  value: proxReuniao,          color:'var(--yellow)',  sub: `a partir de hoje` },
+    { label:'Contatos Hoje',      value: db.leads.filter(l=>l.ultimo_contato===hoje).length, color:'var(--cyan)', sub: hoje },
+  ].map(s=>`<div class="stat-card">
+    <div class="stat-label">${s.label}</div>
+    <div class="stat-value" style="color:${s.color}">${s.value}</div>
+    <div style="font-size:10px;color:var(--text3);margin-top:2px">${s.sub}</div>
+  </div>`).join('');
+}
 
-  function filterByStatus(status, el) {
-  // BLINDAGEM MÁXIMA: Força a saída das metas antes de filtrar
+function filterByStatus(status, el) {
   const metas = document.getElementById('metasView');
   if (metas && !metas.classList.contains('hidden')) {
       setView('table');
@@ -1446,10 +1460,12 @@ document.addEventListener('click', () => document.getElementById('statusDropdown
 
   currentStatusFilter = status;
   currentNichoFilter  = null; 
+  currentResponsavelFilter = null; // Zera a equipe ao filtrar status
   document.querySelectorAll('.sidebar-item').forEach(e => e.classList.remove('active'));
   if (el) el.classList.add('active');
   renderAll();
 }
+
 // ═══════════════════════════════════
 // NICHOS (CRIAR E REMOVER)
 // ═══════════════════════════════════
@@ -1457,14 +1473,11 @@ function updateNichosSidebar() {
   const container = document.getElementById('nichosList');
   if (!container) return;
   
-  // Extrai nichos já existentes nos leads
   const leadNichos = db.leads.map(l => l.nicho).filter(Boolean);
   db.nichos = db.nichos || [];
   
-  // Cria uma lista única, sem repetições
   const allNichos = [...new Set([...leadNichos, ...db.nichos])].sort();
   
-  // Desenha os botões com um "✕" para poder apagá-los
   container.innerHTML = allNichos.map(n => `
     <div class="filter-chip ${currentNichoFilter === n ? 'active' : ''}" 
          onclick='filterByNichoSidebar(${JSON.stringify(n)}, this)'>
@@ -1474,7 +1487,6 @@ function updateNichosSidebar() {
             onclick='removeNicho(event, ${JSON.stringify(n)})'>✕</span>
     </div>`).join('');
 
-  // Atualiza o select dentro do Modal (Novo Lead)
   const select = document.getElementById('f_nicho');
   if (select) {
     const backupValue = select.value;
@@ -1485,13 +1497,10 @@ function updateNichosSidebar() {
 }
 
 function filterByNichoSidebar(n, el) {
-  // Se clicar no que já está ativo, remove o filtro
   currentNichoFilter = (currentNichoFilter === n) ? null : n;
-  
-  // Limpa o filtro de status para não dar conflito
   currentStatusFilter = null;
+  currentResponsavelFilter = null;
   document.querySelectorAll('.sidebar-item').forEach(e => e.classList.remove('active'));
-  
   renderAll();
 }
 
@@ -1507,48 +1516,80 @@ function addNicho() {
   });
 }
 
-// NOVA FUNÇÃO: Remover Nicho
 function removeNicho(e, n) {
-  e.stopPropagation(); // Impede que o clique ative o filtro da tabela sem querer
+  e.stopPropagation(); 
   myConfirm(`Deseja excluir o nicho "${n}"?\nIsso limpará este nicho de todos os leads que o possuem.`, () => {
-     // Remove da memória do sistema
      db.nichos = (db.nichos || []).filter(x => x !== n);
-     
-     // Remove o nicho dos leads que estavam cadastrados nele
      db.leads.forEach(l => {
          if (l.nicho === n) l.nicho = '';
      });
-     
      if (currentNichoFilter === n) currentNichoFilter = null;
-     
      save(); renderAll(); toast('Nicho excluído!', 'info');
   });
 }
 
-function filterByNichoSidebar(n, el) {
-  // Se clicar no que já está ativo, remove o filtro
-  currentNichoFilter = (currentNichoFilter === n) ? null : n;
+// ═══════════════════════════════════
+// RESPONSÁVEIS / EQUIPE (CRIAR E REMOVER)
+// ═══════════════════════════════════
+function updateResponsaveisSidebar() {
+  const container = document.getElementById('responsaveisList');
+  if (!container) return;
   
-  // Limpa o filtro de status para não dar conflito
+  const leadResps = db.leads.map(l => l.responsavel).filter(Boolean);
+  db.responsaveis = db.responsaveis || [];
+  
+  const allResps = [...new Set([...leadResps, ...db.responsaveis])].sort();
+  
+  container.innerHTML = allResps.map(r => `
+    <div class="filter-chip ${currentResponsavelFilter === r ? 'active' : ''}" 
+         onclick='filterByResponsavelSidebar(${JSON.stringify(r)}, this)'>
+      👤 ${esc(r)}
+      <span style="margin-left:6px; opacity:0.6; cursor:pointer;" 
+            title="Excluir pessoa" 
+            onclick='removeResponsavel(event, ${JSON.stringify(r)})'>✕</span>
+    </div>`).join('');
+
+  const select = document.getElementById('f_responsavel');
+  if (select) {
+    const backupValue = select.value;
+    select.innerHTML = '<option value="">— selecione —</option>' + 
+      allResps.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
+    select.value = backupValue;
+  }
+}
+
+function filterByResponsavelSidebar(r, el) {
+  currentResponsavelFilter = (currentResponsavelFilter === r) ? null : r;
   currentStatusFilter = null;
-  
-  // Remove a classe active de todos os itens da barra lateral (status)
+  currentNichoFilter = null;
   document.querySelectorAll('.sidebar-item').forEach(e => e.classList.remove('active'));
-  
   renderAll();
 }
 
-function addNicho() {
-  myPrompt('Nome do novo nicho:', '', (name) => {
+function addResponsavel() {
+  myPrompt('Nome da pessoa para a Equipe:', '', (name) => {
     if (!name?.trim()) return;
-    db.nichos = db.nichos || [];
-    if (!db.nichos.includes(name.trim())) {
-      db.nichos.push(name.trim());
+    db.responsaveis = db.responsaveis || [];
+    if (!db.responsaveis.includes(name.trim())) {
+      db.responsaveis.push(name.trim());
       save(); renderAll();
-      toast('Nicho criado!', 'success');
+      toast('Pessoa adicionada à equipe!', 'success');
     }
   });
 }
+
+function removeResponsavel(e, r) {
+  e.stopPropagation(); 
+  myConfirm(`Deseja excluir "${r}" da equipe?\nO nome será removido dos leads onde estava selecionado.`, () => {
+     db.responsaveis = (db.responsaveis || []).filter(x => x !== r);
+     db.leads.forEach(l => {
+         if (l.responsavel === r) l.responsavel = '';
+     });
+     if (currentResponsavelFilter === r) currentResponsavelFilter = null;
+     save(); renderAll(); toast('Pessoa excluída!', 'info');
+  });
+}
+
 
 // ═══════════════════════════════════
 // DELETE
@@ -1565,6 +1606,8 @@ function deleteLead(id) {
 function toggleSelectAll(cb) {
   document.querySelectorAll('.row-check').forEach(c => c.checked = cb.checked);
 }
+
+// ═══════════════════════════════════
 // IMPORT / EXPORT
 // ═══════════════════════════════════
 function showImportExport() { document.getElementById('ieModal').classList.remove('hidden'); }
@@ -1606,7 +1649,7 @@ function importJSON(e) {
 }
 function clearAllData() {
   myConfirm('Apagar TODOS os dados? Não há como desfazer.', () => {
-    db = {leads:[],groups:[],lastId:0}; save(); closeDetail(); renderAll(); closeIE();
+    db = {leads:[],nichos:[],responsaveis:[],lastId:0}; save(); closeDetail(); renderAll(); closeIE();
     toast('Dados apagados.','info');
   });
 }
@@ -1628,9 +1671,6 @@ function toast(msg, type='success'){
   setTimeout(()=>{ el.style.opacity='0'; el.style.transform='translateX(110%)'; el.style.transition='.3s'; setTimeout(()=>el.remove(),300); }, 2800);
 }
 
-// ═══════════════════════════════════
-// INIT
-// ═══════════════════════════════════
 // ═══════════════════════════════════
 // METAS & OBJETIVOS
 // ═══════════════════════════════════
@@ -1717,14 +1757,11 @@ function getCanalActual(canal, period) {
     return false;
   }
 
-  // Filtra apenas os leads que ENTRARAM no período selecionado
   const leadsDoPeriodo = leads.filter(l => {
-     // Usa a data_entrada, se não tiver, usa a data invisível de criação como backup
      const dataEntrada = l.data_entrada || (l.createdAt||'').slice(0,10);
      return inPeriod(dataEntrada);
   });
 
-  // Conta os leads baseado na Origem exata marcada no formulário
   if (canal === 'whatsapp')  return leadsDoPeriodo.filter(l => l.origem === 'whatsapp').length;
   if (canal === 'email')     return leadsDoPeriodo.filter(l => l.origem === 'email').length;
   if (canal === 'telefone')  return leadsDoPeriodo.filter(l => l.origem === 'telefone').length;
@@ -1759,11 +1796,11 @@ function getRespActual(nome, period) {
 
 function pct(actual, goal) {
   if (!goal) return 100;
-  return Math.round((actual/goal)*100); // Permite >100%
+  return Math.round((actual/goal)*100); 
 }
 function pctBar(actual, goal) {
   if (!goal) return 100;
-  return Math.min(Math.round((actual/goal)*100), 100); // Barra limitada a 100%
+  return Math.min(Math.round((actual/goal)*100), 100); 
 }
 function pctClass(p) {
   if (p >= 100) return 'good';
@@ -1783,10 +1820,8 @@ function renderMetas() {
   const goals = getGoals();
   const p = metasPeriod;
 
-  // ── Empresa KPIs ──
   const empresaEl = document.getElementById('metasEmpresa');
 
-  // Valor Potencial do Pipeline (R$ por lead contrato ou estimado)
   const valorMeta = goals.valorPipeline || { ativo: false, ticketMedio: 1500 };
   const leadsAtivos = (db.leads||[]).filter(l => l.status !== 'contrato' && l.status !== 'interesse');
   const leadsContrato = (db.leads||[]).filter(l => l.status === 'contrato');
@@ -1794,7 +1829,6 @@ function renderMetas() {
   const valorPipeline = leadsAtivos.length * ticketMedio;
   const receitaFechada = leadsContrato.length * ticketMedio;
 
-  // Origem dos leads do período
   function getLeadsDoPeriodo(period) {
     const hoje = new Date().toISOString().slice(0,10);
     const now = new Date();
@@ -1819,7 +1853,6 @@ function renderMetas() {
   const origemLabels = { whatsapp:'WhatsApp', instagram:'Instagram', telefone:'Telefone', email:'E-mail', indicacao:'Indicação', site:'Site/Inbound', outro:'Outro' };
   const origemColors = { whatsapp:'#22c55e', instagram:'#ec4899', telefone:'#06b6d4', email:'#5865f2', indicacao:'#f97316', site:'#a855f7', outro:'#8890b8' };
 
-  // Motivos de perda (leads com status "interesse" = Não Tem Interesse)
   const perdidos = (db.leads||[]).filter(l => l.status === 'interesse');
   const motivoCounts = {};
   perdidos.forEach(l => {
@@ -1856,7 +1889,6 @@ function renderMetas() {
     </div>`;
   }).join('') +
 
-  // Card: Valor Potencial do Pipeline
   `<div class="metas-kpi-card" style="--kpi-color:#f97316;border-color:#f9731622">
     <div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--orange);border-radius:12px 12px 0 0"></div>
     <div class="kpi-header"><span class="kpi-label">💰 Valor Potencial no Funil</span><span class="kpi-icon">🏦</span></div>
@@ -1866,7 +1898,6 @@ function renderMetas() {
     <div style="margin-top:8px"><button onclick="editTicketMedio()" style="font-size:10px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:3px 8px;color:var(--text2);cursor:pointer">✏️ Editar ticket médio</button></div>
   </div>` +
 
-  // Card: Origem dos Leads
   `<div class="metas-kpi-card" style="--kpi-color:#a855f7;border-color:#a855f722">
     <div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--purple);border-radius:12px 12px 0 0"></div>
     <div class="kpi-header"><span class="kpi-label">📌 Origem dos Leads</span><span class="kpi-icon">🗺️</span></div>
@@ -1883,7 +1914,6 @@ function renderMetas() {
     }).join('') || '<div style="font-size:12px;color:var(--text3)">Nenhum lead no período</div>'}
   </div>` +
 
-  // Card: Motivos de Perda
   `<div class="metas-kpi-card" style="--kpi-color:#ef4444;border-color:#ef444422">
     <div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--red);border-radius:12px 12px 0 0"></div>
     <div class="kpi-header"><span class="kpi-label">❌ Motivos de Perda</span><span class="kpi-icon">📉</span></div>
@@ -1900,7 +1930,6 @@ function renderMetas() {
     }).join('') : `<div style="font-size:12px;color:var(--text3)">Nenhum lead perdido registrado.<br><span style="font-size:10px">Dica: ao marcar "Não Tem Interesse", adicione um campo "Motivo de Perda" via edição do lead.</span></div>`}
   </div>`;
 
-  // ── Canais ──
   const canaisEl = document.getElementById('metasCanais');
   canaisEl.innerHTML = Object.entries(goals.canais).map(([key, cfg]) => {
     const actual = getCanalActual(key, p);
@@ -1935,11 +1964,9 @@ function renderMetas() {
     </div>`;
   }).join('');
 
-  // ── Responsáveis ──
   const respsEl = document.getElementById('metasResponsaveis');
   const resps = goals.responsaveis || [];
 
-  // Métricas disponíveis por colaborador
   const METRICAS_DISPONIVEIS = [
     { key: 'contatos',  label: 'Contatos',        icon: '📞' },
     { key: 'reunioes',  label: 'Reuniões Marc.',   icon: '📅' },
@@ -1957,7 +1984,6 @@ function renderMetas() {
       const semColor     = percContatos >= 100 ? 'var(--green)' : percContatos >= 80 ? 'var(--yellow)' : 'var(--red)';
       const initials = r.nome.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
 
-      // Métricas visíveis para este colaborador (padrão: contatos + reunioes + contratos)
       const metricasVisiveis = r.metricas || ['contatos', 'reunioes', 'contratos'];
 
       const getStatVal = (key) => {
@@ -2028,11 +2054,10 @@ function openEditGoals() {
 
   let html = `<p style="color:var(--text3);font-size:12px;margin-bottom:4px">Editando metas para: <b style="color:var(--text)">${pLabel}</b></p>`;
 
-  // Empresa
   html += `<div class="form-section-title" style="grid-column:unset;margin-bottom:8px">🏢 Empresa</div>`;
   html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">`;
   Object.entries(goals.empresa).forEach(([key, cfg]) => {
-    if (cfg.unit === '%') return; // auto-calculated
+    if (cfg.unit === '%') return; 
     html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
       <span style="font-size:12px;color:var(--text2);flex:1">${cfg.icon} ${cfg.label}</span>
       <input class="form-control" type="number" min="0" style="width:90px;padding:5px 8px;text-align:center"
@@ -2041,7 +2066,6 @@ function openEditGoals() {
   });
   html += `</div>`;
 
-  // Canais
   html += `<div class="form-section-title" style="grid-column:unset;margin-bottom:8px">📡 Canais</div>`;
   html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">`;
   Object.entries(goals.canais).forEach(([key, cfg]) => {
@@ -2053,7 +2077,6 @@ function openEditGoals() {
   });
   html += `</div>`;
 
-  // Responsáveis
   html += `<div class="form-section-title" style="grid-column:unset;margin-bottom:8px">👥 Colaboradores (Contatos / ${pLabel})</div>`;
   html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px" id="goalsResps">`;
   (goals.responsaveis||[]).forEach((r,i) => {
@@ -2090,19 +2113,16 @@ function saveGoals() {
   const goals = getGoals();
   const p = metasPeriod;
 
-  // Empresa
   Object.keys(goals.empresa).forEach(key => {
     const el = document.getElementById(`goal_emp_${key}`);
     if (el) goals.empresa[key][p] = parseFloat(el.value) || 0;
   });
 
-  // Canais
   Object.keys(goals.canais).forEach(key => {
     const el = document.getElementById(`goal_canal_${key}`);
     if (el) goals.canais[key][p] = parseFloat(el.value) || 0;
   });
 
-  // Responsáveis
   const respCount = (goals.responsaveis||[]).length;
   const colors = ['#5865f2','#a855f7','#22c55e','#f97316','#06b6d4','#ec4899','#eab308'];
   for (let i = 0; i < respCount; i++) {
@@ -2166,7 +2186,6 @@ function editRespMetrics(idx) {
   });
   html += `</div>`;
 
-  // Metas individuais por métrica por período
   html += `<div class="form-section-title" style="margin-bottom:8px">Metas (${pLabel})</div>`;
   html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">`;
   METRICAS.forEach(m => {
@@ -2182,7 +2201,6 @@ function editRespMetrics(idx) {
 
   body.innerHTML = html;
 
-  // Override the save button action temporarily
   document.querySelector('#goalsModal .modal-footer .btn-primary').onclick = function() {
     const newMetricas = METRICAS.filter(m => document.getElementById(`resp_metric_${m.key}`)?.checked).map(m => m.key);
     if (newMetricas.length === 0) { toast('Selecione ao menos 1 métrica.', 'error'); return; }
@@ -2201,15 +2219,69 @@ function editRespMetrics(idx) {
   document.getElementById('goalsModal').classList.remove('hidden');
 }
 
-
-
 function closeGoalsModal() {
   document.getElementById('goalsModal').classList.add('hidden');
-  // Reset save button to default action
   const btn = document.querySelector('#goalsModal .modal-footer .btn-primary');
   if (btn) btn.onclick = saveGoals;
 }
 
+// ═══════════════════════════════════
+// RESIZE DE COLUNAS
+// ═══════════════════════════════════
+function initResizableColumns() {
+  const table = document.getElementById('leadsTable');
+  const cols = table.querySelectorAll('thead th');
+  
+  cols.forEach(col => {
+    // Cria o elemento clicável na borda direita
+    const resizer = document.createElement('div');
+    resizer.classList.add('resizer');
+    col.appendChild(resizer);
+    
+    let x = 0;
+    let w = 0;
+
+    const mouseDownHandler = function(e) {
+      x = e.clientX;
+      const styles = window.getComputedStyle(col);
+      w = parseInt(styles.width, 10);
+
+      document.addEventListener('mousemove', mouseMoveHandler);
+      document.addEventListener('mouseup', mouseUpHandler);
+      resizer.classList.add('resizing');
+    };
+
+    const mouseMoveHandler = function(e) {
+      const dx = e.clientX - x;
+      const newWidth = w + dx;
+      
+      // Atualiza a largura do TH
+      col.style.width = `${newWidth}px`;
+      col.style.minWidth = `${newWidth}px`;
+      col.style.maxWidth = `${newWidth}px`;
+      
+      // Acha as células (TDs) dessa coluna e permite que elas cresçam junto
+      const colIndex = Array.from(col.parentNode.children).indexOf(col);
+      const cells = table.querySelectorAll(`tbody tr td:nth-child(${colIndex + 1})`);
+      cells.forEach(cell => {
+         cell.style.maxWidth = `${newWidth}px`;
+         cell.style.width = `${newWidth}px`;
+      });
+    };
+
+    const mouseUpHandler = function() {
+      resizer.classList.remove('resizing');
+      document.removeEventListener('mousemove', mouseMoveHandler);
+      document.removeEventListener('mouseup', mouseUpHandler);
+    };
+
+    resizer.addEventListener('mousedown', mouseDownHandler);
+  });
+}
+
+// Chame a função antes de carregar os dados
+initResizableColumns();
+// Inicia o sistema
 load();
 </script>
 </body>
