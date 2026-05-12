@@ -11,6 +11,7 @@
   gtag('js', new Date());
   gtag('config', 'GA_MEASUREMENT_ID');
 </script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
 
@@ -57,7 +58,6 @@ body { position: relative; z-index: 0; }
 .bg-grid {
     position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
     background-size: 40px 40px;
-    /* Linhas extremamente suaves (apenas 2% de opacidade) */
     background-image: 
         linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
         linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
@@ -67,7 +67,6 @@ body { position: relative; z-index: 0; }
 .ambient-light-saas {
     position: fixed; top: -20%; left: 50%; transform: translateX(-50%);
     width: 90vw; height: 70vh;
-    /* Luz radial vindo do topo, sem animação de pulso */
     background: radial-gradient(ellipse at top, rgba(0, 210, 255, 0.07) 0%, transparent 60%);
     z-index: -1; pointer-events: none;
 }
@@ -296,6 +295,50 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
 .nicho-drawer-header span.arrow{transition:transform .2s;}
 .nicho-drawer.open span.arrow{transform:rotate(90deg);}
 
+/* ── CUSTOM DATE PICKER (ANO OCULTO) ── */
+.custom-date-picker {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    background: var(--surface);
+    padding: 6px 12px;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    transition: all 0.2s;
+}
+.custom-date-picker:hover { border-color: var(--border2); }
+
+/* Oculta o texto nativo do input de forma forçada */
+.custom-date-picker input[type="date"] {
+    position: absolute !important;
+    top: 0 !important; left: 0 !important; 
+    width: 100% !important; height: 100% !important;
+    opacity: 0 !important; 
+    cursor: pointer !important; 
+    z-index: 10 !important;
+    color: transparent !important;
+    background: transparent !important;
+    font-size: 0px !important;
+}
+
+/* Estica a área de clique do ícone nativo para cobrir 100% do botão */
+.custom-date-picker input[type="date"]::-webkit-calendar-picker-indicator {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    margin: 0; padding: 0;
+    cursor: pointer;
+    opacity: 0;
+}
+
+.custom-date-picker span {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    pointer-events: none;
+}
+
 /* ── KANBAN & METAS VIEWS ── */
 .kanban-outer{flex:1;overflow-x:auto;overflow-y:hidden}
 .kanban-view{display:flex;gap:14px;padding:16px 20px;min-height:100%;align-items:flex-start;width:max-content;}
@@ -377,7 +420,7 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
   position: absolute;
   top: 0;
   right: 0;
-  width: 15px; /* Aumentado de 5px para 15px para facilitar o clique */
+  width: 15px; 
   cursor: col-resize; 
   user-select: none;
   height: 100%;
@@ -385,14 +428,62 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
 }
 
 .resizer:hover, .resizing {
-  border-right: 5px solid var(--accent); /* Linha azul de destaque ao arrastar */
+  border-right: 5px solid var(--accent); 
 }
 
-/* Garante que o max-width das células acompanhe a largura da coluna quando expandida */
 #leadsTable td.td-truncate {
-  max-width: 100px; /* Largura inicial */
+  max-width: 100px; 
   transition: max-width 0.1s;
 }
+
+/* ── AÇÕES NA CHECKBOX (NOVO) ── */
+.check-container { 
+  display: flex; 
+  align-items: center; 
+  min-height: 24px; 
+}
+.row-actions-left { 
+  display: none;
+  align-items: center; 
+  gap: 4px; 
+  margin-left: 10px; 
+}
+.row-check:checked ~ .row-actions-left { 
+  display: inline-flex; 
+  animation: slideInRight 0.2s ease; 
+}
+
+/* ── NOVO DASHBOARD METAS (VISUAL REACT/SaaS) ── */
+.dash-grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.dash-kpi { background: #131520; border: 1px solid #252840; border-radius: 12px; padding: 20px; position: relative; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.2); transition: border-color 0.2s; }
+.dash-kpi:hover { border-color: #333860; }
+.dash-kpi-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: absolute; right: 20px; top: 20px; }
+
+.dash-grid-charts { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 24px; }
+.dash-grid-bottom { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 40px; }
+@media (max-width: 1024px) { 
+   .dash-grid-charts, .dash-grid-bottom { grid-template-columns: 1fr; } 
+}
+
+.dash-card { background: #131520; border: 1px solid #252840; border-radius: 12px; padding: 24px; box-shadow: 0 4px 24px rgba(0,0,0,.2); display: flex; flex-direction: column; }
+.dash-title { font-size: 13px; font-weight: 700; color: #8890b8; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid #252840; padding-bottom: 12px; }
+
+/* Podium Ranking Equipe */
+.podium-wrap { display: flex; align-items: flex-end; justify-content: center; gap: 16px; height: 260px; margin-bottom: 30px; border-bottom: 1px solid #252840; padding-bottom: 16px; }
+.podium-col { display: flex; flex-direction: column; align-items: center; width: 30%; position: relative; }
+.podium-avatar { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; color: #fff; z-index: 10; margin-bottom: -16px; border: 4px solid #1c1f30; object-fit: cover;}
+.podium-avatar.gold { width: 80px; height: 80px; font-size: 32px; border-color: #eab308; margin-bottom: -20px; }
+.podium-badge { position: absolute; top: 40px; right: 15%; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; color: #fff; z-index: 20; border: 2px solid #1c1f30; }
+.badge-gold { background: #eab308; color: #713f12; top: 50px; }
+.badge-silver { background: #8890b8; }
+.badge-bronze { background: #f97316; }
+.podium-bar { width: 100%; border-radius: 12px 12px 0 0; display: flex; flex-direction: column; align-items: center; padding-top: 32px; text-align: center; }
+.bar-gold { height: 180px; background: #2a220d; border: 1px solid #4a3c0a; border-bottom: none; padding-top: 40px; }
+.bar-silver { height: 140px; background: #1c1f30; border: 1px solid #252840; border-bottom: none; }
+.bar-bronze { height: 100px; background: #1c1f30; border: 1px solid #252840; border-bottom: none; }
+
+.progress-bar-wrap { width: 100%; background: #1c1f30; border-radius: 99px; height: 6px; overflow: hidden; margin-top: 6px; }
+.progress-bar-fill { height: 100%; border-radius: 99px; transition: width 0.5s ease; }
 
 </style>
 </head>
@@ -409,6 +500,18 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
     </div>
   </div>
   <div class="topbar-right">
+    <div style="display:flex; align-items:center; gap:8px; margin-right:12px; border-right:1px solid var(--border); padding-right:16px;">
+      <div class="custom-date-picker">
+        <span id="labelGlobalDataInicio">Início</span>
+        <input type="date" id="inputGlobalDataInicio" onchange="updateGlobalDateRange()">
+      </div>
+      <span style="color:var(--text3); font-size:10px; font-weight:700; text-transform:uppercase;">Até</span>
+      <div class="custom-date-picker">
+        <span id="labelGlobalDataFim">Fim</span>
+        <input type="date" id="inputGlobalDataFim" onchange="updateGlobalDateRange()">
+      </div>
+      <button class="btn-icon" onclick="clearGlobalDateRange()" title="Limpar Datas" style="padding:4px 6px; font-size:10px;">✕</button>
+    </div>
     <div class="view-toggle">
       <button class="view-btn active" id="viewTableBtn" onclick="setView('table')" title="Tabela">☰ Tabela</button>
       <button class="view-btn" id="viewKanbanBtn" onclick="setView('kanban')" title="Kanban">⊞ Kanban</button>
@@ -509,7 +612,6 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
               <th>Pontos Fortes</th>
               <th>Tem como Escalar?</th>
               <th>Observação</th>
-              <th style="width:80px">Ações</th>
             </tr>
           </thead>
           <tbody id="tableBody"></tbody>
@@ -522,28 +624,7 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
     </div>
 
     <div id="metasView" class="hidden" style="position:relative">
-      <div class="metas-header">
-        <div class="metas-title">🎯 Metas & Objetivos</div>
-        <div style="display:flex;align-items:center;gap:10px">
-          <div class="metas-period-tabs">
-            <button class="metas-tab active" onclick="setMetasPeriod('dia',this)">Hoje</button>
-            <button class="metas-tab" onclick="setMetasPeriod('semana',this)">Semana</button>
-            <button class="metas-tab" onclick="setMetasPeriod('mes',this)">Mês</button>
-          </div>
-          <button class="btn btn-ghost" onclick="openEditGoals()" style="font-size:12px">⚙️ Editar Metas</button>
-        </div>
       </div>
-
-      <div class="metas-section-title">🏢 Empresa — Visão Geral</div>
-      <div class="metas-grid" id="metasEmpresa"></div>
-
-      <div class="metas-section-title">📡 Por Canal</div>
-      <div class="canal-grid" id="metasCanais"></div>
-
-      <div class="metas-section-title">👥 Por Colaborador</div>
-      <div class="resp-grid" id="metasResponsaveis"></div>
-
-    </div>
 
   </div>
 
@@ -606,6 +687,7 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
           <label>Origem / Canal</label>
           <select class="form-control" id="f_origem">
             <option value="">— selecione —</option>
+            <option value="gmn">GMN</option>
             <option value="whatsapp">WhatsApp</option>
             <option value="instagram">Instagram</option>
             <option value="telefone">Telefone / Ligação</option>
@@ -802,7 +884,7 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
 <div class="modal-overlay hidden" id="goalsModal" onclick="if(event.target===this)closeGoalsModal()">
   <div class="modal" style="max-width:560px">
     <div class="modal-header">
-      <div class="modal-title">⚙️ Editar Metas</div>
+      <div class="modal-title">⚙️ Editar Metas (Mensais)</div>
       <button class="btn-icon" onclick="closeGoalsModal()">✕</button>
     </div>
     <div class="modal-body" id="goalsModalBody">
@@ -871,12 +953,17 @@ let db = { leads: [], nichos: [], responsaveis: [], lastId: 0 };
 
 let currentStatusFilter = null;
 let currentNichoFilter  = null;
-let currentResponsavelFilter = null; // Novo filtro de responsável
+let currentResponsavelFilter = null;
 let currentSort = { key: null, dir: 1 };
 let currentView = 'table';
 let editingId   = null;
 let statusTargetId = null;
 let detailId    = null;
+
+// VARIÁVEIS DE PERÍODO (Substituem as abas fixas)
+let metasDataInicio = new Date(new Date().setDate(1)).toISOString().slice(0, 10); // Começa no 1º dia do mês
+let metasDataFim = new Date().toISOString().slice(0, 10); // Até hoje
+let metasOpen = false;
 
 const firebaseConfig = {
   apiKey: "AIzaSyCTjJ2x_uJbjDTZzrkgHxP8RyTVqj4swkE", 
@@ -891,7 +978,6 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
 
-// Função Load 100% blindada contra erros de Array do Firebase
 function load() {
   database.ref('crm_data').on('value', (snapshot) => {
     const data = snapshot.val();
@@ -949,6 +1035,22 @@ function getFiltered() {
     if (currentNichoFilter)  list = list.filter(l => l.nicho === currentNichoFilter);
     if (currentResponsavelFilter) list = list.filter(l => l.responsavel === currentResponsavelFilter);
     
+    // --- COLE O CÓDIGO NOVO AQUI ---
+    const dInicio = document.getElementById('inputGlobalDataInicio')?.value;
+    const dFim = document.getElementById('inputGlobalDataFim')?.value;
+
+    if (dInicio || dFim) {
+      list = list.filter(l => {
+        const dEntrada = (l.data_entrada || l.createdAt || '').slice(0, 10);
+        if (!dEntrada) return false;
+        
+        if (dInicio && dFim) return dEntrada >= dInicio && dEntrada <= dFim;
+        if (dInicio) return dEntrada >= dInicio;
+        if (dFim) return dEntrada <= dFim;
+      });
+    }
+    // --- FIM DO CÓDIGO NOVO ---
+
     if (currentSort.key) {
       list.sort((a,b)=>{
         let av = a[currentSort.key]||'', bv = b[currentSort.key]||'';
@@ -966,6 +1068,16 @@ function getFiltered() {
 }
 
 function applyFilters() { renderAll(); }
+
+function sortTable(key) {
+  if (currentSort.key === key) {
+    currentSort.dir *= -1;
+  } else {
+    currentSort.key = key;
+    currentSort.dir = 1;
+  }
+  renderTable();
+}
 
 // ═══════════════════════════════════
 // VIEW TOGGLE 
@@ -1012,7 +1124,7 @@ function renderAll() {
     updateCounts();
     updateStats();
     updateNichosSidebar(); 
-    updateResponsaveisSidebar(); // Atualiza a nova gaveta da equipe
+    updateResponsaveisSidebar();
     
     if (currentView === 'table') {
         renderTable();
@@ -1126,7 +1238,15 @@ function renderTable() {
       `;
 
       return `<tr class="${detailId===l.id?'selected':''}" style="animation-delay:${delay}s">
-        <td><input type="checkbox" class="row-check" data-id="${l.id}"></td>
+        <td>
+          <div class="check-container">
+            <input type="checkbox" class="row-check" data-id="${l.id}">
+            <div class="row-actions-left">
+              <button class="btn-icon" title="Editar Completo" onclick="openModal(${l.id})">✏️</button>
+              <button class="btn-icon" title="Excluir" onclick="deleteLead(${l.id})">🗑</button>
+            </div>
+          </div>
+        </td>
         <td class="td-name" onclick="openDetail(${l.id})">
           ${editable('nome', `
             <div class="td-name-main">${esc(l.nome)}</div>
@@ -1153,12 +1273,6 @@ function renderTable() {
         <td class="td-truncate" title="${esc(l.pontos||'')}">${editable('pontos', esc(l.pontos)||'<span class="td-empty">—</span>')}</td>
         <td class="td-truncate" title="${esc(l.escalar||'')}">${editable('escalar', esc(l.escalar)||'<span class="td-empty">—</span>')}</td>
         <td class="td-truncate" title="${esc(l.obs||'')}">${editable('obs', esc(l.obs)||'<span class="td-empty">—</span>')}</td>
-        <td>
-          <div class="row-actions">
-            <button class="btn-icon" title="Editar Completo" onclick="openModal(${l.id})">✏️</button>
-            <button class="btn-icon" title="Excluir" onclick="deleteLead(${l.id})">🗑</button>
-          </div>
-        </td>
       </tr>`;
     }).join('');
   } catch (erro) {
@@ -1388,11 +1502,9 @@ function openStatusDropdown(e, id) {
   dd.classList.remove('hidden');
   const r = e.target.getBoundingClientRect();
   
-  // Calcula a altura da caixinha de opções
   const dropdownHeight = dd.offsetHeight;
-  let topPos = r.bottom + 4; // Padrão: abre para baixo do botão
+  let topPos = r.bottom + 4; 
 
-  // Se a posição para baixo + o tamanho da caixa passar do limite da tela, abre para cima
   if (topPos + dropdownHeight > window.innerHeight) {
       topPos = r.top - dropdownHeight - 4;
   }
@@ -1460,7 +1572,7 @@ function filterByStatus(status, el) {
 
   currentStatusFilter = status;
   currentNichoFilter  = null; 
-  currentResponsavelFilter = null; // Zera a equipe ao filtrar status
+  currentResponsavelFilter = null;
   document.querySelectorAll('.sidebar-item').forEach(e => e.classList.remove('active'));
   if (el) el.classList.add('active');
   renderAll();
@@ -1675,8 +1787,26 @@ function toast(msg, type='success'){
 // METAS & OBJETIVOS
 // ═══════════════════════════════════
 
-let metasPeriod = 'dia';
-let metasOpen = false;
+function formatDayMonth(isoDate) {
+    if (!isoDate) return '--/--';
+    const [y, m, d] = isoDate.split('-');
+    return `${d}/${m}`;
+}
+
+function updateMetasDateRange() {
+    const start = document.getElementById('metaDataInicio').value;
+    const end = document.getElementById('metaDataFim').value;
+    
+    if (start && end) {
+        if (start > end) {
+            toast('A data inicial deve ser menor ou igual à data final.', 'error');
+            return;
+        }
+        metasDataInicio = start;
+        metasDataFim = end;
+        renderMetas();
+    }
+}
 
 const DEFAULT_GOALS = {
   empresa: {
@@ -1691,368 +1821,425 @@ const DEFAULT_GOALS = {
     email:    { label:'E-mail',   icon:'📧', color:'#5865f2', dia:5,  semana:25, mes:100 },
     telefone: { label:'Telefone', icon:'📞', color:'#06b6d4', dia:8,  semana:40, mes:160 },
     instagram:{ label:'Instagram',icon:'📸', color:'#ec4899', dia:5,  semana:25, mes:100 },
-  },
-  responsaveis: [
-    { nome:'SDR',    role:'SDR',    color:'#5865f2', dia:6,  semana:30, mes:120 },
-    { nome:'BDR',    role:'BDR',    color:'#a855f7', dia:6,  semana:30, mes:120 },
-    { nome:'Closer', role:'Closer', color:'#22c55e', dia:2,  semana:10, mes:40  },
-  ]
+  }
 };
 
 function getGoals() {
-  return db.goals || JSON.parse(JSON.stringify(DEFAULT_GOALS));
+  let g = db.goals || JSON.parse(JSON.stringify(DEFAULT_GOALS));
+  if (!g.empresa) g = JSON.parse(JSON.stringify(DEFAULT_GOALS)); 
+  return g;
 }
 
-function getMetricActual(key, period) {
-  const hoje = new Date().toISOString().slice(0,10);
-  const now   = new Date();
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - now.getDay());
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const swStr = startOfWeek.toISOString().slice(0,10);
-  const smStr = startOfMonth.toISOString().slice(0,10);
-
-  function inPeriod(dateStr) {
-    if (!dateStr) return false;
-    if (period === 'dia')    return dateStr === hoje;
-    if (period === 'semana') return dateStr >= swStr && dateStr <= hoje;
-    if (period === 'mes')    return dateStr >= smStr && dateStr <= hoje;
-    return false;
-  }
-
-  const leads = db.leads || [];
-  switch(key) {
-    case 'novosLeads':
-      return leads.filter(l => inPeriod((l.createdAt||'').slice(0,10))).length;
-    case 'reunioesMarcadas':
-      return leads.filter(l => l.status === 'reuniao-marc' && inPeriod(l.reuniao)).length;
-    case 'contratosFechados':
-      return leads.filter(l => l.status === 'contrato' && inPeriod((l.updatedAt||l.createdAt||'').slice(0,10))).length;
-    case 'contatosRealizados':
-      return leads.filter(l => inPeriod(l.ultimo_contato)).length;
-    case 'taxaConversao': {
-      const total = leads.length;
-      const conv = leads.filter(l => l.status === 'contrato').length;
-      return total > 0 ? Math.round((conv/total)*100) : 0;
-    }
-    default: return 0;
-  }
-}
-
-function getCanalActual(canal, period) {
-  const leads = db.leads || [];
-  const hoje = new Date().toISOString().slice(0,10);
-  const now   = new Date();
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - now.getDay());
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const swStr = startOfWeek.toISOString().slice(0,10);
-  const smStr = startOfMonth.toISOString().slice(0,10);
-
-  function inPeriod(dateStr) {
-    if (!dateStr) return false;
-    if (period === 'dia')    return dateStr === hoje;
-    if (period === 'semana') return dateStr >= swStr && dateStr <= hoje;
-    if (period === 'mes')    return dateStr >= smStr && dateStr <= hoje;
-    return false;
-  }
-
-  const leadsDoPeriodo = leads.filter(l => {
-     const dataEntrada = l.data_entrada || (l.createdAt||'').slice(0,10);
-     return inPeriod(dataEntrada);
-  });
-
-  if (canal === 'whatsapp')  return leadsDoPeriodo.filter(l => l.origem === 'whatsapp').length;
-  if (canal === 'email')     return leadsDoPeriodo.filter(l => l.origem === 'email').length;
-  if (canal === 'telefone')  return leadsDoPeriodo.filter(l => l.origem === 'telefone').length;
-  if (canal === 'instagram') return leadsDoPeriodo.filter(l => l.origem === 'instagram').length;
-  
-  return 0;
-}
-
-function getRespActual(nome, period) {
-  const hoje = new Date().toISOString().slice(0,10);
-  const now   = new Date();
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - now.getDay());
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const swStr = startOfWeek.toISOString().slice(0,10);
-  const smStr = startOfMonth.toISOString().slice(0,10);
-  function inPeriod(dateStr) {
-    if (!dateStr) return false;
-    if (period === 'dia')    return dateStr === hoje;
-    if (period === 'semana') return dateStr >= swStr && dateStr <= hoje;
-    if (period === 'mes')    return dateStr >= smStr && dateStr <= hoje;
-    return false;
-  }
-  const leads = db.leads || [];
-  const mine  = leads.filter(l => (l.responsavel||'').toLowerCase().trim() === nome.toLowerCase().trim());
-  return {
-    contatos:  mine.filter(l => inPeriod(l.ultimo_contato)).length,
-    reunioes:  mine.filter(l => l.status === 'reuniao-marc').length,
-    contratos: mine.filter(l => l.status === 'contrato').length,
-  };
-}
-
-function pct(actual, goal) {
-  if (!goal) return 100;
-  return Math.round((actual/goal)*100); 
-}
-function pctBar(actual, goal) {
-  if (!goal) return 100;
-  return Math.min(Math.round((actual/goal)*100), 100); 
-}
-function pctClass(p) {
-  if (p >= 100) return 'good';
-  if (p >= 80)  return 'good';
-  if (p >= 40)  return 'warn';
-  return 'bad';
-}
-function pctLabel(p) {
-  if (p >= 100) return '🎉 Meta Superada!';
-  if (p >= 80)  return 'Quase lá';
-  if (p >= 40)  return '⚠️ Atenção';
-  return '🔴 Crítico';
-}
-
+// ═══════════════════════════════════
+// METAS & OBJETIVOS - NOVO DASHBOARD
+// ═══════════════════════════════════
 function renderMetas() {
   if (!metasOpen) return;
+  const metasView = document.getElementById('metasView');
+
+  const iconDollar = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>`;
+  const iconCheck = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+  const iconCalendar = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`;
+  const iconUsers = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>`;
+  const iconZap = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>`;
+  const iconBriefcase = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>`;
+  const iconAlert = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
+  const iconTrophy = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>`;
+
+  const fmtMoeda = (v) => {
+    if (v >= 1000000) return 'R$ ' + (v/1000000).toFixed(2) + 'M';
+    if (v >= 1000) return 'R$ ' + (v/1000).toFixed(1) + 'k';
+    return 'R$ ' + v.toLocaleString('pt-BR');
+  };
+
   const goals = getGoals();
-  const p = metasPeriod;
-
-  const empresaEl = document.getElementById('metasEmpresa');
-
-  const valorMeta = goals.valorPipeline || { ativo: false, ticketMedio: 1500 };
-  const leadsAtivos = (db.leads||[]).filter(l => l.status !== 'contrato' && l.status !== 'interesse');
-  const leadsContrato = (db.leads||[]).filter(l => l.status === 'contrato');
-  const ticketMedio = valorMeta.ticketMedio || 1500;
-  const valorPipeline = leadsAtivos.length * ticketMedio;
-  const receitaFechada = leadsContrato.length * ticketMedio;
-
-  function getLeadsDoPeriodo(period) {
-    const hoje = new Date().toISOString().slice(0,10);
-    const now = new Date();
-    const sw = new Date(now); sw.setDate(now.getDate() - now.getDay());
-    const sm = new Date(now.getFullYear(), now.getMonth(), 1);
-    const swStr = sw.toISOString().slice(0,10);
-    const smStr = sm.toISOString().slice(0,10);
-    return (db.leads||[]).filter(l => {
-      const d = (l.data_entrada || (l.createdAt||'').slice(0,10));
-      if (period === 'dia') return d === hoje;
-      if (period === 'semana') return d >= swStr && d <= hoje;
-      if (period === 'mes') return d >= smStr && d <= hoje;
-      return true;
-    });
+  const ticketMedio = (goals.valorPipeline && goals.valorPipeline.ticketMedio) || 1500;
+  
+  function inPeriod(dateStr) {
+      if (!dateStr) return false;
+      return dateStr >= metasDataInicio && dateStr <= metasDataFim;
   }
-  const leadsPeriodo = getLeadsDoPeriodo(p);
-  const origemCounts = {};
+
+  const allLeads = db.leads || [];
+
+  // 1. Leads que ENTRARAM no período selecionado (Garante que só vai mostrar os 5 leads!)
+  const leadsPeriodo = allLeads.filter(l => {
+      const dEntrada = (l.data_entrada || l.createdAt || '').slice(0,10);
+      return inPeriod(dEntrada);
+  });
+
+  // 2. Contratos FECHADOS no período selecionado (Garante que a venda conta no dia certo)
+  const contratos = allLeads.filter(l => {
+      const dUpdate = (l.updatedAt || l.createdAt || '').slice(0,10);
+      return l.status === 'contrato' && inPeriod(dUpdate);
+  });
+
+  // 3. Reuniões ACONTECENDO no período selecionado
+  const reunioes = allLeads.filter(l => {
+      if (!['reuniao-marc', 'reuniao-pos', 'contrato'].includes(l.status)) return false;
+      const dReuniao = (l.reuniao || l.updatedAt || l.createdAt || '').slice(0,10);
+      return inPeriod(dReuniao);
+  });
+
+  const novaReceita = contratos.length * ticketMedio;
+  const qtdLeads = leadsPeriodo.length;
+  
+  // Taxas comparando as conversões de hoje com as entradas de hoje
+  const winRate = qtdLeads > 0 ? Math.round((contratos.length / qtdLeads) * 100) : 0;
+  const agendamento = qtdLeads > 0 ? Math.round((reunioes.length / qtdLeads) * 100) : 0;
+
+  // --- Gráfico de Evolução Adaptável ---
+  const chartEvolucaoMap = {};
+  
+  // Usa "12:00:00" para driblar problemas de Timezone que poderiam avançar/voltar 1 dia
+  let cDate = new Date(metasDataInicio + 'T12:00:00');
+  const eDate = new Date(metasDataFim + 'T12:00:00');
+  
+  // Se for maior que 90 dias, agrupa por mês para não "achatar" muito, senão por dia.
+  const diffDays = Math.ceil((eDate - cDate) / (1000 * 60 * 60 * 24));
+  let groupFormat = diffDays > 90 ? 'month' : 'day';
+
+  if (groupFormat === 'day') {
+      while (cDate <= eDate) {
+          const iso = cDate.toISOString().slice(0, 10);
+          const [y, m, d] = iso.split('-');
+          chartEvolucaoMap[iso] = { label: `${d}/${m}`, leads: 0, reunioes: 0, contratos: 0 };
+          cDate.setDate(cDate.getDate() + 1);
+      }
+  } else {
+      while (cDate <= eDate) {
+          const y = cDate.getFullYear();
+          const m = String(cDate.getMonth() + 1).padStart(2, '0');
+          const key = `${y}-${m}`;
+          chartEvolucaoMap[key] = { label: `${m}/${y.toString().slice(2)}`, leads: 0, reunioes: 0, contratos: 0 };
+          cDate.setMonth(cDate.getMonth() + 1);
+      }
+  }
+
+  allLeads.forEach(l => {
+      const dEntradaFull = l.data_entrada || l.createdAt || '';
+      const dEntradaKey = groupFormat === 'day' ? dEntradaFull.slice(0, 10) : dEntradaFull.slice(0, 7);
+      if(chartEvolucaoMap[dEntradaKey]) chartEvolucaoMap[dEntradaKey].leads++;
+      
+      if(l.status === 'contrato') {
+          const dDataFull = l.updatedAt || l.createdAt || '';
+          const dDataKey = groupFormat === 'day' ? dDataFull.slice(0, 10) : dDataFull.slice(0, 7);
+          if(chartEvolucaoMap[dDataKey]) {
+              chartEvolucaoMap[dDataKey].reunioes++;
+              chartEvolucaoMap[dDataKey].contratos++;
+          }
+      } 
+      else if(l.reuniao || ['reuniao-marc', 'reuniao-pos'].includes(l.status)) {
+          const dReuniaoFull = l.reuniao || l.updatedAt || l.createdAt || '';
+          const dReuniaoKey = groupFormat === 'day' ? dReuniaoFull.slice(0, 10) : dReuniaoFull.slice(0, 7);
+          if(chartEvolucaoMap[dReuniaoKey]) chartEvolucaoMap[dReuniaoKey].reunioes++;
+      }
+  });
+
+  const chartEvolucao = Object.values(chartEvolucaoMap);
+
+  // Canais
+  const canaisMap = {};
   leadsPeriodo.forEach(l => {
-    const o = l.origem || 'outro';
-    origemCounts[o] = (origemCounts[o]||0)+1;
+      const o = l.origem || 'Outro';
+      if (!canaisMap[o]) canaisMap[o] = { name: o.charAt(0).toUpperCase() + o.slice(1), leads: 0, reunioes: 0 };
+      canaisMap[o].leads++;
+      if(['reuniao-marc', 'reuniao-pos', 'contrato'].includes(l.status)) canaisMap[o].reunioes++;
   });
-  const origemLabels = { whatsapp:'WhatsApp', instagram:'Instagram', telefone:'Telefone', email:'E-mail', indicacao:'Indicação', site:'Site/Inbound', outro:'Outro' };
-  const origemColors = { whatsapp:'#22c55e', instagram:'#ec4899', telefone:'#06b6d4', email:'#5865f2', indicacao:'#f97316', site:'#a855f7', outro:'#8890b8' };
+  const dataCanais = Object.values(canaisMap).sort((a,b) => b.reunioes - a.reunioes).slice(0, 6);
 
-  const perdidos = (db.leads||[]).filter(l => l.status === 'interesse');
-  const motivoCounts = {};
+  // Nichos
+  const nichoMap = {};
+  leadsPeriodo.forEach(l => {
+     if(!l.nicho) return;
+     nichoMap[l.nicho] = (nichoMap[l.nicho] || 0) + 1;
+  });
+  const dataNicho = Object.entries(nichoMap)
+     .map(([nicho, count]) => ({ nicho, count, percent: Math.round((count/qtdLeads)*100) }))
+     .sort((a,b) => b.count - a.count).slice(0,5);
+
+  // Perdas
+  const perdidos = leadsPeriodo.filter(l => l.status === 'interesse');
+  const perdaMap = {};
   perdidos.forEach(l => {
-    const m = l.motivoPerda || 'Sem Resposta';
-    motivoCounts[m] = (motivoCounts[m]||0)+1;
+     const m = l.motivoPerda || 'Sem Motivo/Resposta';
+     perdaMap[m] = (perdaMap[m] || 0) + 1;
   });
-  const topMotivos = Object.entries(motivoCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const dataPerdas = Object.entries(perdaMap)
+     .map(([motivo, count]) => ({ motivo, percent: Math.round((count/perdidos.length)*100) }))
+     .sort((a,b) => b.percent - a.percent).slice(0,5);
 
-  empresaEl.innerHTML = Object.entries(goals.empresa).map(([key, cfg]) => {
-    const actual = getMetricActual(key, p);
-    const goal   = cfg[p];
-    const unit   = cfg.unit || '';
-    const perc   = goal != null ? pct(actual, goal) : null;
-    const barW   = goal != null ? pctBar(actual, goal) : null;
-    const pc     = perc != null ? pctClass(perc) : '';
-    const semColor = perc == null ? 'var(--text3)' : perc >= 100 ? 'var(--green)' : perc >= 80 ? 'var(--yellow)' : 'var(--red)';
-    const semBg   = perc == null ? 'transparent' : perc >= 100 ? 'var(--green-bg)' : perc >= 80 ? 'var(--yellow-bg)' : 'var(--red-bg)';
-    const deltaText = perc == null ? '' : perc >= 100 ? `🎉 ${perc}% — Meta Superada!` : perc >= 80 ? `⚠️ ${perc}% — Quase lá` : `🔴 ${perc}% — Crítico`;
-    return `<div class="metas-kpi-card" style="--kpi-color:${cfg.color};border-color:${semColor}22">
-      <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${semColor};border-radius:12px 12px 0 0"></div>
-      <div class="kpi-header">
-        <span class="kpi-label">${cfg.label}</span>
-        <span class="kpi-icon">${cfg.icon}</span>
-      </div>
-      <div class="kpi-values">
-        <span class="kpi-current" style="color:${cfg.color}">${actual}${unit}</span>
-        ${goal != null ? `<span class="kpi-goal">/ ${goal}${unit}</span>` : '<span class="kpi-goal">— sem meta</span>'}
-      </div>
-      ${goal != null ? `
-      <div class="kpi-progress-bar"><div class="kpi-progress-fill" style="width:${barW}%;background:${semColor}"></div></div>
-      <div class="kpi-footer">
-        <span class="kpi-pct ${pc}" style="color:${semColor};background:${semBg};padding:2px 8px;border-radius:6px;font-size:11px">${deltaText}</span>
-      </div>` : ''}
-    </div>`;
-  }).join('') +
-
-  `<div class="metas-kpi-card" style="--kpi-color:#f97316;border-color:#f9731622">
-    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--orange);border-radius:12px 12px 0 0"></div>
-    <div class="kpi-header"><span class="kpi-label">💰 Valor Potencial no Funil</span><span class="kpi-icon">🏦</span></div>
-    <div class="kpi-values"><span class="kpi-current" style="color:var(--orange);font-size:22px">R$${valorPipeline.toLocaleString('pt-BR')}</span></div>
-    <div style="font-size:11px;color:var(--text3);margin-top:4px">${leadsAtivos.length} leads × R$${ticketMedio.toLocaleString('pt-BR')} ticket médio</div>
-    <div style="font-size:11px;color:var(--green);margin-top:4px">✅ Receita fechada: R$${receitaFechada.toLocaleString('pt-BR')}</div>
-    <div style="margin-top:8px"><button onclick="editTicketMedio()" style="font-size:10px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:3px 8px;color:var(--text2);cursor:pointer">✏️ Editar ticket médio</button></div>
-  </div>` +
-
-  `<div class="metas-kpi-card" style="--kpi-color:#a855f7;border-color:#a855f722">
-    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--purple);border-radius:12px 12px 0 0"></div>
-    <div class="kpi-header"><span class="kpi-label">📌 Origem dos Leads</span><span class="kpi-icon">🗺️</span></div>
-    <div style="font-size:10px;color:var(--text3);margin-bottom:8px">Período: ${p === 'dia' ? 'Hoje' : p === 'semana' ? 'Esta semana' : 'Este mês'} — ${leadsPeriodo.length} leads</div>
-    ${Object.entries(origemCounts).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([orig, cnt]) => {
-      const pctOrig = leadsPeriodo.length ? Math.round((cnt/leadsPeriodo.length)*100) : 0;
-      return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-        <span style="font-size:11px;color:var(--text2);min-width:70px">${origemLabels[orig]||orig}</span>
-        <div style="flex:1;background:var(--surface2);border-radius:99px;height:6px;overflow:hidden">
-          <div style="height:100%;border-radius:99px;background:${origemColors[orig]||'#8890b8'};width:${pctOrig}%"></div>
-        </div>
-        <span style="font-size:11px;font-family:'DM Mono';color:${origemColors[orig]||'#8890b8'}">${cnt}</span>
-      </div>`;
-    }).join('') || '<div style="font-size:12px;color:var(--text3)">Nenhum lead no período</div>'}
-  </div>` +
-
-  `<div class="metas-kpi-card" style="--kpi-color:#ef4444;border-color:#ef444422">
-    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--red);border-radius:12px 12px 0 0"></div>
-    <div class="kpi-header"><span class="kpi-label">❌ Motivos de Perda</span><span class="kpi-icon">📉</span></div>
-    <div style="font-size:10px;color:var(--text3);margin-bottom:8px">${perdidos.length} leads perdidos no total</div>
-    ${topMotivos.length ? topMotivos.map(([motivo, cnt]) => {
-      const pctM = perdidos.length ? Math.round((cnt/perdidos.length)*100) : 0;
-      return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-        <span style="font-size:11px;color:var(--text2);min-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${motivo}</span>
-        <div style="flex:1;background:var(--surface2);border-radius:99px;height:6px;overflow:hidden">
-          <div style="height:100%;border-radius:99px;background:var(--red);width:${pctM}%"></div>
-        </div>
-        <span style="font-size:11px;font-family:'DM Mono';color:var(--red)">${cnt}</span>
-      </div>`;
-    }).join('') : `<div style="font-size:12px;color:var(--text3)">Nenhum lead perdido registrado.<br><span style="font-size:10px">Dica: ao marcar "Não Tem Interesse", adicione um campo "Motivo de Perda" via edição do lead.</span></div>`}
-  </div>`;
-
-  const canaisEl = document.getElementById('metasCanais');
-  canaisEl.innerHTML = Object.entries(goals.canais).map(([key, cfg]) => {
-    const actual = getCanalActual(key, p);
-    const goal   = cfg[p];
-    const perc   = pct(actual, goal);
-    const barW   = pctBar(actual, goal);
-    const semColor = perc >= 100 ? 'var(--green)' : perc >= 80 ? 'var(--yellow)' : 'var(--red)';
-    const deltaText = perc >= 100 ? `🎉 ${perc}% — Superado!` : perc >= 80 ? `⚠️ ${perc}% — Quase lá` : `🔴 ${perc}% — Crítico`;
-    return `<div class="canal-card" style="--canal-color:${cfg.color};border-color:${semColor}33">
-      <div class="canal-header">
-        <span class="canal-icon">${cfg.icon}</span>
-        <span class="canal-name">${cfg.label}</span>
-      </div>
-      <div class="canal-nums">
-        <div class="canal-num">
-          <div class="canal-num-val" style="color:${cfg.color}">${actual}</div>
-          <div class="canal-num-label">Realizados</div>
-        </div>
-        <div class="canal-num">
-          <div class="canal-num-val">${goal}</div>
-          <div class="canal-num-label">Meta</div>
-        </div>
-        <div class="canal-num">
-          <div class="canal-num-val" style="color:${semColor}">${perc}%</div>
-          <div class="canal-num-label">Taxa</div>
-        </div>
-      </div>
-      <div class="canal-progress-wrap">
-        <div class="canal-progress-bar"><div class="canal-progress-fill" style="width:${barW}%;background:${semColor}"></div></div>
-      </div>
-      <div style="font-size:10px;color:${semColor};margin-top:4px;font-weight:600">${deltaText}</div>
-    </div>`;
-  }).join('');
-
-  const respsEl = document.getElementById('metasResponsaveis');
-  const resps = goals.responsaveis || [];
-
-  const METRICAS_DISPONIVEIS = [
-    { key: 'contatos',  label: 'Contatos',        icon: '📞' },
-    { key: 'reunioes',  label: 'Reuniões Marc.',   icon: '📅' },
-    { key: 'contratos', label: 'Contratos',        icon: '🤝' },
-    { key: 'novosLeads',label: 'Novos Leads',      icon: '📋' },
-  ];
-
-  respsEl.innerHTML = resps.length === 0
-    ? `<div style="color:var(--text3);font-size:13px;grid-column:1/-1">Nenhum colaborador cadastrado. Clique em ⚙️ Editar Metas para adicionar.</div>`
-    : resps.map((r, idx) => {
-      const stats = getRespActual(r.nome, p);
-      const metaContatos = r[p] || 0;
-      const percContatos = pct(stats.contatos, metaContatos);
-      const barContatos  = pctBar(stats.contatos, metaContatos);
-      const semColor     = percContatos >= 100 ? 'var(--green)' : percContatos >= 80 ? 'var(--yellow)' : 'var(--red)';
-      const initials = r.nome.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
-
-      const metricasVisiveis = r.metricas || ['contatos', 'reunioes', 'contratos'];
-
-      const getStatVal = (key) => {
-        if (key === 'contatos')   return stats.contatos;
-        if (key === 'reunioes')   return stats.reunioes;
-        if (key === 'contratos')  return stats.contratos;
-        if (key === 'novosLeads') return (db.leads||[]).filter(l => (l.responsavel||'').toLowerCase().trim() === r.nome.toLowerCase().trim() && (() => {
-          const hoje = new Date().toISOString().slice(0,10);
-          const now = new Date();
-          const sw = new Date(now); sw.setDate(now.getDate() - now.getDay());
-          const sm = new Date(now.getFullYear(), now.getMonth(), 1);
-          const d = (l.data_entrada || (l.createdAt||'').slice(0,10));
-          if (p === 'dia') return d === hoje;
-          if (p === 'semana') return d >= sw.toISOString().slice(0,10) && d <= hoje;
-          if (p === 'mes') return d >= sm.toISOString().slice(0,10) && d <= hoje;
-          return false;
-        })()).length;
-        return 0;
+  // Ranking Equipe
+  const avatarColors = ['#5865f2', '#a855f7', '#06b6d4', '#ec4899', '#eab308', '#22c55e', '#f97316'];
+  const ranking = [];
+  const responsaveisAtivos = db.responsaveis || [];
+  
+  responsaveisAtivos.forEach((respNome, index) => {
+      const repData = {
+          nome: respNome,
+          avatar: respNome.slice(0, 2).toUpperCase(),
+          color: avatarColors[index % avatarColors.length],
+          receita: 0,
+          contratosFechados: 0
       };
 
-      const getRespMeta = (key) => {
-        if (key === 'contatos') return metaContatos;
-        return r[`meta_${key}_${p}`] || 0;
-      };
+      contratos.forEach(l => {
+          if (l.responsavel === respNome) {
+              repData.receita += ticketMedio;
+              repData.contratosFechados++;
+          }
+      });
+      ranking.push(repData);
+  });
 
-      return `<div class="resp-card" style="border-color:${semColor}33">
-        <div style="height:3px;background:${semColor};border-radius:8px 8px 0 0;margin:-14px -16px 10px"></div>
-        <div class="resp-top">
-          <div class="resp-avatar" style="background:${r.color}">${initials}</div>
-          <div style="flex:1">
-            <div class="resp-name">${esc(r.nome)}</div>
-            <div class="resp-role">${esc(r.role)}</div>
+  ranking.sort((a,b) => b.receita - a.receita);
+
+  let podiumHTML = '';
+  let listHTML = '';
+
+  if (ranking.length >= 3 && ranking[0].receita > 0) {
+      podiumHTML = `
+      <div class="podium-wrap">
+          <div class="podium-col">
+              <div class="podium-avatar" style="background:${ranking[1].color}">${ranking[1].avatar}</div>
+              <div class="podium-badge badge-silver">2</div>
+              <div class="podium-bar bar-silver">
+                  <span style="font-size:12px;color:var(--text);font-weight:500" class="td-truncate">${esc(ranking[1].nome)}</span>
+                  <span style="font-size:14px;color:var(--text);font-weight:700;font-family:'DM Mono',monospace;margin-top:4px">${fmtMoeda(ranking[1].receita)}</span>
+              </div>
           </div>
-          <button onclick="editRespMetrics(${idx})" title="Configurar métricas" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 7px;color:var(--text3);cursor:pointer;font-size:11px">⚙️</button>
-        </div>
-        <div class="resp-stats">
-          ${metricasVisiveis.map(mkey => {
-            const mCfg = METRICAS_DISPONIVEIS.find(m => m.key === mkey) || {};
-            const val = getStatVal(mkey);
-            const meta = getRespMeta(mkey);
-            const mp = meta ? pct(val, meta) : null;
-            const mbar = meta ? pctBar(val, meta) : null;
-            const mSem = mp == null ? 'var(--text3)' : mp >= 100 ? 'var(--green)' : mp >= 80 ? 'var(--yellow)' : 'var(--red)';
-            return `<div class="resp-stat-row">
-              <span class="resp-stat-label">${mCfg.icon||''} ${mCfg.label||mkey}</span>
-              <span class="resp-stat-val" style="color:${mSem}">${val}${meta ? ` <span style="color:var(--text3);font-size:10px">/ ${meta}</span>` : ''}</span>
-            </div>
-            ${meta ? `<div class="kpi-progress-bar" style="margin:2px 0 6px"><div class="kpi-progress-fill" style="--kpi-color:${r.color};width:${mbar}%;background:${mSem}"></div></div>` : ''}`;
-          }).join('')}
-        </div>
+          <div class="podium-col">
+              <div class="podium-avatar gold" style="background:${ranking[0].color}">${ranking[0].avatar}</div>
+              <div class="podium-badge badge-gold">1</div>
+              <div class="podium-bar bar-gold">
+                  <span style="font-size:14px;color:var(--yellow);font-weight:700" class="td-truncate">${esc(ranking[0].nome)}</span>
+                  <span style="font-size:16px;color:var(--yellow);font-weight:700;font-family:'DM Mono',monospace;margin-top:4px">${fmtMoeda(ranking[0].receita)}</span>
+                  <span style="font-size:24px;margin-top:auto;margin-bottom:16px">🏆</span>
+              </div>
+          </div>
+          <div class="podium-col">
+              <div class="podium-avatar" style="background:${ranking[2].color}">${ranking[2].avatar}</div>
+              <div class="podium-badge badge-bronze">3</div>
+              <div class="podium-bar bar-bronze">
+                  <span style="font-size:12px;color:var(--text);font-weight:500" class="td-truncate">${esc(ranking[2].nome)}</span>
+                  <span style="font-size:14px;color:var(--text);font-weight:700;font-family:'DM Mono',monospace;margin-top:4px">${fmtMoeda(ranking[2].receita)}</span>
+              </div>
+          </div>
       </div>`;
-    }).join('');
-}
+      
+      listHTML = ranking.slice(3).map((r, i) => `
+          <div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:8px">
+              <span style="font-size:14px;font-weight:bold;color:var(--text3);width:24px">${i+4}</span>
+              <div class="avatar" style="width:28px;height:28px;font-size:12px;margin-right:12px;background:${r.color}">${r.avatar}</div>
+              <span style="flex:1;font-size:13px;font-weight:500" class="td-truncate">${esc(r.nome)}</span>
+              <span style="font-size:13px;font-weight:700;font-family:'DM Mono',monospace;color:var(--accent2)">${fmtMoeda(r.receita)}</span>
+          </div>
+      `).join('');
+  } else {
+      listHTML = ranking.map((r, i) => `
+          <div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:8px">
+              <span style="font-size:14px;font-weight:bold;color:var(--text3);width:24px">${i+1}</span>
+              <div class="avatar" style="width:28px;height:28px;font-size:12px;margin-right:12px;background:${r.color}">${r.avatar}</div>
+              <span style="flex:1;font-size:13px;font-weight:500" class="td-truncate">${esc(r.nome)}</span>
+              <span style="font-size:13px;font-weight:700;font-family:'DM Mono',monospace;color:var(--accent2)">${fmtMoeda(r.receita)}</span>
+          </div>
+      `).join('');
+  }
 
-function setMetasPeriod(p, el) {
-  metasPeriod = p;
-  document.querySelectorAll('.metas-tab').forEach(t => t.classList.remove('active'));
-  if (el) el.classList.add('active');
-  renderMetas();
+  // --- Renderização do HTML Base ---
+  metasView.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; border-bottom:1px solid var(--border); padding-bottom:16px;">
+      <h2 style="font-size:20px;font-weight:700;color:var(--accent2);display:flex;align-items:center;gap:10px">
+         <div style="width:32px;height:32px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;box-shadow:0 0 8px var(--accent)">C</div>
+         CRM <span style="color:var(--text2);font-weight:400">Outbound</span>
+      </h2>
+      <div style="display:flex;align-items:center;gap:10px">
+        
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div class="custom-date-picker">
+            <span>${formatDayMonth(metasDataInicio)}</span>
+            <input type="date" id="metaDataInicio" value="${metasDataInicio}" onchange="updateMetasDateRange()">
+          </div>
+          <span style="color:var(--text3); font-size:12px; font-weight:700; text-transform:uppercase;">Até</span>
+          <div class="custom-date-picker">
+            <span>${formatDayMonth(metasDataFim)}</span>
+            <input type="date" id="metaDataFim" value="${metasDataFim}" onchange="updateMetasDateRange()">
+          </div>
+        </div>
+
+        <button class="btn btn-ghost" onclick="editTicketMedio()" style="font-size:12px" title="Configurar Ticket Médio">⚙️ Configurar</button>
+      </div>
+    </div>
+
+    <div class="dash-grid-4">
+      <div class="dash-kpi">
+        <div style="position:absolute;top:0;left:0;width:100%;height:3px;background:var(--orange)"></div>
+        <div class="dash-kpi-icon" style="background:var(--orange-bg);color:var(--orange)">${iconDollar}</div>
+        <h3 style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">Nova Receita</h3>
+        <p style="font-size:28px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text)">${fmtMoeda(novaReceita)}</p>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px">
+          <span style="color:var(--green);font-weight:600">Baseado no ticket</span>
+          <span style="color:var(--text3)">Tk: ${fmtMoeda(ticketMedio)}</span>
+        </div>
+      </div>
+      
+      <div class="dash-kpi">
+        <div style="position:absolute;top:0;left:0;width:100%;height:3px;background:var(--pink)"></div>
+        <div class="dash-kpi-icon" style="background:var(--pink-bg);color:var(--pink)">${iconCheck}</div>
+        <h3 style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">Novos Contratos</h3>
+        <p style="font-size:28px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text)">${contratos.length}</p>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px">
+          <span style="color:var(--pink);font-weight:600">${winRate}% Win Rate</span>
+          <span style="color:var(--text3)">Total Leads: ${qtdLeads}</span>
+        </div>
+      </div>
+
+      <div class="dash-kpi">
+        <div style="position:absolute;top:0;left:0;width:100%;height:3px;background:var(--yellow)"></div>
+        <div class="dash-kpi-icon" style="background:var(--yellow-bg);color:var(--yellow)">${iconCalendar}</div>
+        <h3 style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">Reuniões Marcadas</h3>
+        <p style="font-size:28px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text)">${reunioes.length}</p>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px">
+          <span style="color:var(--yellow);font-weight:600">${agendamento}% Agendamento</span>
+        </div>
+      </div>
+
+      <div class="dash-kpi">
+        <div style="position:absolute;top:0;left:0;width:100%;height:3px;background:var(--accent)"></div>
+        <div class="dash-kpi-icon" style="background:rgba(88,101,242,0.15);color:var(--accent)">${iconUsers}</div>
+        <h3 style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">Leads Qualificados</h3>
+        <p style="font-size:28px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text)">${qtdLeads}</p>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px">
+          <span style="color:var(--text2)">Neste período selecionado</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="dash-grid-charts">
+      <div class="dash-card">
+        <div class="dash-title">Funil ao Longo do Tempo (Período Selecionado)</div>
+        <div style="height:250px;width:100%"><canvas id="chartEvolucao"></canvas></div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-title" style="justify-content:center"><span style="color:var(--purple)">${iconZap}</span> Eficiência de Canal</div>
+        <div style="height:250px;width:100%"><canvas id="chartCanais"></canvas></div>
+      </div>
+    </div>
+
+    <div class="dash-grid-bottom">
+      
+      <div class="dash-card">
+        <div class="dash-title" style="color:var(--text)"><span style="color:var(--yellow)">${iconTrophy}</span> TOP PERFORMERS (EQUIPE)</div>
+        ${podiumHTML}
+        <div>${listHTML}</div>
+        ${ranking.length === 0 ? '<p style="text-align:center;color:var(--text3);margin-top:40px">Nenhum contrato fechado neste período.</p>' : ''}
+      </div>
+      
+      <div style="display:flex;flex-direction:column;gap:24px">
+          <div class="dash-card" style="flex:1">
+            <div class="dash-title"><span style="color:var(--cyan)">${iconBriefcase}</span> VOLUME POR NICHO</div>
+            <div style="display:flex;flex-direction:column;gap:16px">
+              ${dataNicho.map(n => `
+                <div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+                     <span style="color:var(--text);font-weight:500" class="td-truncate" style="max-width:200px">${esc(n.nicho)}</span>
+                     <span style="color:var(--text2);font-family:'DM Mono',monospace">${n.count} leads</span>
+                  </div>
+                  <div class="progress-bar-wrap"><div class="progress-bar-fill" style="background:var(--cyan);width:${n.percent}%"></div></div>
+                </div>
+              `).join('')}
+              ${dataNicho.length === 0 ? '<p style="color:var(--text3);font-size:12px">Sem dados de nicho</p>' : ''}
+            </div>
+          </div>
+
+          <div class="dash-card" style="flex:1">
+            <div class="dash-title"><span style="color:var(--red)">${iconAlert}</span> MOTIVOS DE PERDA</div>
+            <div style="display:flex;flex-direction:column;gap:16px">
+              ${dataPerdas.map(p => `
+                <div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+                     <span style="color:var(--text);font-weight:500" class="td-truncate" style="max-width:200px">${esc(p.motivo)}</span>
+                     <span style="color:var(--red);font-family:'DM Mono',monospace;font-weight:bold">${p.percent}%</span>
+                  </div>
+                  <div class="progress-bar-wrap"><div class="progress-bar-fill" style="background:var(--red);width:${p.percent}%"></div></div>
+                </div>
+              `).join('')}
+              ${dataPerdas.length === 0 ? '<p style="color:var(--text3);font-size:12px">Nenhuma perda registrada.</p>' : ''}
+            </div>
+            ${dataPerdas.length > 0 ? `<p style="font-size:10px;color:var(--text3);text-align:center;margin-top:16px;text-transform:uppercase">Base: ${perdidos.length} leads perdidos</p>` : ''}
+          </div>
+      </div>
+    </div>
+  `;
+
+  // --- Renderização dos Gráficos Interativos via Chart.js ---
+  setTimeout(() => {
+      if(typeof Chart === 'undefined') return;
+      Chart.defaults.color = '#8890b8';
+      Chart.defaults.font.family = "'DM Sans', sans-serif";
+
+      const ctxLine = document.getElementById('chartEvolucao');
+      if(ctxLine) {
+          if(window.lineEvolucao) window.lineEvolucao.destroy();
+          window.lineEvolucao = new Chart(ctxLine, {
+              type: 'line',
+              data: {
+                  labels: chartEvolucao.map(d => d.label),
+                  datasets: [
+                      { label: 'Leads Processados', data: chartEvolucao.map(d => d.leads), borderColor: '#5865f2', tension: 0.3, borderWidth: 3, pointRadius: 0, pointHoverRadius: 6, yAxisID: 'y' },
+                      { label: 'Reuniões', data: chartEvolucao.map(d => d.reunioes), borderColor: '#22c55e', tension: 0.3, borderWidth: 3, pointRadius: 0, pointHoverRadius: 6, yAxisID: 'y1' },
+                      { label: 'Contratos', data: chartEvolucao.map(d => d.contratos), borderColor: '#ec4899', tension: 0.3, borderWidth: 3, pointRadius: 0, pointHoverRadius: 6, yAxisID: 'y1' }
+                  ]
+              },
+              options: {
+                  responsive: true, maintainAspectRatio: false,
+                  interaction: { mode: 'index', intersect: false },
+                  scales: {
+                      x: { grid: { display: false } },
+                      y: { grid: { color: '#252840', drawBorder: false }, position: 'left' },
+                      y1: { grid: { display: false }, position: 'right' }
+                  },
+                  plugins: { legend: { labels: { color: '#e4e6f5', usePointStyle: true, boxWidth: 8 } } }
+              }
+          });
+      }
+
+      const ctxBar = document.getElementById('chartCanais');
+      if(ctxBar) {
+          if(window.barCanais) window.barCanais.destroy();
+          window.barCanais = new Chart(ctxBar, {
+              type: 'bar',
+              data: {
+                  labels: dataCanais.map(d => d.name),
+                  datasets: [{
+                      label: 'Reuniões',
+                      data: dataCanais.map(d => d.reunioes),
+                      backgroundColor: '#a855f7',
+                      borderRadius: 4,
+                      barThickness: 20
+                  }]
+              },
+              options: {
+                  indexAxis: 'y',
+                  responsive: true, maintainAspectRatio: false,
+                  scales: {
+                      x: { display: false, grid: { display: false } },
+                      y: { grid: { display: false }, ticks: { font: {weight: 600} } }
+                  },
+                  plugins: { legend: { display: false }, tooltip: { cornerRadius: 8 } }
+              }
+          });
+      }
+  }, 100);
 }
 
 // ─── Goals Editor ───
 function openEditGoals() {
   const goals = getGoals();
   const body = document.getElementById('goalsModalBody');
-  const p = metasPeriod;
-  const pLabel = p === 'dia' ? 'Hoje' : p === 'semana' ? 'Semana' : 'Mês';
+  const p = 'mes'; // Padrão de salvamento mantido para estabilidade de metas mensais
 
-  let html = `<p style="color:var(--text3);font-size:12px;margin-bottom:4px">Editando metas para: <b style="color:var(--text)">${pLabel}</b></p>`;
+  let html = `<p style="color:var(--text3);font-size:12px;margin-bottom:4px">Você está editando a base de objetivos <b style="color:var(--text)">Mensais</b> da empresa.</p>`;
 
   html += `<div class="form-section-title" style="grid-column:unset;margin-bottom:8px">🏢 Empresa</div>`;
   html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">`;
@@ -2077,41 +2264,13 @@ function openEditGoals() {
   });
   html += `</div>`;
 
-  html += `<div class="form-section-title" style="grid-column:unset;margin-bottom:8px">👥 Colaboradores (Contatos / ${pLabel})</div>`;
-  html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px" id="goalsResps">`;
-  (goals.responsaveis||[]).forEach((r,i) => {
-    html += `<div style="display:flex;align-items:center;gap:8px">
-      <input class="form-control" placeholder="Nome" style="flex:1;padding:5px 8px" id="goal_resp_nome_${i}" value="${esc(r.nome)}">
-      <input class="form-control" placeholder="Cargo" style="width:90px;padding:5px 8px" id="goal_resp_role_${i}" value="${esc(r.role)}">
-      <input class="form-control" type="number" min="0" style="width:70px;padding:5px 8px;text-align:center" id="goal_resp_meta_${i}" value="${r[p]||0}">
-      <button class="btn-icon" onclick="removeRespGoal(${i})" title="Remover">✕</button>
-    </div>`;
-  });
-  html += `</div>`;
-  html += `<button class="btn btn-ghost" onclick="addRespGoal()" style="font-size:12px;width:100%;justify-content:center">＋ Adicionar Colaborador</button>`;
-
   body.innerHTML = html;
   document.getElementById('goalsModal').classList.remove('hidden');
 }
 
-function addRespGoal() {
-  const goals = getGoals();
-  goals.responsaveis = goals.responsaveis || [];
-  goals.responsaveis.push({ nome:'Novo', role:'SDR', color:'#5865f2', dia:6, semana:30, mes:120 });
-  db.goals = goals;
-  openEditGoals();
-}
-
-function removeRespGoal(i) {
-  const goals = getGoals();
-  goals.responsaveis.splice(i, 1);
-  db.goals = goals;
-  openEditGoals();
-}
-
 function saveGoals() {
   const goals = getGoals();
-  const p = metasPeriod;
+  const p = 'mes'; 
 
   Object.keys(goals.empresa).forEach(key => {
     const el = document.getElementById(`goal_emp_${key}`);
@@ -2122,20 +2281,6 @@ function saveGoals() {
     const el = document.getElementById(`goal_canal_${key}`);
     if (el) goals.canais[key][p] = parseFloat(el.value) || 0;
   });
-
-  const respCount = (goals.responsaveis||[]).length;
-  const colors = ['#5865f2','#a855f7','#22c55e','#f97316','#06b6d4','#ec4899','#eab308'];
-  for (let i = 0; i < respCount; i++) {
-    const nome = document.getElementById(`goal_resp_nome_${i}`)?.value || goals.responsaveis[i].nome;
-    const role = document.getElementById(`goal_resp_role_${i}`)?.value || goals.responsaveis[i].role;
-    const meta = parseFloat(document.getElementById(`goal_resp_meta_${i}`)?.value) || 0;
-    goals.responsaveis[i] = {
-      ...goals.responsaveis[i],
-      nome, role,
-      color: goals.responsaveis[i].color || colors[i % colors.length],
-      [p]: meta
-    };
-  }
 
   db.goals = goals;
   save();
@@ -2159,66 +2304,6 @@ function editTicketMedio() {
   });
 }
 
-function editRespMetrics(idx) {
-  const goals = getGoals();
-  const r = goals.responsaveis[idx];
-  if (!r) return;
-  const METRICAS = [
-    { key: 'contatos',   label: 'Contatos' },
-    { key: 'reunioes',   label: 'Reuniões Marc.' },
-    { key: 'contratos',  label: 'Contratos' },
-    { key: 'novosLeads', label: 'Novos Leads' },
-  ];
-  const atual = r.metricas || ['contatos', 'reunioes', 'contratos'];
-  const p = metasPeriod;
-  const pLabel = p === 'dia' ? 'Hoje' : p === 'semana' ? 'Semana' : 'Mês';
-
-  const body = document.getElementById('goalsModalBody');
-  let html = `<p style="color:var(--text2);font-size:13px;margin-bottom:12px">Configurando métricas de <b style="color:var(--text)">${esc(r.nome)}</b></p>`;
-  html += `<div class="form-section-title" style="margin-bottom:8px">Métricas visíveis no card</div>`;
-  html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">`;
-  METRICAS.forEach(m => {
-    const checked = atual.includes(m.key);
-    html += `<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;text-transform:none;letter-spacing:0;color:var(--text)">
-      <input type="checkbox" id="resp_metric_${m.key}" ${checked?'checked':''} style="width:14px;height:14px">
-      ${m.label}
-    </label>`;
-  });
-  html += `</div>`;
-
-  html += `<div class="form-section-title" style="margin-bottom:8px">Metas (${pLabel})</div>`;
-  html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">`;
-  METRICAS.forEach(m => {
-    const metaKey = m.key === 'contatos' ? p : `meta_${m.key}_${p}`;
-    const val = m.key === 'contatos' ? (r[p]||0) : (r[`meta_${m.key}_${p}`]||0);
-    html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-      <span style="font-size:12px;color:var(--text2);flex:1">${m.label}</span>
-      <input class="form-control" type="number" min="0" style="width:90px;padding:5px 8px;text-align:center" id="resp_meta_${m.key}" value="${val}">
-    </div>`;
-  });
-  html += `</div>`;
-  html += `<button class="btn btn-ghost" onclick="openEditGoals()" style="font-size:12px">← Voltar</button>`;
-
-  body.innerHTML = html;
-
-  document.querySelector('#goalsModal .modal-footer .btn-primary').onclick = function() {
-    const newMetricas = METRICAS.filter(m => document.getElementById(`resp_metric_${m.key}`)?.checked).map(m => m.key);
-    if (newMetricas.length === 0) { toast('Selecione ao menos 1 métrica.', 'error'); return; }
-    goals.responsaveis[idx].metricas = newMetricas;
-    METRICAS.forEach(m => {
-      const val = parseFloat(document.getElementById(`resp_meta_${m.key}`)?.value) || 0;
-      if (m.key === 'contatos') { goals.responsaveis[idx][p] = val; }
-      else { goals.responsaveis[idx][`meta_${m.key}_${p}`] = val; }
-    });
-    db.goals = goals;
-    save();
-    closeGoalsModal();
-    renderMetas();
-    toast('Métricas do colaborador salvas!', 'success');
-  };
-  document.getElementById('goalsModal').classList.remove('hidden');
-}
-
 function closeGoalsModal() {
   document.getElementById('goalsModal').classList.add('hidden');
   const btn = document.querySelector('#goalsModal .modal-footer .btn-primary');
@@ -2233,7 +2318,6 @@ function initResizableColumns() {
   const cols = table.querySelectorAll('thead th');
   
   cols.forEach(col => {
-    // Cria o elemento clicável na borda direita
     const resizer = document.createElement('div');
     resizer.classList.add('resizer');
     col.appendChild(resizer);
@@ -2255,12 +2339,10 @@ function initResizableColumns() {
       const dx = e.clientX - x;
       const newWidth = w + dx;
       
-      // Atualiza a largura do TH
       col.style.width = `${newWidth}px`;
       col.style.minWidth = `${newWidth}px`;
       col.style.maxWidth = `${newWidth}px`;
       
-      // Acha as células (TDs) dessa coluna e permite que elas cresçam junto
       const colIndex = Array.from(col.parentNode.children).indexOf(col);
       const cells = table.querySelectorAll(`tbody tr td:nth-child(${colIndex + 1})`);
       cells.forEach(cell => {
@@ -2279,9 +2361,31 @@ function initResizableColumns() {
   });
 }
 
-// Chame a função antes de carregar os dados
-initResizableColumns();
+// ═══════════════════════════════════
+// FILTRO DE DATAS GLOBAL (TABELA E KANBAN)
+// ═══════════════════════════════════
+function updateGlobalDateRange() {
+    const start = document.getElementById('inputGlobalDataInicio').value;
+    const end = document.getElementById('inputGlobalDataFim').value;
+    
+    document.getElementById('labelGlobalDataInicio').textContent = start ? formatDayMonth(start) : 'Início';
+    document.getElementById('labelGlobalDataFim').textContent = end ? formatDayMonth(end) : 'Fim';
+
+    if (start && end && start > end) {
+        toast('A data inicial deve ser menor que a final.', 'error');
+    }
+    renderAll();
+}
+
+function clearGlobalDateRange() {
+    document.getElementById('inputGlobalDataInicio').value = '';
+    document.getElementById('inputGlobalDataFim').value = '';
+    updateGlobalDateRange();
+    toast('Filtro de datas removido!', 'info');
+}
+
 // Inicia o sistema
+initResizableColumns();
 load();
 </script>
 </body>
