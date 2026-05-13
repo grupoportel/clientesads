@@ -143,7 +143,21 @@ body { position: relative; z-index: 0; }
 .sidebar{
   width:210px;background:var(--surface);border-right:1px solid var(--border);
   padding:12px 0;flex-shrink:0;overflow-y:auto;
-  animation:slideInLeft .3s ease;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s; /* Adicionado para animar suavemente */
+}
+
+/* NOVA CLASSE ADICIONADA: Estado da gaveta fechada */
+.sidebar.collapsed {
+  width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  border-right: none;
+  opacity: 0;
+  overflow: hidden; /* Adicione isso para esconder a barra de rolagem ao fechar */
+}
+.sidebar.collapsed * {
+  pointer-events: none; /* Impede cliques quando estiver escondida */
+  white-space: nowrap; /* Impede que o texto quebre ao encolher */
 }
 .sidebar-label{
   font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;
@@ -493,8 +507,10 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
 
 <div class="topbar">
   <div class="topbar-left">
-    <div class="logo"><div class="logo-dot"></div> CRM <span> Grupo Portel </span></div>
-    <div class="search-wrap">
+  <button class="btn-icon" onclick="toggleSidebar()" style="margin-right: 8px; font-size: 16px; padding: 4px 8px;" title="Recolher/Expandir Menu">☰</button>
+  
+  <div class="logo"><div class="logo-dot"></div> CRM <span> Grupo Portel </span></div>
+  <div class="search-wrap">
       <span class="search-icon">🔍</span>
       <input type="text" id="searchInput" placeholder="Buscar leads…" oninput="applyFilters()">
     </div>
@@ -919,6 +935,15 @@ function toggleResponsavelDrawer() {
 }
 
 let confirmCallback = null;
+
+// ═══════════════════════════════════
+// TOGGLE SIDEBAR (GAVETA)
+// ═══════════════════════════════════
+function toggleSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  sidebar.classList.toggle('collapsed');
+}
+
 function myConfirm(message, callback) {
   document.getElementById('customConfirmMsg').textContent = message;
   document.getElementById('customConfirmModal').classList.remove('hidden');
@@ -2050,8 +2075,8 @@ function renderMetas() {
   metasView.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; border-bottom:1px solid var(--border); padding-bottom:16px;">
       <h2 style="font-size:20px;font-weight:700;color:var(--accent2);display:flex;align-items:center;gap:10px">
-         <div style="width:32px;height:32px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;box-shadow:0 0 8px var(--accent)">C</div>
-         CRM <span style="color:var(--text2);font-weight:400">Outbound</span>
+         <div style="width:32px;height:32px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;box-shadow:0 0 8px var(--accent)"></div>
+         METAS <span style="color:var(--text2);font-weight:400">Grupo Portel</span>
       </h2>
       <div style="display:flex;align-items:center;gap:10px">
         
