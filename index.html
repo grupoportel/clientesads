@@ -514,6 +514,7 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
       <span class="search-icon">🔍</span>
       <input type="text" id="searchInput" placeholder="Buscar leads…" oninput="applyFilters()">
     </div>
+    
   </div>
   <div class="topbar-right">
     <div style="display:flex; align-items:center; gap:8px; margin-right:12px; border-right:1px solid var(--border); padding-right:16px;">
@@ -607,11 +608,38 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
           <thead>
             <tr>
               <th style="width:36px"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)"></th>
-              <th onclick="sortTable('nome')">Nome / Empresa</th>
-              <th onclick="sortTable('responsavel')">Responsável</th>
-              <th onclick="sortTable('status')">Status</th>
-              <th onclick="sortTable('nicho')">Nicho / Mercado</th>
-              <th>Telefone</th>
+              <th onclick="sortTable('nome')" style="min-width: 350px; cursor: pointer;">Nome / Empresa</th>
+              <th onclick="sortTable('responsavel')" style="min-width: 150px; cursor: pointer;">Responsável</th> 
+              
+              <th style="padding: 0; min-width: 180px;">
+                <select class="form-control" style="width: 100%; height: 100%; padding: 9px 13px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .7px; background: transparent; border: none; color: var(--text3); cursor: pointer; outline: none; box-shadow: none;" onchange="currentStatusFilter=this.value; applyFilters()">
+                  <option value="" style="color:var(--text)">STATUS (TODOS)</option>
+                  <option value="nenhuma" style="color:var(--text)">Nenhuma Ação</option>
+                  <option value="interesse" style="color:var(--text)">Não Tem Interesse</option>
+                  <option value="retornar" style="color:var(--text)">Retornar</option>
+                  <option value="segundo" style="color:var(--text)">Segundo Retorno</option>
+                  <option value="reuniao-pos" style="color:var(--text)">Terceiro Retorno</option>
+                  <option value="reuniao-marc" style="color:var(--text)">Reunião Marcada</option>
+                  <option value="contrato" style="color:var(--text)">Contrato Fechado</option>
+                </select>
+              </th>
+
+              <th onclick="sortTable('nicho')" style="min-width: 170px; cursor: pointer;">Nicho / Mercado</th>
+              
+              <th style="padding: 0; min-width: 140px;">
+                <select class="form-control" style="width: 100%; height: 100%; padding: 9px 13px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .7px; background: transparent; border: none; color: var(--text3); cursor: pointer; outline: none; box-shadow: none;" onchange="currentOrigemFilter=this.value; applyFilters()">
+                  <option value="" style="color:var(--text)">ORIGEM (TODAS)</option>
+                  <option value="gmn" style="color:var(--text)">GMN</option>  
+                  <option value="whatsapp" style="color:var(--text)">WhatsApp</option>
+                  <option value="instagram" style="color:var(--text)">Instagram</option>
+                  <option value="telefone" style="color:var(--text)">Telefone</option>
+                  <option value="email" style="color:var(--text)">E-mail</option>
+                  <option value="indicacao" style="color:var(--text)">Indicação</option>
+                  <option value="site" style="color:var(--text)">Site / Inbound</option>
+                  <option value="outro" style="color:var(--text)">Outro</option>
+                </select>
+              </th>
+
               <th>WhatsApp</th>
               <th>Instagram</th>
               <th>IG do Dono</th>
@@ -634,7 +662,6 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
         </table>
       </div>
     </div>
-
     <div id="kanbanView" class="hidden kanban-outer">
       <div class="kanban-view" id="kanbanBoard"></div>
     </div>
@@ -829,14 +856,15 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
   </div>
 </div>
 
-<div class="status-dropdown hidden" id="statusDropdown">
-  <div class="status-option" onclick="setStatus('nenhuma')"><span class="status-badge s-nenhuma">● Nenhuma Ação</span></div>
-  <div class="status-option" onclick="setStatus('interesse')"><span class="status-badge s-interesse">● Não Tem Interesse</span></div>
-  <div class="status-option" onclick="setStatus('retornar')"><span class="status-badge s-retornar">● Retornar</span></div>
-  <div class="status-option" onclick="setStatus('segundo')"><span class="status-badge s-segundo">● Segundo Retorno</span></div>
-  <div class="status-option" onclick="setStatus('reuniao-pos')"><span class="status-badge s-reuniao-pos">● Terceiro Retorno</span></div>
-  <div class="status-option" onclick="setStatus('reuniao-marc')"><span class="status-badge s-reuniao-marc">● Reunião Marcada</span></div>
-  <div class="status-option" onclick="setStatus('contrato')"><span class="status-badge s-contrato">● Contrato Fechado</span></div>
+<div class="status-dropdown hidden" id="origemDropdown">
+  <div class="status-option" onclick="setOrigem('gmn')"><span class="badge-pill">GMN</span></div>
+  <div class="status-option" onclick="setOrigem('whatsapp')"><span class="badge-pill">WhatsApp</span></div>
+  <div class="status-option" onclick="setOrigem('instagram')"><span class="badge-pill">Instagram</span></div>
+  <div class="status-option" onclick="setOrigem('telefone')"><span class="badge-pill">Telefone</span></div>
+  <div class="status-option" onclick="setOrigem('email')"><span class="badge-pill">E-mail</span></div>
+  <div class="status-option" onclick="setOrigem('indicacao')"><span class="badge-pill">Indicação</span></div>
+  <div class="status-option" onclick="setOrigem('site')"><span class="badge-pill">Site / Inbound</span></div>
+  <div class="status-option" onclick="setOrigem('outro')"><span class="badge-pill">Outro</span></div>
 </div>
 
 <div class="modal-overlay hidden" id="ieModal" onclick="closeIEOnOverlay(event)">
@@ -846,22 +874,31 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
       <button class="btn-icon" onclick="closeIE()">✕</button>
     </div>
     <div class="modal-body">
-      <p style="color:var(--text2);font-size:13px;line-height:1.5">
-        Seus dados ficam no <b>localStorage</b> do navegador. Exporte o JSON regularmente para ter um backup salvo no PC.
+      <p style="color:var(--text2);font-size:13px;line-height:1.5;margin-bottom:12px;">
+        Seus dados ficam no <b>localStorage</b> do navegador. Exporte regularmente para ter um backup salvo no PC.
       </p>
-      <button class="btn btn-primary" onclick="exportJSON()" style="justify-content:center;width:100%">⬇️ Baixar JSON (backup)</button>
-      <button class="btn btn-ghost" onclick="exportCSV()" style="justify-content:center;width:100%">📄 Exportar CSV (Excel)</button>
-      <div class="import-zone" onclick="document.getElementById('importFile').click()">
-        <div style="font-size:32px;margin-bottom:8px">📂</div>
-        <div style="font-size:14px;font-weight:500;color:var(--text2)">Clique para importar JSON</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:4px">Substitui todos os dados atuais</div>
+      
+      <button class="btn btn-primary" onclick="exportJSON()" style="justify-content:center;width:100%;margin-bottom:8px">⬇️ Baixar JSON (backup)</button>
+      <button class="btn btn-ghost" onclick="exportCSV()" style="justify-content:center;width:100%;margin-bottom:16px">📄 Exportar CSV (Excel)</button>
+      
+      <div style="border-top:1px solid var(--border); margin:12px 0;"></div>
+
+      <button class="btn btn-ghost" onclick="document.getElementById('importCsvFile').click()" style="justify-content:center;width:100%; border-style:dashed; color:var(--green); border-color:var(--green); margin-bottom:16px;">
+        ➕ Importar Planilha CSV (Adicionar Leads)
+      </button>
+      <input type="file" id="importCsvFile" accept=".csv" style="display:none" onchange="importCSV(event)">
+
+      <div class="import-zone" onclick="document.getElementById('importFile').click()" style="background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:16px; text-align:center; cursor:pointer;">
+        <div style="font-size:24px;margin-bottom:4px">📂</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">Restaurar backup JSON</div>
+        <div style="font-size:11px;color:var(--red);margin-top:4px">Atenção: Apaga tudo e substitui pelo arquivo</div>
         <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)">
       </div>
-      <button class="btn btn-danger" onclick="clearAllData()" style="justify-content:center;width:100%">🗑 Apagar todos os dados</button>
+      
+      <button class="btn btn-danger" onclick="clearAllData()" style="justify-content:center;width:100%;margin-top:16px">🗑 Apagar todos os dados</button>
     </div>
   </div>
 </div>
-
 <div class="modal-overlay hidden" id="customConfirmModal" style="z-index: 10000;">
   <div class="modal small-modal">
     <div class="modal-header">
@@ -979,6 +1016,7 @@ let db = { leads: [], nichos: [], responsaveis: [], lastId: 0 };
 let currentStatusFilter = null;
 let currentNichoFilter  = null;
 let currentResponsavelFilter = null;
+let currentOrigemFilter = null; // <- NOVA VARIÁVEL
 let currentSort = { key: null, dir: 1 };
 let currentView = 'table';
 let editingId   = null;
@@ -1059,6 +1097,10 @@ function getFiltered() {
     if (currentStatusFilter) list = list.filter(l => (l.status||'nenhuma') === currentStatusFilter);
     if (currentNichoFilter)  list = list.filter(l => l.nicho === currentNichoFilter);
     if (currentResponsavelFilter) list = list.filter(l => l.responsavel === currentResponsavelFilter);
+    
+    // FILTROS DA TABELA
+    if (currentOrigemFilter) list = list.filter(l => l.origem === currentOrigemFilter);
+    // Nota: currentStatusFilter já está sendo verificado na linha 825
     
     // --- COLE O CÓDIGO NOVO AQUI ---
     const dInicio = document.getElementById('inputGlobalDataInicio')?.value;
@@ -1173,7 +1215,29 @@ function inlineEdit(e, id, field) {
   const val = lead[field] || '';
   let inputHtml = '';
   
-  if (field === 'nicho') {
+  if (field === 'status') {
+    inputHtml = `<select id="inl_${id}_${field}" class="form-control" style="padding:4px;height:26px;font-size:11px;min-width:120px">
+      <option value="nenhuma" ${val==='nenhuma'?'selected':''}>Nenhuma Ação</option>
+      <option value="interesse" ${val==='interesse'?'selected':''}>Não Tem Interesse</option>
+      <option value="retornar" ${val==='retornar'?'selected':''}>Retornar</option>
+      <option value="segundo" ${val==='segundo'?'selected':''}>Segundo Retorno</option>
+      <option value="reuniao-pos" ${val==='reuniao-pos'?'selected':''}>Terceiro Retorno</option>
+      <option value="reuniao-marc" ${val==='reuniao-marc'?'selected':''}>Reunião Marcada</option>
+      <option value="contrato" ${val==='contrato'?'selected':''}>Contrato Fechado</option>
+    </select>`;
+  } else if (field === 'origem') {
+    inputHtml = `<select id="inl_${id}_${field}" class="form-control" style="padding:4px;height:26px;font-size:11px;min-width:100px">
+      <option value="">—</option>
+      <option value="gmn" ${val==='gmn'?'selected':''}>GMN</option>
+      <option value="whatsapp" ${val==='whatsapp'?'selected':''}>WhatsApp</option>
+      <option value="instagram" ${val==='instagram'?'selected':''}>Instagram</option>
+      <option value="telefone" ${val==='telefone'?'selected':''}>Telefone</option>
+      <option value="email" ${val==='email'?'selected':''}>E-mail</option>
+      <option value="indicacao" ${val==='indicacao'?'selected':''}>Indicação</option>
+      <option value="site" ${val==='site'?'selected':''}>Site / Inbound</option>
+      <option value="outro" ${val==='outro'?'selected':''}>Outro</option>
+    </select>`;
+  } else if (field === 'nicho') {
     inputHtml = `<select id="inl_${id}_${field}" class="form-control" style="padding:4px;height:26px;font-size:11px;min-width:100px">
       <option value="">—</option>
       ${db.nichos.map(n => `<option value="${esc(n)}" ${val===n?'selected':''}>${esc(n)}</option>`).join('')}
@@ -1233,6 +1297,11 @@ function renderTable() {
   const leads = getFiltered();
   const tbody = document.getElementById('tableBody');
   
+  // 1. MEMORIZA A POSIÇÃO DA BARRA DE ROLAGEM
+  const wrapper = document.querySelector('.table-wrapper');
+  const scrollX = wrapper ? wrapper.scrollLeft : 0;
+  const scrollY = wrapper ? wrapper.scrollTop : 0;
+
   if (!leads.length) {
     tbody.innerHTML = `<tr><td colspan="23" style="text-align:center;padding:60px;color:var(--text3)">
       Nenhum lead encontrado.
@@ -1254,6 +1323,14 @@ function renderTable() {
       
       const telLimpo = String(l.telefone || '').replace(/\D/g,'');
       const wppLimpo = String(l.whatsapp || '').replace(/\D/g,'');
+
+      // Dicionário para deixar os nomes perfeitos (GMN maiúsculo, WhatsApp, etc)
+      const ORIGEM_LABELS = {
+        'gmn': 'GMN', 'whatsapp': 'WhatsApp', 'instagram': 'Instagram', 
+        'telefone': 'Telefone', 'email': 'E-mail', 'indicacao': 'Indicação', 
+        'site': 'Site / Inbound', 'outro': 'Outro'
+      };
+      const origemDisplay = l.origem ? (ORIGEM_LABELS[l.origem] || l.origem) : 'SELECIONAR';
 
       const editable = (field, content) => `
         <div class="cell-wrap">
@@ -1278,10 +1355,13 @@ function renderTable() {
             ${l.nicho?`<div class="td-name-sub">${esc(l.nicho)}</div>`:''}
           `)}
         </td>
-        <td>${editable('responsavel', l.responsavel?`<div style="display:flex;align-items:center;gap:6px"><div class="avatar">${esc(l.responsavel).charAt(0)}</div>${esc(l.responsavel)}</div>`:'<span class="td-empty">—</span>')}</td>
-        <td><button class="status-badge ${st.cls}" onclick="openStatusDropdown(event,${l.id})">${st.label}</button></td>
-        <td>${editable('nicho', l.nicho?`<span class="badge-pill">${esc(l.nicho)}</span>`:'<span class="td-empty">—</span>')}</td>
-        <td>${editable('telefone', l.telefone?`<a href="tel:${telLimpo}" class="td-link" onclick="event.stopPropagation()">📞 ${esc(l.telefone)}</a>`:'<span class="td-empty">—</span>')}</td>
+       <td>${editable('responsavel', l.responsavel?`<div style="display:flex;align-items:center;gap:6px"><div class="avatar">${esc(l.responsavel).charAt(0)}</div>${esc(l.responsavel)}</div>`:'<span class="td-empty">—</span>')}</td>
+       
+       <td>${editable('status', `<button class="status-badge ${st.cls}" onclick="openStatusDropdown(event,${l.id})">${st.label} ▾</button>`)}</td>
+       <td>${editable('nicho', l.nicho?`<span class="badge-pill">${esc(l.nicho)}</span>`:'<span class="td-empty">—</span>')}</td>
+       <td>${editable('origem', `<button class="status-badge" style="background:var(--surface2); border:1px solid var(--border); color:var(--text)" onclick="openOrigemDropdown(event,${l.id})">${origemDisplay} ▾</button>`)}</td>
+       
+       <td>${editable('telefone', l.telefone?`<a href="tel:${telLimpo}" class="td-link" onclick="event.stopPropagation()">📞 ${esc(l.telefone)}</a>`:'<span class="td-empty">—</span>')}</td>
         <td>${editable('whatsapp', l.whatsapp?`<a href="https://wa.me/55${wppLimpo}" target="_blank" class="td-link" onclick="event.stopPropagation()">💬 ${esc(l.whatsapp)}</a>`:'<span class="td-empty">—</span>')}</td>
         <td>${editable('instagram', igLink?`<a href="${igLink}" target="_blank" class="td-link" onclick="event.stopPropagation()">📷 ${esc(l.instagram)}</a>`:'<span class="td-empty">—</span>')}</td>
         <td>${editable('ig_dono', igDono?`<a href="${igDono}" target="_blank" class="td-link" onclick="event.stopPropagation()">👤 ${esc(l.ig_dono)}</a>`:'<span class="td-empty">—</span>')}</td>
@@ -1300,6 +1380,15 @@ function renderTable() {
         <td class="td-truncate" title="${esc(l.obs||'')}">${editable('obs', esc(l.obs)||'<span class="td-empty">—</span>')}</td>
       </tr>`;
     }).join('');
+
+    // 2. RESTAURA A POSIÇÃO DA BARRA DE ROLAGEM (COM ATRASO PARA O NAVEGADOR DESENHAR)
+    if (wrapper) {
+        setTimeout(() => {
+            wrapper.scrollLeft = scrollX;
+            wrapper.scrollTop = scrollY;
+        }, 10);
+    }
+
   } catch (erro) {
     console.error("Erro Crítico ao desenhar a tabela:", erro);
   }
@@ -1549,7 +1638,45 @@ function setStatus(status) {
   document.getElementById('statusDropdown').classList.add('hidden');
   statusTargetId = null;
 }
-document.addEventListener('click', () => document.getElementById('statusDropdown').classList.add('hidden'));
+let origemTargetId = null;
+
+function openOrigemDropdown(e, id) {
+  e.stopPropagation();
+  origemTargetId = id;
+  const dd = document.getElementById('origemDropdown');
+  dd.classList.remove('hidden');
+  document.getElementById('statusDropdown').classList.add('hidden'); // Esconde o de status se estiver aberto
+  const r = e.target.getBoundingClientRect();
+  
+  const dropdownHeight = dd.offsetHeight || 250;
+  let topPos = r.bottom + 4; 
+
+  if (topPos + dropdownHeight > window.innerHeight) {
+      topPos = r.top - dropdownHeight - 4;
+  }
+
+  dd.style.top  = topPos + 'px';
+  dd.style.left = Math.min(r.left, window.innerWidth - 210) + 'px';
+}
+
+function setOrigem(origem) {
+  if (!origemTargetId) return;
+  const idx = db.leads.findIndex(x => x.id === origemTargetId);
+  if (idx >= 0) {
+    db.leads[idx].origem = origem;
+    db.leads[idx].updatedAt = new Date().toISOString();
+    save(); renderAll();
+    toast('Origem atualizada!', 'success');
+  }
+  document.getElementById('origemDropdown').classList.add('hidden');
+  origemTargetId = null;
+}
+
+// Isso garante que se você clicar fora da tela, qualquer um dos menus se fecha
+document.addEventListener('click', () => {
+  document.getElementById('statusDropdown')?.classList.add('hidden');
+  document.getElementById('origemDropdown')?.classList.add('hidden');
+});
 
 // ═══════════════════════════════════
 // COUNTS & STATS
@@ -1759,16 +1886,114 @@ function exportJSON() {
   a.click(); toast('JSON baixado!','success');
 }
 function exportCSV() {
-  const cols = ['id','nome','status','nicho','responsavel','decisor','telefone','whatsapp','email',
+  // Atualizado com Origem e Motivo Perda
+  const cols = ['id','nome','status','nicho','origem','responsavel','decisor','telefone','whatsapp','email',
     'instagram','ig_dono','site','cnpj','nota','avals','ultimo_contato','reuniao',
-    'melhores','oportunidades','pontos','escalar','obs','historico','createdAt','updatedAt'];
+    'melhores','oportunidades','pontos','escalar','obs','historico','motivoPerda','createdAt','updatedAt'];
   const rows = [cols.join(','), ...db.leads.map(l =>
     cols.map(c => '"'+(String(l[c]||'').replace(/"/g,'""'))+'"').join(','))];
   const blob = new Blob([rows.join('\n')],{type:'text/csv;charset=utf-8'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'crm_local_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.download = 'crm_leads_'+new Date().toISOString().slice(0,10)+'.csv';
   a.click(); toast('CSV exportado!','success');
+}
+
+// NOVA FUNÇÃO: LER CSV E ADICIONAR SEM APAGAR O RESTO
+function importCSV(e) {
+  const file = e.target.files[0]; 
+  if (!file) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    try {
+      const text = ev.target.result;
+      let rows = []; let row = []; let inQ = false; let val = '';
+      
+      // Lógica robusta para ler o CSV sem quebrar com vírgulas nos textos
+      for(let i=0; i<text.length; i++) {
+        let c = text[i];
+        if(inQ) {
+          if(c==='"' && text[i+1]==='"') { val+='"'; i++; } // Aspas escapadas
+          else if(c==='"') inQ = false;
+          else val+=c;
+        } else {
+          if(c==='"') inQ = true;
+          else if(c===',') { row.push(val); val=''; }
+          else if(c==='\n' || c==='\r') {
+            row.push(val); val='';
+            if(row.length>1 || row[0]!=='') rows.push(row);
+            row=[];
+            if(c==='\r' && text[i+1]==='\n') i++; // Pula quebra dupla de linha (Windows)
+          }
+          else val+=c;
+        }
+      }
+      if(val!=='' || row.length>0) { row.push(val); rows.push(row); }
+      
+      if(rows.length < 2) { toast('CSV vazio ou sem dados.', 'error'); return; }
+      
+      // Pega os cabeçalhos (a primeira linha do Excel)
+      const headers = rows[0].map(h => h.trim());
+      let count = 0;
+      let repetidos = 0; // Vai contar quantos foram ignorados
+      
+      // Roda por todas as linhas abaixo do cabeçalho
+      for(let i=1; i<rows.length; i++) {
+        let cols = rows[i];
+        // Cria um ID novo único
+        let lead = { id: Date.now() + i, createdAt: new Date().toISOString() };
+        
+        headers.forEach((h, j) => {
+          if(cols[j] && cols[j].trim() !== '') {
+            if (h !== 'id') lead[h] = cols[j].trim();
+          }
+        });
+        
+        // Só importa se a linha tiver um "nome" válido
+        if(lead.nome) {
+          
+          // ─── LÓGICA PARA EVITAR REPETIDOS ───
+          // Limpa a formatação para comparar apenas os números ou textos exatos
+          const leadTel = String(lead.telefone || '').replace(/\D/g, '');
+          const leadWpp = String(lead.whatsapp || '').replace(/\D/g, '');
+          const leadEmail = String(lead.email || '').toLowerCase().trim();
+          const leadNome = String(lead.nome || '').toLowerCase().trim();
+
+          // Verifica se já existe na base de dados
+          const isDuplicate = db.leads.some(ex => {
+            const exTel = String(ex.telefone || '').replace(/\D/g, '');
+            const exWpp = String(ex.whatsapp || '').replace(/\D/g, '');
+            const exEmail = String(ex.email || '').toLowerCase().trim();
+            const exNome = String(ex.nome || '').toLowerCase().trim();
+
+            // Considera repetido se bater o Telefone, WhatsApp, Email ou Nome exato
+            return (
+              (leadTel && exTel && leadTel === exTel) ||
+              (leadWpp && exWpp && leadWpp === exWpp) ||
+              (leadEmail && exEmail && leadEmail === exEmail) ||
+              (leadNome && exNome && leadNome === exNome)
+            );
+          });
+
+          // Se não for duplicado, adiciona. Se for, soma aos repetidos.
+          if (!isDuplicate) {
+             db.leads.push(lead);
+             count++;
+          } else {
+             repetidos++;
+          }
+        }
+      }
+      
+      save(); renderAll(); closeIE(); 
+      toast(`${count} novos adicionados. (${repetidos} repetidos ignorados)`, 'success');
+    } catch(err) {
+      console.error(err);
+      toast('Erro ao processar o CSV.', 'error');
+    }
+  };
+  r.readAsText(file, 'utf-8'); 
+  e.target.value = ''; // Limpa o input
 }
 function importJSON(e) {
   const file = e.target.files[0]; if (!file) return;
