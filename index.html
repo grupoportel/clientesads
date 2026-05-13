@@ -639,7 +639,7 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
                   <option value="outro" style="color:var(--text)">Outro</option>
                 </select>
               </th>
-
+              <th>Telefone</th>
               <th>WhatsApp</th>
               <th>Instagram</th>
               <th>IG do Dono</th>
@@ -1888,7 +1888,7 @@ function exportJSON() {
 function exportCSV() {
   // Atualizado com Origem e Motivo Perda
   const cols = ['id','nome','status','nicho','origem','responsavel','decisor','telefone','whatsapp','email',
-    'instagram','ig_dono','site','cnpj','nota','avals','ultimo_contato','reuniao',
+    'instagram','ig_dono','site','cnpj','nota','avals','data_entrada','ultimo_contato','reuniao',
     'melhores','oportunidades','pontos','escalar','obs','historico','motivoPerda','createdAt','updatedAt'];
   const rows = [cols.join(','), ...db.leads.map(l =>
     cols.map(c => '"'+(String(l[c]||'').replace(/"/g,'""'))+'"').join(','))];
