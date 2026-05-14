@@ -517,6 +517,10 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
     
   </div>
   <div class="topbar-right">
+    <button id="btnBulkDelete" class="btn btn-danger hidden" onclick="deleteSelectedLeads()" style="margin-right: auto;">
+      🗑 Excluir (<span id="bulkCount">0</span>)
+    </button>
+
     <div style="display:flex; align-items:center; gap:8px; margin-right:12px; border-right:1px solid var(--border); padding-right:16px;">
       <div class="custom-date-picker">
         <span id="labelGlobalDataInicio">Início</span>
@@ -645,7 +649,7 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
               <th>IG do Dono</th>
               <th>Site</th>
               <th onclick="sortTable('nota')">Nota ⭐</th>
-              <th onclick="sortTable('avals')">Avaliações</th>
+              <th onclick="sortTable('avaliacoes')">Avaliações</th>
               <th>Decisor</th>
               <th>E-mail</th>
               <th>CNPJ</th>
@@ -790,7 +794,7 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
         </div>
         <div class="form-group">
           <label>Qtd. Avaliações</label>
-          <input class="form-control" id="f_avals" type="number" placeholder="67">
+          <input class="form-control" id="f_avaliacoes" type="number" placeholder="67">
         </div>
 
         <div class="form-section-title">📅 Datas</div>
@@ -1251,7 +1255,7 @@ function inlineEdit(e, id, field) {
     inputHtml = `<input type="date" id="inl_${id}_${field}" class="form-control" style="padding:4px;height:26px;font-size:11px;min-width:110px" value="${esc(val)}">`;
   } else if (['obs', 'melhores', 'oportunidades', 'pontos', 'escalar', 'historico'].includes(field)) {
     inputHtml = `<textarea id="inl_${id}_${field}" class="form-control" style="padding:4px;font-size:11px;min-width:150px;height:40px">${esc(val)}</textarea>`;
-  } else if (field === 'nota' || field === 'avals') {
+  } else if (field === 'nota' || field === 'avaliacoes') {
     inputHtml = `<input type="number" step="0.1" id="inl_${id}_${field}" class="form-control" style="padding:4px;height:26px;font-size:11px;width:70px" value="${esc(val)}" onkeydown="if(event.key==='Enter') saveInline(${id}, '${field}', event)">`;
   } else {
     inputHtml = `<input type="text" id="inl_${id}_${field}" class="form-control" style="padding:4px;height:26px;font-size:11px;min-width:100px" value="${esc(val)}" onkeydown="if(event.key==='Enter') saveInline(${id}, '${field}', event)">`;
@@ -1342,7 +1346,7 @@ function renderTable() {
       return `<tr class="${detailId===l.id?'selected':''}" style="animation-delay:${delay}s">
         <td>
           <div class="check-container">
-            <input type="checkbox" class="row-check" data-id="${l.id}">
+            <input type="checkbox" class="row-check" data-id="${l.id}" onchange="updateBulkActions()">
             <div class="row-actions-left">
               <button class="btn-icon" title="Editar Completo" onclick="openModal(${l.id})">✏️</button>
               <button class="btn-icon" title="Excluir" onclick="deleteLead(${l.id})">🗑</button>
@@ -1367,7 +1371,7 @@ function renderTable() {
         <td>${editable('ig_dono', igDono?`<a href="${igDono}" target="_blank" class="td-link" onclick="event.stopPropagation()">👤 ${esc(l.ig_dono)}</a>`:'<span class="td-empty">—</span>')}</td>
         <td>${editable('site', siteLink?`<a href="${siteLink}" target="_blank" class="td-link" onclick="event.stopPropagation()">🌐 Site</a>`:'<span class="td-empty">—</span>')}</td>
         <td>${editable('nota', notaFormatada?`<span style="font-size:14px; font-weight:700; color:var(--yellow); font-family:'DM Mono', monospace;">${notaFormatada}</span>`:'<span class="td-empty">—</span>')}</td>
-        <td>${editable('avals', l.avals?`<span class="td-mono">${l.avals}</span>`:'<span class="td-empty">—</span>')}</td>
+        <td>${editable('avaliacoes', l.avaliacoes?`<span class="td-mono">${l.avaliacoes}</span>`:'<span class="td-empty">—</span>')}</td>
         <td class="td-truncate" title="${esc(l.decisor||'')}">${editable('decisor', l.decisor?esc(l.decisor):'<span class="td-empty">—</span>')}</td>
         <td>${editable('email', l.email?`<a href="mailto:${l.email}" class="td-link" onclick="event.stopPropagation()">✉️ ${esc(l.email)}</a>`:'<span class="td-empty">—</span>')}</td>
         <td class="td-mono" style="font-size:11px">${editable('cnpj', l.cnpj||'<span class="td-empty">—</span>')}</td>
@@ -1382,12 +1386,17 @@ function renderTable() {
     }).join('');
 
     // 2. RESTAURA A POSIÇÃO DA BARRA DE ROLAGEM (COM ATRASO PARA O NAVEGADOR DESENHAR)
+    // No final do bloco try dentro de renderTable()
     if (wrapper) {
         setTimeout(() => {
             wrapper.scrollLeft = scrollX;
             wrapper.scrollTop = scrollY;
         }, 10);
     }
+
+    // ADICIONE ESTAS DUAS LINHAS:
+    document.getElementById('selectAll').checked = false;
+    updateBulkActions();
 
   } catch (erro) {
     console.error("Erro Crítico ao desenhar a tabela:", erro);
@@ -1513,7 +1522,7 @@ function openDetail(id) {
     l.data_entrada  && dRow('📥 Entrada no CRM', fmtDate(l.data_entrada)),
     l.responsavel   && dRow('🧑 Responsável',   esc(l.responsavel)),
     l.cnpj          && dRow('🏢 CNPJ',          `<span class="td-mono">${esc(l.cnpj)}</span>`),
-    l.nota          && dRow('⭐ Nota Google',   `${l.nota}/5 (${l.avals||0} avaliações)`),
+    l.nota          && dRow('⭐ Nota Google',   `${l.nota}/5 (${l.avaliacoes||0} avaliações)`),
     l.ultimo_contato&& dRow('📅 Último Contato', fmtDate(l.ultimo_contato)),
     l.reuniao       && dRow('🤝 Reunião',        `<span style="color:${isUpcoming(l.reuniao)?'var(--green)':'var(--text)'}">${fmtDate(l.reuniao)}</span>`),
     l.historico     && dRow('📝 Histórico',      `<span style="white-space:pre-wrap">${esc(l.historico)}</span>`),
@@ -1550,7 +1559,7 @@ function deleteFromDetail() { if (detailId) { deleteLead(detailId); closeDetail(
 // MODAL FORMS
 // ═══════════════════════════════════
 const FIELDS = ['nome','status','nicho','origem','responsavel','decisor','cnpj','telefone','whatsapp','email',
-  'instagram','ig_dono','site','nota','avals','data_entrada','ultimo_contato','reuniao',
+  'instagram','ig_dono','site','nota','avaliacoes','data_entrada','ultimo_contato','reuniao',
   'melhores','oportunidades','pontos','escalar','obs','historico','motivoPerda'];
 
 function openModal(id) {
@@ -1869,6 +1878,39 @@ function deleteLead(id) {
 }
 function toggleSelectAll(cb) {
   document.querySelectorAll('.row-check').forEach(c => c.checked = cb.checked);
+  updateBulkActions(); // <- Nova linha adicionada
+}
+
+// Função para mostrar/esconder o botão de exclusão em massa
+function updateBulkActions() {
+  const checkedBoxes = document.querySelectorAll('.row-check:checked');
+  const btnBulk = document.getElementById('btnBulkDelete');
+  const countSpan = document.getElementById('bulkCount');
+  
+  if (checkedBoxes.length > 0) {
+    btnBulk.classList.remove('hidden');
+    countSpan.textContent = checkedBoxes.length;
+  } else {
+    btnBulk.classList.add('hidden');
+  }
+}
+
+// Função que executa a exclusão dos leads marcados
+function deleteSelectedLeads() {
+  const checkedBoxes = document.querySelectorAll('.row-check:checked');
+  if (checkedBoxes.length === 0) return;
+
+  myConfirm(`Excluir ${checkedBoxes.length} lead(s) selecionado(s)? Não há como desfazer.`, () => {
+    // Pega o ID de todos que estão marcados
+    const idsToRemove = Array.from(checkedBoxes).map(cb => parseInt(cb.getAttribute('data-id')));
+    
+    // Filtra o banco de dados mantendo apenas quem NÃO está na lista de exclusão
+    db.leads = db.leads.filter(l => !idsToRemove.includes(l.id));
+    
+    save();
+    renderAll();
+    toast(`${checkedBoxes.length} lead(s) excluído(s) com sucesso.`, 'success');
+  });
 }
 
 // ═══════════════════════════════════
@@ -1888,7 +1930,7 @@ function exportJSON() {
 function exportCSV() {
   // Atualizado com Origem e Motivo Perda
   const cols = ['id','nome','status','nicho','origem','responsavel','decisor','telefone','whatsapp','email',
-    'instagram','ig_dono','site','cnpj','nota','avals','data_entrada','ultimo_contato','reuniao',
+    'instagram','ig_dono','site','cnpj','nota','avaliacoes','data_entrada','ultimo_contato','reuniao',
     'melhores','oportunidades','pontos','escalar','obs','historico','motivoPerda','createdAt','updatedAt'];
   const rows = [cols.join(','), ...db.leads.map(l =>
     cols.map(c => '"'+(String(l[c]||'').replace(/"/g,'""'))+'"').join(','))];
