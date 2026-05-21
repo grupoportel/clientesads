@@ -474,7 +474,7 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
 .dash-kpi-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: absolute; right: 20px; top: 20px; }
 
 .dash-grid-charts { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 24px; }
-.dash-grid-bottom { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 40px; }
+.dash-grid-bottom { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 24px; margin-bottom: 40px; }
 @media (max-width: 1024px) { 
    .dash-grid-charts, .dash-grid-bottom { grid-template-columns: 1fr; } 
 }
@@ -606,6 +606,26 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
       </div>
     </div>
 
+    <div class="nicho-drawer" id="estadoDrawer">
+      <div class="nicho-drawer-header" onclick="toggleEstadoDrawer()">
+        <span class="arrow">▶</span> 🗺️ Estado
+      </div>
+      <div class="nicho-drawer-content">
+        <div id="estadosList" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+        <button class="filter-chip" onclick="addEstado()" style="border-style: dashed; color: var(--accent2)">＋ Adicionar Estado</button>
+      </div>
+    </div>
+
+    <div class="nicho-drawer" id="cidadeDrawer">
+      <div class="nicho-drawer-header" onclick="toggleCidadeDrawer()">
+        <span class="arrow">▶</span> 🏙️ Cidade
+      </div>
+      <div class="nicho-drawer-content">
+        <div id="cidadesList" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+        <button class="filter-chip" onclick="addCidade()" style="border-style: dashed; color: var(--accent2)">＋ Adicionar Cidade</button>
+      </div>
+    </div>
+
     <div id="tableView" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
       <div class="table-wrapper">
         <table id="leadsTable">
@@ -629,7 +649,9 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
               </th>
 
               <th onclick="sortTable('nicho')" style="min-width: 170px; cursor: pointer;">Nicho / Mercado</th>
-              
+              <th onclick="sortTable('estado')" style="min-width: 120px; cursor: pointer;">Estado</th>
+              <th onclick="sortTable('cidade')" style="min-width: 140px; cursor: pointer;">Cidade</th>
+
               <th style="padding: 0; min-width: 140px;">
                 <select class="form-control" style="width: 100%; height: 100%; padding: 9px 13px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .7px; background: transparent; border: none; color: var(--text3); cursor: pointer; outline: none; box-shadow: none;" onchange="currentOrigemFilter=this.value; applyFilters()">
                   <option value="" style="color:var(--text)">ORIGEM (TODAS)</option>
@@ -697,7 +719,7 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
   </div>
 </div>
 
-<div class="modal-overlay hidden" id="modalOverlay">
+<div class="modal-overlay hidden" id="modalOverlay" onclick="closeModalOnOverlay(event)">
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title" id="modalTitle">Novo Lead</div>
@@ -727,6 +749,20 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
         <div class="form-group">
           <label>Nicho / Mercado</label>
           <select class="form-control" id="f_nicho">
+            <option value="">— selecione —</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>Estado</label>
+          <select class="form-control" id="f_estado">
+            <option value="">— selecione —</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>Cidade</label>
+          <select class="form-control" id="f_cidade">
             <option value="">— selecione —</option>
           </select>
         </div>
@@ -1020,6 +1056,8 @@ let db = { leads: [], nichos: [], responsaveis: [], lastId: 0 };
 let currentStatusFilter = null;
 let currentNichoFilter  = null;
 let currentResponsavelFilter = null;
+let currentEstadoFilter = null;
+let currentCidadeFilter = null;
 let currentOrigemFilter = null; // <- NOVA VARIÁVEL
 let currentSort = { key: null, dir: 1 };
 let currentView = 'table';
@@ -1054,6 +1092,8 @@ function load() {
       db.nichos = data.nichos ? Object.values(data.nichos) : (data.groups ? Object.values(data.groups) : []);
       db.responsaveis = data.responsaveis ? Object.values(data.responsaveis) : [];
       db.lastId = data.lastId || 0;
+      db.estados = data.estados ? Object.values(data.estados) : [];
+      db.cidades = data.cidades ? Object.values(data.cidades) : [];
     } else {
       db = { leads: [], nichos: [], responsaveis: [], lastId: 0 };
     }
@@ -1101,6 +1141,8 @@ function getFiltered() {
     if (currentStatusFilter) list = list.filter(l => (l.status||'nenhuma') === currentStatusFilter);
     if (currentNichoFilter)  list = list.filter(l => l.nicho === currentNichoFilter);
     if (currentResponsavelFilter) list = list.filter(l => l.responsavel === currentResponsavelFilter);
+    if (currentEstadoFilter) list = list.filter(l => l.estado === currentEstadoFilter);
+    if (currentCidadeFilter) list = list.filter(l => l.cidade === currentCidadeFilter);
     
     // FILTROS DA TABELA
     if (currentOrigemFilter) list = list.filter(l => l.origem === currentOrigemFilter);
@@ -1196,6 +1238,8 @@ function renderAll() {
     updateStats();
     updateNichosSidebar(); 
     updateResponsaveisSidebar();
+    updateEstadosSidebar();
+    updateCidadesSidebar();
     
     if (currentView === 'table') {
         renderTable();
@@ -1251,6 +1295,16 @@ function inlineEdit(e, id, field) {
       <option value="">—</option>
       ${(db.responsaveis||[]).map(r => `<option value="${esc(r)}" ${val===r?'selected':''}>${esc(r)}</option>`).join('')}
     </select>`;
+    } else if (field === 'estado') {
+    inputHtml = `<select id="inl_${id}_${field}" class="form-control" style="padding:4px;height:26px;font-size:11px;min-width:100px">
+      <option value="">—</option>
+      ${(db.estados||[]).map(e => `<option value="${esc(e)}" ${val===e?'selected':''}>${esc(e)}</option>`).join('')}
+    </select>`;
+  } else if (field === 'cidade') {
+    inputHtml = `<select id="inl_${id}_${field}" class="form-control" style="padding:4px;height:26px;font-size:11px;min-width:100px">
+      <option value="">—</option>
+      ${(db.cidades||[]).map(c => `<option value="${esc(c)}" ${val===c?'selected':''}>${esc(c)}</option>`).join('')}
+    </select>`;
   } else if (field === 'ultimo_contato' || field === 'reuniao' || field === 'data_entrada') {
     inputHtml = `<input type="date" id="inl_${id}_${field}" class="form-control" style="padding:4px;height:26px;font-size:11px;min-width:110px" value="${esc(val)}">`;
   } else if (['obs', 'melhores', 'oportunidades', 'pontos', 'escalar', 'historico'].includes(field)) {
@@ -1284,9 +1338,33 @@ function saveInline(id, field, e) {
   e.stopPropagation();
   const el = document.getElementById(`inl_${id}_${field}`);
   if (!el) return;
+  const newVal = el.value.trim();
+
+  // Pega os IDs de todos os leads com a checkbox marcada
+  const checkedBoxes = document.querySelectorAll('.row-check:checked');
+  const checkedIds = Array.from(checkedBoxes).map(cb => parseInt(cb.getAttribute('data-id')));
+
+  // Se há mais de 1 selecionado E o lead atual está entre os selecionados, faz edição em lote
+  if (checkedIds.length > 1 && checkedIds.includes(id)) {
+    myConfirm(`Deseja aplicar essa alteração a TODOS os ${checkedIds.length} leads selecionados?`, () => {
+      checkedIds.forEach(cid => {
+        const index = db.leads.findIndex(l => l.id === cid);
+        if (index >= 0) {
+          db.leads[index][field] = newVal;
+          db.leads[index].updatedAt = new Date().toISOString();
+        }
+      });
+      save();
+      renderAll();
+      toast(`${checkedIds.length} leads atualizados com sucesso!`, 'success');
+    });
+    return; // Interrompe para aguardar a confirmação do modal
+  }
+
+  // Comportamento normal para 1 lead
   const idx = db.leads.findIndex(l => l.id === id);
   if (idx >= 0) {
-    db.leads[idx][field] = el.value.trim();
+    db.leads[idx][field] = newVal;
     db.leads[idx].updatedAt = new Date().toISOString();
     save();
     toast('Atualizado com sucesso!', 'success');
@@ -1363,6 +1441,8 @@ function renderTable() {
        
        <td>${editable('status', `<button class="status-badge ${st.cls}" onclick="openStatusDropdown(event,${l.id})">${st.label} ▾</button>`)}</td>
        <td>${editable('nicho', l.nicho?`<span class="badge-pill">${esc(l.nicho)}</span>`:'<span class="td-empty">—</span>')}</td>
+       <td>${editable('estado', l.estado?`<span class="badge-pill">${esc(l.estado)}</span>`:'<span class="td-empty">—</span>')}</td>
+       <td>${editable('cidade', l.cidade?`<span class="badge-pill">${esc(l.cidade)}</span>`:'<span class="td-empty">—</span>')}</td>
        <td>${editable('origem', `<button class="status-badge" style="background:var(--surface2); border:1px solid var(--border); color:var(--text)" onclick="openOrigemDropdown(event,${l.id})">${origemDisplay} ▾</button>`)}</td>
        
        <td>${editable('telefone', l.telefone?`<a href="tel:${telLimpo}" class="td-link" onclick="event.stopPropagation()">📞 ${esc(l.telefone)}</a>`:'<span class="td-empty">—</span>')}</td>
@@ -1558,7 +1638,7 @@ function deleteFromDetail() { if (detailId) { deleteLead(detailId); closeDetail(
 // ═══════════════════════════════════
 // MODAL FORMS
 // ═══════════════════════════════════
-const FIELDS = ['nome','status','nicho','origem','responsavel','decisor','cnpj','telefone','whatsapp','email',
+const FIELDS = ['nome','status','nicho','estado','cidade','origem','responsavel','decisor','cnpj','telefone','whatsapp','email',
   'instagram','ig_dono','site','nota','avaliacoes','data_entrada','ultimo_contato','reuniao',
   'melhores','oportunidades','pontos','escalar','obs','historico','motivoPerda'];
 
@@ -1637,12 +1717,32 @@ function openStatusDropdown(e, id) {
 }
 function setStatus(status) {
   if (!statusTargetId) return;
-  const idx = db.leads.findIndex(x => x.id === statusTargetId);
-  if (idx >= 0) {
-    db.leads[idx].status = status;
-    db.leads[idx].updatedAt = new Date().toISOString();
-    save(); renderAll();
-    toast('Status atualizado!', 'success');
+
+  const checkedBoxes = document.querySelectorAll('.row-check:checked');
+  const checkedIds = Array.from(checkedBoxes).map(cb => parseInt(cb.getAttribute('data-id')));
+
+  // Verifica edição em lote para o Status
+  if (checkedIds.length > 1 && checkedIds.includes(statusTargetId)) {
+    myConfirm(`Deseja alterar o status de TODOS os ${checkedIds.length} leads selecionados?`, () => {
+      checkedIds.forEach(cid => {
+        const idx = db.leads.findIndex(x => x.id === cid);
+        if (idx >= 0) {
+          db.leads[idx].status = status;
+          db.leads[idx].updatedAt = new Date().toISOString();
+        }
+      });
+      save(); renderAll();
+      toast(`Status atualizado em ${checkedIds.length} leads!`, 'success');
+    });
+  } else {
+    // Edição individual
+    const idx = db.leads.findIndex(x => x.id === statusTargetId);
+    if (idx >= 0) {
+      db.leads[idx].status = status;
+      db.leads[idx].updatedAt = new Date().toISOString();
+      save(); renderAll();
+      toast('Status atualizado!', 'success');
+    }
   }
   document.getElementById('statusDropdown').classList.add('hidden');
   statusTargetId = null;
@@ -1670,12 +1770,32 @@ function openOrigemDropdown(e, id) {
 
 function setOrigem(origem) {
   if (!origemTargetId) return;
-  const idx = db.leads.findIndex(x => x.id === origemTargetId);
-  if (idx >= 0) {
-    db.leads[idx].origem = origem;
-    db.leads[idx].updatedAt = new Date().toISOString();
-    save(); renderAll();
-    toast('Origem atualizada!', 'success');
+
+  const checkedBoxes = document.querySelectorAll('.row-check:checked');
+  const checkedIds = Array.from(checkedBoxes).map(cb => parseInt(cb.getAttribute('data-id')));
+
+  // Verifica edição em lote para a Origem
+  if (checkedIds.length > 1 && checkedIds.includes(origemTargetId)) {
+    myConfirm(`Deseja alterar a origem de TODOS os ${checkedIds.length} leads selecionados?`, () => {
+      checkedIds.forEach(cid => {
+        const idx = db.leads.findIndex(x => x.id === cid);
+        if (idx >= 0) {
+          db.leads[idx].origem = origem;
+          db.leads[idx].updatedAt = new Date().toISOString();
+        }
+      });
+      save(); renderAll();
+      toast(`Origem atualizada em ${checkedIds.length} leads!`, 'success');
+    });
+  } else {
+    // Edição individual
+    const idx = db.leads.findIndex(x => x.id === origemTargetId);
+    if (idx >= 0) {
+      db.leads[idx].origem = origem;
+      db.leads[idx].updatedAt = new Date().toISOString();
+      save(); renderAll();
+      toast('Origem atualizada!', 'success');
+    }
   }
   document.getElementById('origemDropdown').classList.add('hidden');
   origemTargetId = null;
@@ -1863,6 +1983,113 @@ function removeResponsavel(e, r) {
   });
 }
 
+// ═══════════════════════════════════
+// ESTADOS (CRIAR E REMOVER)
+// ═══════════════════════════════════
+function toggleEstadoDrawer() {
+  const drawer = document.getElementById('estadoDrawer');
+  drawer.classList.toggle('open');
+  const arrow = drawer.querySelector('.arrow');
+  arrow.textContent = drawer.classList.contains('open') ? '▼' : '▶';
+}
+
+function updateEstadosSidebar() {
+  const container = document.getElementById('estadosList');
+  if (!container) return;
+  const leadEstados = db.leads.map(l => l.estado).filter(Boolean);
+  db.estados = db.estados || [];
+  const allEstados = [...new Set([...leadEstados, ...db.estados])].sort();
+  container.innerHTML = allEstados.map(e => `
+    <div class="filter-chip ${currentEstadoFilter === e ? 'active' : ''}" onclick='filterByEstadoSidebar(${JSON.stringify(e)}, this)'>
+      ${esc(e)} <span style="margin-left:6px; opacity:0.6; cursor:pointer;" onclick='removeEstado(event, ${JSON.stringify(e)})'>✕</span>
+    </div>`).join('');
+
+  const select = document.getElementById('f_estado');
+  if (select) {
+    const backupValue = select.value;
+    select.innerHTML = '<option value="">— selecione —</option>' + allEstados.map(e => `<option value="${esc(e)}">${esc(e)}</option>`).join('');
+    select.value = backupValue;
+  }
+}
+
+function filterByEstadoSidebar(e, el) {
+  currentEstadoFilter = (currentEstadoFilter === e) ? null : e;
+  currentStatusFilter = currentNichoFilter = currentResponsavelFilter = currentCidadeFilter = null;
+  document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+  renderAll();
+}
+
+function addEstado() {
+  myPrompt('Sigla ou Nome do Estado (ex: SP):', '', (name) => {
+    if (!name?.trim()) return;
+    db.estados = db.estados || [];
+    if (!db.estados.includes(name.trim())) { db.estados.push(name.trim()); save(); renderAll(); toast('Estado adicionado!', 'success'); }
+  });
+}
+
+function removeEstado(e, est) {
+  e.stopPropagation(); 
+  myConfirm(`Deseja excluir o estado "${est}"?`, () => {
+     db.estados = (db.estados || []).filter(x => x !== est);
+     db.leads.forEach(l => { if (l.estado === est) l.estado = ''; });
+     if (currentEstadoFilter === est) currentEstadoFilter = null;
+     save(); renderAll(); toast('Estado excluído!', 'info');
+  });
+}
+
+// ═══════════════════════════════════
+// CIDADES (CRIAR E REMOVER)
+// ═══════════════════════════════════
+function toggleCidadeDrawer() {
+  const drawer = document.getElementById('cidadeDrawer');
+  drawer.classList.toggle('open');
+  const arrow = drawer.querySelector('.arrow');
+  arrow.textContent = drawer.classList.contains('open') ? '▼' : '▶';
+}
+
+function updateCidadesSidebar() {
+  const container = document.getElementById('cidadesList');
+  if (!container) return;
+  const leadCidades = db.leads.map(l => l.cidade).filter(Boolean);
+  db.cidades = db.cidades || [];
+  const allCidades = [...new Set([...leadCidades, ...db.cidades])].sort();
+  container.innerHTML = allCidades.map(c => `
+    <div class="filter-chip ${currentCidadeFilter === c ? 'active' : ''}" onclick='filterByCidadeSidebar(${JSON.stringify(c)}, this)'>
+      ${esc(c)} <span style="margin-left:6px; opacity:0.6; cursor:pointer;" onclick='removeCidade(event, ${JSON.stringify(c)})'>✕</span>
+    </div>`).join('');
+
+  const select = document.getElementById('f_cidade');
+  if (select) {
+    const backupValue = select.value;
+    select.innerHTML = '<option value="">— selecione —</option>' + allCidades.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+    select.value = backupValue;
+  }
+}
+
+function filterByCidadeSidebar(c, el) {
+  currentCidadeFilter = (currentCidadeFilter === c) ? null : c;
+  currentStatusFilter = currentNichoFilter = currentResponsavelFilter = currentEstadoFilter = null;
+  document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+  renderAll();
+}
+
+function addCidade() {
+  myPrompt('Nome da Cidade:', '', (name) => {
+    if (!name?.trim()) return;
+    db.cidades = db.cidades || [];
+    if (!db.cidades.includes(name.trim())) { db.cidades.push(name.trim()); save(); renderAll(); toast('Cidade adicionada!', 'success'); }
+  });
+}
+
+function removeCidade(e, cid) {
+  e.stopPropagation(); 
+  myConfirm(`Deseja excluir a cidade "${cid}"?`, () => {
+     db.cidades = (db.cidades || []).filter(x => x !== cid);
+     db.leads.forEach(l => { if (l.cidade === cid) l.cidade = ''; });
+     if (currentCidadeFilter === cid) currentCidadeFilter = null;
+     save(); renderAll(); toast('Cidade excluída!', 'info');
+  });
+}
 
 // ═══════════════════════════════════
 // DELETE
@@ -1929,7 +2156,7 @@ function exportJSON() {
 }
 function exportCSV() {
   // Atualizado com Origem e Motivo Perda
-  const cols = ['id','nome','status','nicho','origem','responsavel','decisor','telefone','whatsapp','email',
+  const cols = ['id','nome','status','nicho','estado','cidade','origem','responsavel','decisor','telefone','whatsapp','email',
     'instagram','ig_dono','site','cnpj','nota','avaliacoes','data_entrada','ultimo_contato','reuniao',
     'melhores','oportunidades','pontos','escalar','obs','historico','motivoPerda','createdAt','updatedAt'];
   const rows = [cols.join(','), ...db.leads.map(l =>
@@ -2053,7 +2280,7 @@ function importJSON(e) {
 }
 function clearAllData() {
   myConfirm('Apagar TODOS os dados? Não há como desfazer.', () => {
-    db = {leads:[],nichos:[],responsaveis:[],lastId:0}; save(); closeDetail(); renderAll(); closeIE();
+    db = {leads:[],nichos:[],responsaveis:[],estados:[],cidades:[],lastId:0}; save(); closeDetail(); renderAll(); closeIE();
     toast('Dados apagados.','info');
   });
 }
@@ -2065,7 +2292,11 @@ function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
 function igUrl(ig){ if(!ig) return ''; if(ig.startsWith('http')) return ig; const h=ig.replace('@','').trim(); return h?'https://instagram.com/'+h:''; }
 function siteUrl(s){ if(!s) return ''; return s.startsWith('http')?s:'https://'+s; }
 function fmtDate(d){ if(!d) return ''; const [y,m,day]=d.split('-'); return `${day}/${m}/${y}`; }
-function isUpcoming(d){ return d && d >= new Date().toISOString().slice(0,10); }
+function isUpcoming(d){ 
+  if(!d) return false; 
+  const hojeLocal = new Date().toLocaleDateString('en-CA'); // Pega data YYYY-MM-DD no fuso local
+  return d >= hojeLocal; 
+}
 function trunc(s,n){ if(!s) return ''; return s.length>n ? s.slice(0,n)+'…' : s; }
 function toast(msg, type='success'){
   const el = document.createElement('div');
@@ -2102,7 +2333,7 @@ function updateMetasDateRange() {
 
 const DEFAULT_GOALS = {
   empresa: {
-    novosLeads:       { label:'Novos Leads',        icon:'📋', color:'#5865f2', dia:5,  semana:25, mes:100 },
+    novosLeads:       { label:'Novos Leads',        icon:'📋', color:'#5865f2', dia:200,  semana:1400, mes:5600 },
     reunioesMarcadas: { label:'Reuniões Marcadas',   icon:'📅', color:'#22c55e', dia:2,  semana:10, mes:40  },
     contratosFechados:{ label:'Contratos Fechados',  icon:'🤝', color:'#ec4899', dia:1,  semana:4,  mes:15  },
     contatosRealizados:{ label:'Contatos Realizados',icon:'📞', color:'#06b6d4', dia:10, semana:50, mes:200 },
@@ -2260,6 +2491,48 @@ function renderMetas() {
   const dataPerdas = Object.entries(perdaMap)
      .map(([motivo, count]) => ({ motivo, percent: Math.round((count/perdidos.length)*100) }))
      .sort((a,b) => b.percent - a.percent).slice(0,5);
+     // --- NOVOS CÁLCULOS: CIDADES E ESTADOS ---
+  const cidadeMap = {};
+  const estadoMap = {};
+  leadsPeriodo.forEach(l => {
+      if(l.cidade) cidadeMap[l.cidade] = (cidadeMap[l.cidade] || 0) + 1;
+      if(l.estado) estadoMap[l.estado] = (estadoMap[l.estado] || 0) + 1;
+  });
+  const dataCidade = Object.entries(cidadeMap)
+      .map(([nome, count]) => ({ nome, count, percent: Math.round((count/qtdLeads)*100) }))
+      .sort((a,b) => b.count - a.count).slice(0,5);
+  const dataEstado = Object.entries(estadoMap)
+      .map(([nome, count]) => ({ nome, count, percent: Math.round((count/qtdLeads)*100) }))
+      .sort((a,b) => b.count - a.count).slice(0,5);
+
+  // --- NOVOS CÁLCULOS: PROGRESSO DE METAS (DIA/SEMANA) ---
+  const metaLeadsDia = goals.empresa.novosLeads.dia || 200;
+  const metaLeadsSemana = goals.empresa.novosLeads.semana || 1400;
+  const metaReunioesSemana = goals.empresa.reunioesMarcadas.semana || 100;
+
+  const hojeLocal = new Date().toLocaleDateString('en-CA');
+  const dataAtual = new Date();
+  const startOfWeekDate = new Date(dataAtual);
+  startOfWeekDate.setDate(dataAtual.getDate() - dataAtual.getDay());
+  const startOfWeek = startOfWeekDate.toLocaleDateString('en-CA');
+  const endOfWeekDate = new Date(startOfWeekDate);
+  endOfWeekDate.setDate(startOfWeekDate.getDate() + 6);
+  const endOfWeek = endOfWeekDate.toLocaleDateString('en-CA');
+
+  const leadsHoje = allLeads.filter(l => (l.data_entrada || (l.createdAt||'').slice(0,10)) === hojeLocal).length;
+  const leadsSemana = allLeads.filter(l => {
+      const dt = (l.data_entrada || (l.createdAt||'').slice(0,10));
+      return dt >= startOfWeek && dt <= endOfWeek;
+  }).length;
+  const reunioesSemana = allLeads.filter(l => {
+      if (!['reuniao-marc', 'reuniao-pos', 'contrato'].includes(l.status)) return false;
+      const dt = (l.reuniao || (l.updatedAt||'').slice(0,10));
+      return dt >= startOfWeek && dt <= endOfWeek;
+  }).length;
+
+  const pctLeadsDia = Math.min(Math.round((leadsHoje / metaLeadsDia) * 100), 100) || 0;
+  const pctLeadsSem = Math.min(Math.round((leadsSemana / metaLeadsSemana) * 100), 100) || 0;
+  const pctReunioesSem = Math.min(Math.round((reunioesSemana / metaReunioesSemana) * 100), 100) || 0;
 
   // Ranking Equipe
   const avatarColors = ['#5865f2', '#a855f7', '#06b6d4', '#ec4899', '#eab308', '#22c55e', '#f97316'];
@@ -2358,7 +2631,9 @@ function renderMetas() {
             <input type="date" id="metaDataFim" value="${metasDataFim}" onchange="updateMetasDateRange()">
           </div>
         </div>
-
+        
+        <button class="btn btn-primary" onclick="openEditGoals()" style="font-size:12px">🎯 Editar Metas</button>
+        
         <button class="btn btn-ghost" onclick="editTicketMedio()" style="font-size:12px" title="Configurar Ticket Médio">⚙️ Configurar</button>
       </div>
     </div>
@@ -2419,7 +2694,6 @@ function renderMetas() {
     </div>
 
     <div class="dash-grid-bottom">
-      
       <div class="dash-card">
         <div class="dash-title" style="color:var(--text)"><span style="color:var(--yellow)">${iconTrophy}</span> TOP PERFORMERS (EQUIPE)</div>
         ${podiumHTML}
@@ -2442,6 +2716,67 @@ function renderMetas() {
               `).join('')}
               ${dataNicho.length === 0 ? '<p style="color:var(--text3);font-size:12px">Sem dados de nicho</p>' : ''}
             </div>
+          </div>
+
+          <div class="dash-card" style="flex:1">
+              <div class="dash-title" style="justify-content:space-between; border-bottom:none; margin-bottom:8px; padding-bottom:0;">
+                  <span><span style="color:var(--green)">📍</span> LOCALIZAÇÃO</span>
+                  <div class="view-toggle" style="margin-top:-6px;">
+                      <button class="view-btn active" onclick="document.getElementById('loc-est').style.display='flex'; document.getElementById('loc-cid').style.display='none'; this.classList.add('active'); this.nextElementSibling.classList.remove('active');">Estados</button>
+                      <button class="view-btn" onclick="document.getElementById('loc-cid').style.display='flex'; document.getElementById('loc-est').style.display='none'; this.classList.add('active'); this.previousElementSibling.classList.remove('active');">Cidades</button>
+                  </div>
+              </div>
+              <div id="loc-est" style="display:flex;flex-direction:column;gap:16px; margin-top:8px;">
+                  ${dataEstado.length === 0 ? '<p style="color:var(--text3);font-size:12px">Sem dados de estados</p>' : dataEstado.map(e => `
+                    <div>
+                      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+                         <span style="color:var(--text);font-weight:500" class="td-truncate" style="max-width:200px">${esc(e.nome)}</span>
+                         <span style="color:var(--text2);font-family:'DM Mono',monospace">${e.count} leads</span>
+                      </div>
+                      <div class="progress-bar-wrap"><div class="progress-bar-fill" style="background:var(--green);width:${e.percent}%"></div></div>
+                    </div>
+                  `).join('')}
+              </div>
+              <div id="loc-cid" style="display:none;flex-direction:column;gap:16px; margin-top:8px;">
+                  ${dataCidade.length === 0 ? '<p style="color:var(--text3);font-size:12px">Sem dados de cidades</p>' : dataCidade.map(c => `
+                    <div>
+                      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+                         <span style="color:var(--text);font-weight:500" class="td-truncate" style="max-width:200px">${esc(c.nome)}</span>
+                         <span style="color:var(--text2);font-family:'DM Mono',monospace">${c.count} leads</span>
+                      </div>
+                      <div class="progress-bar-wrap"><div class="progress-bar-fill" style="background:var(--green);width:${c.percent}%"></div></div>
+                    </div>
+                  `).join('')}
+              </div>
+          </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:24px">
+          <div class="dash-card" style="flex:1">
+              <div class="dash-title"><span style="color:var(--accent2)">🎯</span> PROGRESSO DE METAS</div>
+              <div style="display:flex;flex-direction:column;gap:20px">
+                  <div>
+                      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+                          <span style="color:var(--text);font-weight:500">Leads Hoje</span>
+                          <span style="color:var(--text2);font-family:'DM Mono',monospace">${leadsHoje} / ${metaLeadsDia}</span>
+                      </div>
+                      <div class="progress-bar-wrap" style="height:8px"><div class="progress-bar-fill" style="background:${pctLeadsDia>=100?'var(--green)':'var(--accent)'};width:${pctLeadsDia}%"></div></div>
+                  </div>
+                  <div>
+                      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+                          <span style="color:var(--text);font-weight:500">Leads na Semana</span>
+                          <span style="color:var(--text2);font-family:'DM Mono',monospace">${leadsSemana} / ${metaLeadsSemana}</span>
+                      </div>
+                      <div class="progress-bar-wrap" style="height:8px"><div class="progress-bar-fill" style="background:${pctLeadsSem>=100?'var(--green)':'var(--accent)'};width:${pctLeadsSem}%"></div></div>
+                  </div>
+                  <div>
+                      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+                          <span style="color:var(--text);font-weight:500">Reuniões na Semana</span>
+                          <span style="color:var(--text2);font-family:'DM Mono',monospace">${reunioesSemana} / ${metaReunioesSemana}</span>
+                      </div>
+                      <div class="progress-bar-wrap" style="height:8px"><div class="progress-bar-fill" style="background:${pctReunioesSem>=100?'var(--green)':'var(--accent)'};width:${pctReunioesSem}%"></div></div>
+                  </div>
+              </div>
           </div>
 
           <div class="dash-card" style="flex:1">
@@ -2526,12 +2861,30 @@ function renderMetas() {
 }
 
 // ─── Goals Editor ───
-function openEditGoals() {
+function openEditGoals(periodoSelecionado = 'mes') {
   const goals = getGoals();
   const body = document.getElementById('goalsModalBody');
-  const p = 'mes'; // Padrão de salvamento mantido para estabilidade de metas mensais
+  const p = periodoSelecionado; 
 
-  let html = `<p style="color:var(--text3);font-size:12px;margin-bottom:4px">Você está editando a base de objetivos <b style="color:var(--text)">Mensais</b> da empresa.</p>`;
+  const nomesPeriodos = { dia: 'Diárias', semana: 'Semanais', mes: 'Mensais', ano: 'Anuais' };
+  const titulo = nomesPeriodos[p] || 'Mensais';
+
+  // Atualiza o título do modal
+  document.querySelector('#goalsModal .modal-title').innerHTML = `⚙️ Editar Metas (${titulo})`;
+
+  // Cria as abas de navegação dentro do modal
+  let html = `
+  <div style="display:flex; gap:8px; margin-bottom: 16px; background:var(--surface2); padding:4px; border-radius:8px; border:1px solid var(--border);">
+      <button class="view-btn ${p==='dia'?'active':''}" style="flex:1" onclick="openEditGoals('dia')">Diária</button>
+      <button class="view-btn ${p==='semana'?'active':''}" style="flex:1" onclick="openEditGoals('semana')">Semanal</button>
+      <button class="view-btn ${p==='mes'?'active':''}" style="flex:1" onclick="openEditGoals('mes')">Mensal</button>
+      <button class="view-btn ${p==='ano'?'active':''}" style="flex:1" onclick="openEditGoals('ano')">Anual</button>
+  </div>`;
+
+  html += `<p style="color:var(--text3);font-size:12px;margin-bottom:4px">Você está editando a base de objetivos <b style="color:var(--text)">${titulo}</b> da empresa.</p>`;
+  
+  // Campo oculto para a função salvar saber qual período estamos editando
+  html += `<input type="hidden" id="edit_period_hidden" value="${p}">`;
 
   html += `<div class="form-section-title" style="grid-column:unset;margin-bottom:8px">🏢 Empresa</div>`;
   html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">`;
@@ -2562,7 +2915,8 @@ function openEditGoals() {
 
 function saveGoals() {
   const goals = getGoals();
-  const p = 'mes'; 
+  // Puxa o período do campo oculto que criamos
+  const p = document.getElementById('edit_period_hidden').value || 'mes'; 
 
   Object.keys(goals.empresa).forEach(key => {
     const el = document.getElementById(`goal_emp_${key}`);
@@ -2578,28 +2932,11 @@ function saveGoals() {
   save();
   closeGoalsModal();
   renderMetas();
-  toast('Metas salvas!', 'success');
-}
-
-function editTicketMedio() {
-  const goals = getGoals();
-  const atual = (goals.valorPipeline && goals.valorPipeline.ticketMedio) || 1500;
-  myPrompt('Ticket médio por lead (R$):', atual, (val) => {
-    const v = parseFloat(val);
-    if (isNaN(v) || v <= 0) { toast('Valor inválido', 'error'); return; }
-    if (!goals.valorPipeline) goals.valorPipeline = {};
-    goals.valorPipeline.ticketMedio = v;
-    db.goals = goals;
-    save();
-    renderMetas();
-    toast('Ticket médio atualizado!', 'success');
-  });
+  toast(`Metas salvas com sucesso!`, 'success');
 }
 
 function closeGoalsModal() {
   document.getElementById('goalsModal').classList.add('hidden');
-  const btn = document.querySelector('#goalsModal .modal-footer .btn-primary');
-  if (btn) btn.onclick = saveGoals;
 }
 
 // ═══════════════════════════════════
