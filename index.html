@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Grupo Portel</title>
+<title>CRM Portel</title>
+<link rel="icon" type="image/png" href="Imagens/logosite.png">
 <script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
@@ -16,27 +17,38 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
 
 :root {
-  --bg: #0c0e18;
-  --surface: #131520;
-  --surface2: #1c1f30;
-  --surface3: #242840;
-  --border: #252840;
-  --border2: #333860;
-  --text: #e4e6f5;
-  --text2: #8890b8;
-  --text3: #4a5070;
-  --accent: #5865f2;
-  --accent2: #818cf8;
-  --accent3: #a5b4fc;
+  /* FUNDOS: Tons de azul marinho profundo baseados no fundo da sua logo */
+  --bg: #091321;
+  --surface: #101c30;
+  --surface2: #182742;
+  --surface3: #223556;
+  
+  /* BORDAS: Azuis um pouco mais claros para criar divisão */
+  --border: #223556;
+  --border2: #304870;
+  
+  /* TEXTOS: Mantendo brancos e azuis clarinhos para leitura fácil */
+  --text: #ffffff;
+  --text2: #94a8d0;
+  --text3: #627ba8;
+  
+  /* DESTAQUE PRINCIPAL: O Amarelo Capivara da sua marca! */
+  --accent: #00d0df; 
+  --accent2: #2ab8e4; /* Amarelo um pouco mais claro para hover */
+  --accent3: #ffe285;
+  
+  /* CORES DE ALERTA (Mantidas nos padrões universais de semáforo) */
   --green: #22c55e; --green-bg: #0d2a1a;
-  --yellow: #eab308; --yellow-bg: #2a220d;
+  --yellow: #facc15; --yellow-bg: #2a220d; /* Ajustado para não brigar com o accent */
   --red: #ef4444; --red-bg: #2a0d0d;
   --purple: #a855f7; --purple-bg: #1e0d2a;
   --cyan: #06b6d4; --cyan-bg: #0d2535;
   --orange: #f97316; --orange-bg: #2a1508;
   --pink: #ec4899; --pink-bg: #2a0d1a;
 
+  /* CORES DO FUNIL (Mantidas do original, mas você pode personalizá-las depois) */
   --s-nenhuma: #5865f2;
+  --s-preparacao: #3b82f6;
   --s-interesse: #06b6d4;
   --s-retornar: #eab308;
   --s-segundo: #f97316;
@@ -246,6 +258,7 @@ tbody tr:hover .row-actions{opacity:1}
 .status-badge:hover{filter:brightness(1.15)}
 .status-badge:active{transform:scale(.96)}
 .s-nenhuma{background:#1a1e42;color:var(--s-nenhuma);border:1px solid #2d3365}
+.s-preparacao{background:#0f172a;color:var(--s-preparacao);border:1px solid #1e293b}
 .s-interesse{background:#0d2535;color:var(--s-interesse);border:1px solid #0d3a4a}
 .s-retornar{background:#2d2508;color:var(--s-retornar);border:1px solid #4a3c0a}
 .s-segundo{background:#2d1808;color:var(--s-segundo);border:1px solid #4a2808}
@@ -355,8 +368,26 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
 
 /* ── KANBAN & METAS VIEWS ── */
 .kanban-outer{flex:1;overflow-x:auto;overflow-y:hidden}
-.kanban-view{display:flex;gap:14px;padding:16px 20px;min-height:100%;align-items:flex-start;width:max-content;}
-.kanban-col{flex-shrink:0;width:248px;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;max-height:calc(100vh - 250px);transition:box-shadow .2s;}
+.kanban-view {
+  display: flex;
+  gap: 14px;
+  padding: 16px 20px;
+  height: 100%; /* Mudou de min-height para height */
+  align-items: flex-start;
+  width: max-content;
+}
+.kanban-col {
+  flex-shrink: 0;
+  width: 248px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 100%; /* A mágica acontece aqui: removemos o calc(100vh - 250px) */
+  transition: box-shadow .2s;
+}
 .kanban-col-header{padding:11px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0;}
 .kanban-col-count{margin-left:auto;font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;background:var(--surface2);padding:1px 7px;border-radius:10px;}
 .kanban-cards{padding:10px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1;}
@@ -509,11 +540,14 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
   <div class="topbar-left">
   <button class="btn-icon" onclick="toggleSidebar()" style="margin-right: 8px; font-size: 16px; padding: 4px 8px;" title="Recolher/Expandir Menu">☰</button>
   
-  <div class="logo"><div class="logo-dot"></div> CRM <span> Grupo Portel </span></div>
-  <div class="search-wrap">
-      <span class="search-icon">🔍</span>
-      <input type="text" id="searchInput" placeholder="Buscar leads…" oninput="applyFilters()">
-    </div>
+  <div class="logo">
+  <img src="Imagens/logosite.png" alt="Logo" style="height: 28px; width: auto; object-fit: contain;">
+  <span>Grupo Portel</span>
+</div>
+  <div class="search-wrap" style="margin-left: 10px;">
+  <span class="search-icon">🔍</span>
+  <input type="text" id="searchInput" placeholder="Buscar leads…" oninput="applyFilters()">
+</div>
     
   </div>
   <div class="topbar-right">
@@ -554,17 +588,20 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
     <div class="sidebar-item" id="sb-nenhuma" onclick="filterByStatus('nenhuma',this)">
       <span class="sidebar-dot" style="background:var(--s-nenhuma)"></span> Nenhuma Ação <span class="sidebar-count" id="count-nenhuma">0</span>
     </div>
+    <div class="sidebar-item" id="sb-preparacao" onclick="filterByStatus('preparacao',this)">
+      <span class="sidebar-dot" style="background:var(--s-preparacao)"></span> Preparação <span class="sidebar-count" id="count-preparacao">0</span>
+    </div>
     <div class="sidebar-item" id="sb-interesse" onclick="filterByStatus('interesse',this)">
       <span class="sidebar-dot" style="background:var(--s-interesse)"></span> Não Tem Interesse <span class="sidebar-count" id="count-interesse">0</span>
     </div>
     <div class="sidebar-item" id="sb-retornar" onclick="filterByStatus('retornar',this)">
-      <span class="sidebar-dot" style="background:var(--s-retornar)"></span> Retornar <span class="sidebar-count" id="count-retornar">0</span>
+      <span class="sidebar-dot" style="background:var(--s-retornar)"></span> Ligação 1 <span class="sidebar-count" id="count-retornar">0</span>
     </div>
     <div class="sidebar-item" id="sb-segundo" onclick="filterByStatus('segundo',this)">
-      <span class="sidebar-dot" style="background:var(--s-segundo)"></span> Segundo Retorno <span class="sidebar-count" id="count-segundo">0</span>
+      <span class="sidebar-dot" style="background:var(--s-segundo)"></span> Ligação 2 <span class="sidebar-count" id="count-segundo">0</span>
     </div>
     <div class="sidebar-item" id="sb-reuniao-pos" onclick="filterByStatus('reuniao-pos',this)">
-      <span class="sidebar-dot" style="background:var(--s-reuniao-pos)"></span> Terceiro Retorno <span class="sidebar-count" id="count-reuniao-pos">0</span>
+      <span class="sidebar-dot" style="background:var(--s-reuniao-pos)"></span> Ligação 3 <span class="sidebar-count" id="count-reuniao-pos">0</span>
     </div>
     <div class="sidebar-item" id="sb-reuniao-marc" onclick="filterByStatus('reuniao-marc',this)">
       <span class="sidebar-dot" style="background:var(--s-reuniao-marc)"></span> Reunião Marcada <span class="sidebar-count" id="count-reuniao-marc">0</span>
@@ -639,10 +676,11 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
                 <select class="form-control" style="width: 100%; height: 100%; padding: 9px 13px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .7px; background: transparent; border: none; color: var(--text3); cursor: pointer; outline: none; box-shadow: none;" onchange="currentStatusFilter=this.value; applyFilters()">
                   <option value="" style="color:var(--text)">STATUS (TODOS)</option>
                   <option value="nenhuma" style="color:var(--text)">Nenhuma Ação</option>
+                  <option value="preparacao" style="color:var(--text)">Preparação</option>
                   <option value="interesse" style="color:var(--text)">Não Tem Interesse</option>
-                  <option value="retornar" style="color:var(--text)">Retornar</option>
-                  <option value="segundo" style="color:var(--text)">Segundo Retorno</option>
-                  <option value="reuniao-pos" style="color:var(--text)">Terceiro Retorno</option>
+                  <option value="retornar" style="color:var(--text)">Ligação 1</option>
+                  <option value="segundo" style="color:var(--text)">Ligação 2</option>
+                  <option value="reuniao-pos" style="color:var(--text)">Ligação 3</option>
                   <option value="reuniao-marc" style="color:var(--text)">Reunião Marcada</option>
                   <option value="contrato" style="color:var(--text)">Contrato Fechado</option>
                 </select>
@@ -738,10 +776,11 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
           <label>Status</label>
           <select class="form-control" id="f_status">
             <option value="nenhuma">Nenhuma Ação</option>
+            <option value="preparacao">Preparação</option>
             <option value="interesse">Não Tem Interesse</option>
-            <option value="retornar">Retornar</option>
-            <option value="segundo">Segundo Retorno</option>
-            <option value="reuniao-pos">Terceiro Retorno</option>
+            <option value="retornar">Ligação 1</option>
+            <option value="segundo">Ligação 2</option>
+            <option value="reuniao-pos">Ligação 3</option>
             <option value="reuniao-marc">Reunião Marcada</option>
             <option value="contrato">Contrato Fechado</option>
           </select>
@@ -1113,10 +1152,11 @@ let dragTargetStatus = null;
 // ═══════════════════════════════════
 const STATUS = {
   'nenhuma':     { label:'Nenhuma Ação',     cls:'s-nenhuma'     },
+  'preparacao':  { label:'Preparação',       cls:'s-preparacao'  }, // ADICIONADO
   'interesse':   { label:'Não Tem Interesse', cls:'s-interesse'   },
-  'retornar':    { label:'Retornar',           cls:'s-retornar'    },
-  'segundo':     { label:'Segundo Retorno',    cls:'s-segundo'     },
-  'reuniao-pos': { label:'Terceiro Retorno',   cls:'s-reuniao-pos' },
+  'retornar':    { label:'Ligação 1',        cls:'s-retornar'    }, // RENOMEADO
+  'segundo':     { label:'Ligação 2',        cls:'s-segundo'     }, // RENOMEADO
+  'reuniao-pos': { label:'Ligação 3',        cls:'s-reuniao-pos' }, // RENOMEADO
   'reuniao-marc':{ label:'Reunião Marcada',    cls:'s-reuniao-marc'},
   'contrato':    { label:'Contrato Fechado',   cls:'s-contrato'    },
 };
@@ -2614,9 +2654,9 @@ function renderMetas() {
   // --- Renderização do HTML Base ---
   metasView.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; border-bottom:1px solid var(--border); padding-bottom:16px;">
-      <h2 style="font-size:20px;font-weight:700;color:var(--accent2);display:flex;align-items:center;gap:10px">
-         <div style="width:32px;height:32px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;box-shadow:0 0 8px var(--accent)"></div>
-         METAS <span style="color:var(--text2);font-weight:400">Grupo Portel</span>
+      <h2 style="font-size:20px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:12px">
+         <img src="Imagens/logosite.png" alt="Logo" style="height: 32px; width: auto;">
+         METAS
       </h2>
       <div style="display:flex;align-items:center;gap:10px">
         
