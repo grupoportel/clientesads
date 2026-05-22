@@ -12,7 +12,7 @@
   gtag('js', new Date());
   gtag('config', 'GA_MEASUREMENT_ID');
 </script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
 
@@ -30,7 +30,7 @@
   /* TEXTOS: Mantendo brancos e azuis clarinhos para leitura fácil */
   --text: #ffffff;
   --text2: #94a8d0;
-  --text3: #627ba8;
+  --text3: #889cbd;
   
   /* DESTAQUE PRINCIPAL: O Amarelo Capivara da sua marca! */
   --accent: #00d0df; 
@@ -564,10 +564,7 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
   
   <div class="logo">
   <img src="Imagens/logosite.png" alt="Logo" style="height: 28px; width: auto; object-fit: contain;">
-  <div style="display:flex;align-items:center;gap:6px;">
-    <span>Grupo Portel</span>
-    <span style="font-size:11px;color:var(--text3);background:rgba(255,255,255,.08);padding:2px 8px;border-radius:999px;letter-spacing:.3px;">v2.1</span>
-  </div>
+  <span>Grupo Portel</span>
 </div>
   <div class="search-wrap" style="margin-left: 10px;">
   <span class="search-icon">🔍</span>
@@ -583,7 +580,7 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
     <div style="display:flex; align-items:center; gap:8px; margin-right:12px; border-right:1px solid var(--border); padding-right:16px;">
       <div class="custom-date-picker">
         <span id="labelGlobalDataInicio">Início</span>
-        <input type="date" id="inputGlobalDataInicio" onchange="updateGlobalDateRange()">
+        <input type="date" id="inputGlobalDataInicio" aria-label="Data de Início" onchange="updateGlobalDateRange()">
       </div>
       <span style="color:var(--text3); font-size:10px; font-weight:700; text-transform:uppercase;">Até</span>
       <div class="custom-date-picker">
@@ -695,12 +692,12 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
         <table id="leadsTable">
           <thead>
             <tr>
-              <th style="width:36px"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)"></th>
+              <th style="width:36px"><input type="checkbox" id="selectAll" aria-label="Selecionar todos os leads" onchange="toggleSelectAll(this)"></th>
               <th onclick="sortTable('nome')" style="min-width: 350px; cursor: pointer;">Nome / Empresa</th>
               <th onclick="sortTable('responsavel')" style="min-width: 150px; cursor: pointer;">Responsável</th> 
               
               <th style="padding: 0; min-width: 180px;">
-                <select class="form-control" style="width: 100%; height: 100%; padding: 9px 13px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .7px; background: transparent; border: none; color: var(--text3); cursor: pointer; outline: none; box-shadow: none;" onchange="currentStatusFilter=this.value; applyFilters()">
+                <select class="form-control" aria-label="Filtrar por Status" style="width: 100%; height: 100%; padding: 9px 13px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .7px; background: transparent; border: none; color: var(--text3); cursor: pointer; outline: none; box-shadow: none;" onchange="currentStatusFilter=this.value; applyFilters()">
                   <option value="" style="color:var(--text)">STATUS (TODOS)</option>
                   <option value="nenhuma" style="color:var(--text)">Nenhuma Ação</option>
                   <option value="preparacao" style="color:var(--text)">Preparação</option>
