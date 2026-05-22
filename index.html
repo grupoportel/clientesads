@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CRM Portel</title>
+<title>CRM Portel v2.1</title>
 <link rel="icon" type="image/png" href="Imagens/logosite.png">
 <script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
 <script>
@@ -533,6 +533,28 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
 </style>
 </head>
 <body>
+
+<div id="loginScreen" style="position:fixed; inset:0; background:var(--bg); z-index:99999; display:flex; align-items:center; justify-content:center; flex-direction:column;">
+  <div style="background:var(--surface); padding:40px; border-radius:16px; border:1px solid var(--border); width:100%; max-width:400px; box-shadow:0 10px 40px rgba(0,0,0,0.8);">
+    <div style="text-align:center; margin-bottom:24px;">
+      <img src="Imagens/logosite.png" alt="Logo" style="height:50px; margin-bottom:12px;">
+      <h2 style="font-size:20px; color:var(--text);">Acesso ao CRM</h2>
+      <p style="font-size:13px; color:var(--text3); margin-top:4px;">Faça login para continuar</p>
+    </div>
+    <form onsubmit="fazerLogin(event)">
+      <div class="form-group" style="margin-bottom:16px;">
+        <label>E-mail</label>
+        <input type="email" id="emailLogin" class="form-control" required placeholder="seu@email.com">
+      </div>
+      <div class="form-group" style="margin-bottom:24px;">
+        <label>Senha</label>
+        <input type="password" id="senhaLogin" class="form-control" required placeholder="••••••••">
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center; padding:12px; font-size:14px;">Entrar</button>
+    </form>
+  </div>
+</div>
+
 <div class="bg-grid"></div>
 <div class="ambient-light-saas"></div>
 
@@ -542,7 +564,10 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
   
   <div class="logo">
   <img src="Imagens/logosite.png" alt="Logo" style="height: 28px; width: auto; object-fit: contain;">
-  <span>Grupo Portel</span>
+  <div style="display:flex;align-items:center;gap:6px;">
+    <span>Grupo Portel</span>
+    <span style="font-size:11px;color:var(--text3);background:rgba(255,255,255,.08);padding:2px 8px;border-radius:999px;letter-spacing:.3px;">v2.1</span>
+  </div>
 </div>
   <div class="search-wrap" style="margin-left: 10px;">
   <span class="search-icon">🔍</span>
@@ -572,8 +597,10 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
       <button class="view-btn" id="viewKanbanBtn" onclick="setView('kanban')" title="Kanban">⊞ Kanban</button>
     </div>
     <button class="btn btn-ghost" onclick="showImportExport()">💾 Dados</button>
-    <button class="btn btn-primary" onclick="openModal()">+ Novo Lead</button>
-  </div>
+  <button class="btn btn-primary" onclick="openModal()">+ Novo Lead</button>
+  
+  <button class="btn btn-danger" onclick="fazerLogout()" style="margin-left: 8px;">Sair</button>
+</div>
 </div>
 
 <div class="main">
@@ -1030,6 +1057,7 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
 
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 
 <script>
 // Aqui começa o seu código
@@ -1122,26 +1150,73 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
 
+// ═══════════════════════════════════
+// DATA LAYER (FIREBASE EM TEMPO REAL) - NOVO MOTOR
+// ═══════════════════════════════════
 function load() {
-  database.ref('crm_data').on('value', (snapshot) => {
-    const data = snapshot.val();
-    if (data) {
-      db = data;
-      db.leads = data.leads ? Object.values(data.leads) : [];
-      db.nichos = data.nichos ? Object.values(data.nichos) : (data.groups ? Object.values(data.groups) : []);
-      db.responsaveis = data.responsaveis ? Object.values(data.responsaveis) : [];
-      db.lastId = data.lastId || 0;
-      db.estados = data.estados ? Object.values(data.estados) : [];
-      db.cidades = data.cidades ? Object.values(data.cidades) : [];
-    } else {
-      db = { leads: [], nichos: [], responsaveis: [], lastId: 0 };
+  // 1. Escuta as configurações isoladamente (sem baixar os leads)
+  database.ref('crm_data/nichos').on('value', snap => { db.nichos = snap.val() ? Object.values(snap.val()) : []; renderAll(); });
+  database.ref('crm_data/responsaveis').on('value', snap => { db.responsaveis = snap.val() ? Object.values(snap.val()) : []; renderAll(); });
+  database.ref('crm_data/estados').on('value', snap => { db.estados = snap.val() ? Object.values(snap.val()) : []; renderAll(); });
+  database.ref('crm_data/cidades').on('value', snap => { db.cidades = snap.val() ? Object.values(snap.val()) : []; renderAll(); });
+  database.ref('crm_data/goals').on('value', snap => { if(snap.val()) { db.goals = snap.val(); renderAll(); } });
+
+  // 2. Carrega todos os leads uma ÚNICA vez no início
+  database.ref('crm_data/leads').once('value', (snap) => {
+    const data = snap.val();
+    db.leads = data ? Object.values(data) : [];
+    renderAll();
+    
+    // 3. Após o carregamento inicial, liga a "escuta inteligente"
+    listenToLeadChanges();
+  });
+}
+
+// A Mágica da Performance: Escuta apenas o que muda, e não tudo!
+function listenToLeadChanges() {
+  // Se alguém (ou você) adicionar um lead
+  database.ref('crm_data/leads').on('child_added', (snap) => {
+    const lead = snap.val();
+    if (!db.leads.some(l => l.id === lead.id)) {
+      db.leads.push(lead);
+      renderAll();
     }
+  });
+
+  // Se um lead for editado/movido
+  database.ref('crm_data/leads').on('child_changed', (snap) => {
+    const leadEditado = snap.val();
+    const index = db.leads.findIndex(l => l.id === leadEditado.id);
+    if (index >= 0) {
+      db.leads[index] = leadEditado;
+      renderAll();
+    }
+  });
+
+  // Se um lead for excluído
+  database.ref('crm_data/leads').on('child_removed', (snap) => {
+    const leadRemovido = snap.val();
+    db.leads = db.leads.filter(l => l.id !== leadRemovido.id);
     renderAll();
   });
 }
 
+// O save() antigo salvava tudo. Agora salva só configurações.
 function save() {
-  database.ref('crm_data').set(db);
+  database.ref('crm_data/nichos').set(db.nichos || []);
+  database.ref('crm_data/responsaveis').set(db.responsaveis || []);
+  database.ref('crm_data/estados').set(db.estados || []);
+  database.ref('crm_data/cidades').set(db.cidades || []);
+  if(db.goals) database.ref('crm_data/goals').set(db.goals);
+}
+
+// NOVAS FUNÇÕES PARA OS LEADS: Enviam apenas o pacote do lead mexido
+function saveLeadToDB(lead) {
+  database.ref('crm_data/leads/' + lead.id).set(lead);
+}
+
+function deleteLeadFromDB(id) {
+  database.ref('crm_data/leads/' + id).remove();
 }
 
 let dragLeadId  = null;
@@ -1392,10 +1467,9 @@ function saveInline(id, field, e) {
         if (index >= 0) {
           db.leads[index][field] = newVal;
           db.leads[index].updatedAt = new Date().toISOString();
+          saveLeadToDB(db.leads[index]); // <- Salva individualmente
         }
       });
-      save();
-      renderAll();
       toast(`${checkedIds.length} leads atualizados com sucesso!`, 'success');
     });
     return; // Interrompe para aguardar a confirmação do modal
@@ -1406,9 +1480,8 @@ function saveInline(id, field, e) {
   if (idx >= 0) {
     db.leads[idx][field] = newVal;
     db.leads[idx].updatedAt = new Date().toISOString();
-    save();
+    saveLeadToDB(db.leads[idx]); // <- Salva individualmente
     toast('Atualizado com sucesso!', 'success');
-    renderAll();
   }
 }
 
@@ -1595,17 +1668,21 @@ function kanbanDragLeave(e, status) {
   const col = document.getElementById('kcol-'+status);
   if (col && !col.contains(e.relatedTarget)) col.classList.remove('drag-over');
 }
+
 function kanbanDrop(e, status) {
   e.preventDefault();
   document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('drag-over'));
   if (!dragLeadId) return;
+  
   const idx = db.leads.findIndex(l => l.id === dragLeadId);
   if (idx >= 0 && db.leads[idx].status !== status) {
-    db.leads[idx].status = status;
-    db.leads[idx].updatedAt = new Date().toISOString();
-    save();
+    // Clona o lead, muda o status e salva isoladamente
+    let leadAtualizado = { ...db.leads[idx] };
+    leadAtualizado.status = status;
+    leadAtualizado.updatedAt = new Date().toISOString();
+    
+    saveLeadToDB(leadAtualizado);
     toast(`Movido para: ${STATUS[status].label}`, 'success');
-    renderAll();
     if (detailId === dragLeadId) openDetail(dragLeadId);
   }
   dragLeadId = null;
@@ -1723,16 +1800,16 @@ function saveLead() {
     const idx = db.leads.findIndex(x => x.id === editingId);
     lead.id = editingId;
     lead.createdAt = db.leads[idx].createdAt;
-    db.leads[idx] = lead;
+    saveLeadToDB(lead); // <- Usa o novo salvador inteligente
     toast('Lead atualizado!', 'success');
     if (detailId === editingId) { detailId = null; }
   } else {
     lead.id = Date.now(); 
     lead.createdAt = new Date().toISOString();
-    db.leads.push(lead);
+    saveLeadToDB(lead); // <- Usa o novo salvador inteligente
     toast('Lead adicionado!', 'success');
   }
-  save(); closeModal(); renderAll();
+  closeModal(); 
 }
 
 // ═══════════════════════════════════
@@ -1769,9 +1846,9 @@ function setStatus(status) {
         if (idx >= 0) {
           db.leads[idx].status = status;
           db.leads[idx].updatedAt = new Date().toISOString();
+          saveLeadToDB(db.leads[idx]); // <- Salva individualmente
         }
       });
-      save(); renderAll();
       toast(`Status atualizado em ${checkedIds.length} leads!`, 'success');
     });
   } else {
@@ -1780,7 +1857,7 @@ function setStatus(status) {
     if (idx >= 0) {
       db.leads[idx].status = status;
       db.leads[idx].updatedAt = new Date().toISOString();
-      save(); renderAll();
+      saveLeadToDB(db.leads[idx]); // <- Salva individualmente
       toast('Status atualizado!', 'success');
     }
   }
@@ -1822,9 +1899,9 @@ function setOrigem(origem) {
         if (idx >= 0) {
           db.leads[idx].origem = origem;
           db.leads[idx].updatedAt = new Date().toISOString();
+          saveLeadToDB(db.leads[idx]); // <- Salva individualmente
         }
       });
-      save(); renderAll();
       toast(`Origem atualizada em ${checkedIds.length} leads!`, 'success');
     });
   } else {
@@ -1833,7 +1910,7 @@ function setOrigem(origem) {
     if (idx >= 0) {
       db.leads[idx].origem = origem;
       db.leads[idx].updatedAt = new Date().toISOString();
-      save(); renderAll();
+      saveLeadToDB(db.leads[idx]); // <- Salva individualmente
       toast('Origem atualizada!', 'success');
     }
   }
@@ -2136,10 +2213,8 @@ function removeCidade(e, cid) {
 // ═══════════════════════════════════
 function deleteLead(id) {
   myConfirm('Excluir este lead? Não há como desfazer.', () => {
-    db.leads = db.leads.filter(l => l.id !== id);
-    save();
+    deleteLeadFromDB(id); // <- Apaga só esse ID no Firebase
     if (detailId === id) closeDetail();
-    renderAll();
     toast('Lead excluído.', 'success');
   });
 }
@@ -3055,7 +3130,46 @@ function clearGlobalDateRange() {
 
 // Inicia o sistema
 initResizableColumns();
-load();
+
+// --- LÓGICA DE AUTENTICAÇÃO ---
+const auth = firebase.auth();
+
+// O Firebase fica vigiando se alguém logou ou deslogou
+auth.onAuthStateChanged((user) => {
+  if (user) {
+    // Se o usuário está logado, esconde a tela de login e puxa os leads do banco
+    document.getElementById('loginScreen').style.display = 'none';
+    load(); // Essa é a sua função original que carrega o banco
+  } else {
+    // Se não está logado, mostra a tela de login e esconde os leads da tela
+    document.getElementById('loginScreen').style.display = 'flex';
+    db = { leads: [], nichos: [], responsaveis: [], estados: [], cidades: [], lastId: 0 };
+    renderAll();
+  }
+});
+
+// Função que o botão "Entrar" chama
+function fazerLogin(e) {
+  e.preventDefault(); // Evita que a página recarregue
+  const email = document.getElementById('emailLogin').value;
+  const senha = document.getElementById('senhaLogin').value;
+  
+  auth.signInWithEmailAndPassword(email, senha)
+    .then(() => {
+      toast('Bem-vindo(a) ao CRM!', 'success');
+    })
+    .catch((error) => {
+      toast('Erro: E-mail ou senha incorretos.', 'error');
+      console.error(error);
+    });
+}
+
+// Função que o botão "Sair" chama
+function fazerLogout() {
+  auth.signOut().then(() => {
+    toast('Você saiu com sucesso.', 'info');
+  });
+}
 </script>
 </body>
 </html>
