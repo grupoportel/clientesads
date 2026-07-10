@@ -13,11 +13,19 @@ import FilterDrawers from './components/FilterDrawers';
 import './index.css';
 
 const MAPA_STATUS_ANTIGOS = {
-  'preparacao': 'investigacao',
-  'retornar': 'diagnostico',
-  'segundo': 'resgate',
-  'reuniao-pos': 'em-conversa',
-  'quarto': 'em-conversa'
+  'preparacao': 'lead-qualificado',
+  'retornar': 'ligacao-feita',
+  'segundo': 'contato-decisor',
+  'reuniao-pos': 'reuniao-marcada',
+  'quarto': 'contato-decisor',
+  'nenhuma': 'nenhum',
+  'investigacao': 'lead-qualificado',
+  'diagnostico': 'ligacao-feita',
+  'resgate': 'contato-decisor',
+  'em-conversa': 'contato-decisor',
+  'reuniao-marc': 'reuniao-marcada',
+  'contrato': 'contrato-realizado',
+  'interesse': 'perda'
 };
 
 function App() {
@@ -117,7 +125,7 @@ function App() {
     return leads.filter(lead => {
       const normaliza = (texto) => String(texto || '').trim().toLowerCase();
 
-      if (filtroStatus && normaliza(lead.status || 'nenhuma') !== normaliza(filtroStatus)) return false;
+      if (filtroStatus && normaliza(lead.status || 'nenhum') !== normaliza(filtroStatus)) return false;
       if (filtroNicho && normaliza(lead.nicho) !== normaliza(filtroNicho)) return false;
       if (filtroResponsavel && normaliza(lead.responsavel) !== normaliza(filtroResponsavel)) return false;
       if (filtroEstado && normaliza(lead.estado) !== normaliza(filtroEstado)) return false;

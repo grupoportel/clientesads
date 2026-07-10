@@ -1,14 +1,15 @@
 import React from 'react';
 
 const STATUS_CONFIG = {
-  'nenhuma':      { label: 'Nenhuma Ação',     cls: 's-nenhuma' },
-  'investigacao': { label: '1. Investigação',  cls: 's-investigacao' },
-  'diagnostico':  { label: '2. Diagnóstico',   cls: 's-diagnostico' },
-  'resgate':      { label: '3. Resgate',       cls: 's-resgate' },
-  'em-conversa':  { label: '💬 Em Conversa',   cls: 's-em-conversa' },
-  'reuniao-marc': { label: 'Reunião Marcada',  cls: 's-reuniao-marc'},
-  'contrato':     { label: 'Contrato Fechado', cls: 's-contrato' },
-  'interesse':    { label: '❌ Perdido',       cls: 's-interesse' }
+  'nenhum':                { label: 'Nenhum',               cls: 's-nenhum' },
+  'lead-qualificado':      { label: 'Lead Qualificado',     cls: 's-lead-qualificado' },
+  'ligacao-feita':         { label: 'Ligação Feita',        cls: 's-ligacao-feita' },
+  'contato-decisor':       { label: 'Contato com decisor',  cls: 's-contato-decisor' },
+  'reuniao-marcada':       { label: 'Reunião Marcada',      cls: 's-reuniao-marcada'},
+  'contrato-realizado':    { label: 'Contrato Realizado',   cls: 's-contrato-realizado' },
+  'venda':                 { label: 'Venda',                cls: 's-venda' },
+  'perda':                 { label: 'Perda',                cls: 's-perda' },
+  'concluido':             { label: 'Concluído',            cls: 's-concluido' }
 };
 
 const limpaTel = (t) => String(t || '').replace(/\D/g, '');
@@ -24,7 +25,7 @@ export default function DetailPanel({ lead, onClose, onEdit, onDelete }) {
   // Se não tem lead selecionado, o painel fica fechado (width: 0 no CSS)
   if (!lead) return <div className="detail-panel"></div>;
 
-  const st = STATUS_CONFIG[lead.status] || STATUS_CONFIG['nenhuma'];
+  const st = STATUS_CONFIG[lead.status] || STATUS_CONFIG['nenhum'];
   const igLink = urlIg(lead.instagram);
   const igDono = urlIg(lead.ig_dono);
   const sLink = urlSite(lead.site);

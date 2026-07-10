@@ -6,9 +6,9 @@ export default function StatsBar({ leads }) {
 
   // Cálculos dinâmicos
   const totalLeads = leads.length;
-  const semAcao = leads.filter(l => (l.status || 'nenhuma') === 'nenhuma').length;
-  const reunioesMarcadas = leads.filter(l => l.status === 'reuniao-marc').length;
-  const contratosFechados = leads.filter(l => l.status === 'contrato').length;
+  const semAcao = leads.filter(l => (l.status || 'nenhum') === 'nenhum').length;
+  const reunioesMarcadas = leads.filter(l => l.status === 'reuniao-marcada').length;
+  const contratosFechados = leads.filter(l => l.status === 'contrato-realizado').length;
   const proxReuniao = leads.filter(l => l.reuniao && l.reuniao >= hoje).length;
   const contatosHoje = leads.filter(l => l.ultimo_contato === hoje).length;
 

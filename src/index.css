@@ -31,14 +31,15 @@
   --pink: #ec4899; --pink-bg: #2a0d1a;
 
   /* CORES DO FUNIL (Otimizado) */
-  --s-nenhuma: #5865f2;
-  --s-investigacao: #3b82f6;
-  --s-diagnostico: #eab308;
-  --s-resgate: #f97316;
-  --s-em-conversa: #a855f7;
-  --s-reuniao-marc: #22c55e;
-  --s-contrato: #ec4899;
-  --s-interesse: #ef4444; /* Usado para Perdido */
+  --s-nenhum: #5865f2;
+  --s-lead-qualificado: #3b82f6;
+  --s-ligacao-feita: #eab308;
+  --s-contato-decisor: #a855f7;
+  --s-reuniao-marcada: #22c55e;
+  --s-contrato-realizado: #ec4899;
+  --s-venda: #14b8a6;
+  --s-perda: #ef4444;
+  --s-concluido: #8b5cf6;
 
   --radius: 10px;
   --shadow: 0 4px 24px rgba(0,0,0,.45);
@@ -241,14 +242,15 @@ tbody tr:hover .row-actions{opacity:1}
 .status-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap;cursor:pointer;border:none;font-family:'DM Sans',sans-serif;transition:filter .15s,transform .1s;}
 .status-badge:hover{filter:brightness(1.15)}
 .status-badge:active{transform:scale(.96)}
-.s-nenhuma{background:#1a1e42;color:var(--s-nenhuma);border:1px solid #2d3365}
-.s-investigacao{background:#0f172a;color:var(--s-investigacao);border:1px solid #1e293b}
-.s-diagnostico{background:#2d2508;color:var(--s-diagnostico);border:1px solid #4a3c0a}
-.s-resgate{background:#2d1808;color:var(--s-resgate);border:1px solid #4a2808}
-.s-em-conversa{background:#1e0d2d;color:var(--s-em-conversa);border:1px solid #32134a}
-.s-reuniao-marc{background:#0d2820;color:var(--s-reuniao-marc);border:1px solid #0e4232}
-.s-contrato{background:#2d0d1a;color:var(--s-contrato);border:1px solid #4a1028}
-.s-interesse{background:#2a0d0d;color:var(--s-interesse);border:1px solid #4a1515}
+.s-nenhum{background:#1a1e42;color:var(--s-nenhum);border:1px solid #2d3365}
+.s-lead-qualificado{background:#0f172a;color:var(--s-lead-qualificado);border:1px solid #1e293b}
+.s-ligacao-feita{background:#2d2508;color:var(--s-ligacao-feita);border:1px solid #4a3c0a}
+.s-contato-decisor{background:#1e0d2d;color:var(--s-contato-decisor);border:1px solid #32134a}
+.s-reuniao-marcada{background:#0d2820;color:var(--s-reuniao-marcada);border:1px solid #0e4232}
+.s-contrato-realizado{background:#2d0d1a;color:var(--s-contrato-realizado);border:1px solid #4a1028}
+.s-venda{background:#0d2828;color:var(--s-venda);border:1px solid #0e4242}
+.s-perda{background:#2a0d0d;color:var(--s-perda);border:1px solid #4a1515}
+.s-concluido{background:#1d1033;color:var(--s-concluido);border:1px solid #3b2266}
 
 /* ── DETAIL PANEL ── */
 .detail-panel{width:0;background:var(--surface);border-left:1px solid var(--border);flex-shrink:0;overflow:hidden;transition:width .25s cubic-bezier(.4,0,.2,1);}

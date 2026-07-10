@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 const CAMPOS_INICIAIS = {
-  nome: '', status: 'nenhuma', nicho: '', estado: '', cidade: '', origem: '', 
+  nome: '', status: 'nenhum', nicho: '', estado: '', cidade: '', origem: '', 
   responsavel: '', decisor: '', cnpj: '', telefone: '', whatsapp: '', email: '', 
   instagram: '', ig_dono: '', site: '', nota: '', avaliacoes: '', data_entrada: '', 
   ultimo_contato: '', reuniao: '', melhores: '', oportunidades: '', pontos: '', 
@@ -49,14 +49,15 @@ export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos =
             <div className="form-group">
               <label>Status</label>
               <select className="form-control" name="status" value={formData.status} onChange={handleChange}>
-                <option value="nenhuma">Nenhuma Ação</option>
-                <option value="investigacao">1. Investigação (Dias 1-3)</option>
-                <option value="diagnostico">2. Diagnóstico (Dias 4-7)</option>
-                <option value="resgate">3. Resgate & Break-up</option>
-                <option value="em-conversa">💬 Em Conversa</option>
-                <option value="reuniao-marc">Reunião Marcada</option>
-                <option value="contrato">Contrato Fechado</option>
-                <option value="interesse">❌ Perdido</option>
+                <option value="nenhum">Nenhum</option>
+                <option value="lead-qualificado">Lead Qualificado</option>
+                <option value="ligacao-feita">Ligação Feita</option>
+                <option value="contato-decisor">Contato com decisor</option>
+                <option value="reuniao-marcada">Reunião Marcada</option>
+                <option value="contrato-realizado">Contrato Realizado</option>
+                <option value="venda">Venda</option>
+                <option value="perda">Perda</option>
+                <option value="concluido">Concluído</option>
               </select>
             </div>
 

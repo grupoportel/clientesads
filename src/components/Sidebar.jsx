@@ -2,14 +2,15 @@ import React from 'react';
 
 // Dicionário de status (igual ao da tabela)
 const STATUS_CONFIG = {
-  'nenhuma':      { label: 'Nenhuma Ação',     cls: 's-nenhuma',       dot: 'var(--s-nenhuma)' },
-  'investigacao': { label: '1. Investigação',  cls: 's-investigacao',  dot: 'var(--s-investigacao)' },
-  'diagnostico':  { label: '2. Diagnóstico',   cls: 's-diagnostico',   dot: 'var(--s-diagnostico)' },
-  'resgate':      { label: '3. Resgate',       cls: 's-resgate',       dot: 'var(--s-resgate)' },
-  'em-conversa':  { label: '💬 Em Conversa',   cls: 's-em-conversa',   dot: 'var(--s-em-conversa)' },
-  'reuniao-marc': { label: 'Reunião Marcada',  cls: 's-reuniao-marc',  dot: 'var(--s-reuniao-marc)' },
-  'contrato':     { label: 'Contrato Fechado', cls: 's-contrato',      dot: 'var(--s-contrato)' },
-  'interesse':    { label: '❌ Perdido',       cls: 's-interesse',     dot: 'var(--s-interesse)' }
+  'nenhum':                { label: 'Nenhum',               cls: 's-nenhum',                dot: 'var(--s-nenhum)' },
+  'lead-qualificado':      { label: 'Lead Qualificado',     cls: 's-lead-qualificado',      dot: 'var(--s-lead-qualificado)' },
+  'ligacao-feita':         { label: 'Ligação Feita',        cls: 's-ligacao-feita',         dot: 'var(--s-ligacao-feita)' },
+  'contato-decisor':       { label: 'Contato com decisor',  cls: 's-contato-decisor',       dot: 'var(--s-contato-decisor)' },
+  'reuniao-marcada':       { label: 'Reunião Marcada',      cls: 's-reuniao-marcada',       dot: 'var(--s-reuniao-marcada)' },
+  'contrato-realizado':    { label: 'Contrato Realizado',   cls: 's-contrato-realizado',    dot: 'var(--s-contrato-realizado)' },
+  'venda':                 { label: 'Venda',                cls: 's-venda',                 dot: 'var(--s-venda)' },
+  'perda':                 { label: 'Perda',                cls: 's-perda',                 dot: 'var(--s-perda)' },
+  'concluido':             { label: 'Concluído',            cls: 's-concluido',             dot: 'var(--s-concluido)' }
 };
 
 export default function Sidebar({ leads, filtroStatus, setFiltroStatus }) {
@@ -32,7 +33,7 @@ export default function Sidebar({ leads, filtroStatus, setFiltroStatus }) {
       {/* Gerando os botões de status automaticamente */}
       {Object.entries(STATUS_CONFIG).map(([chave, config]) => {
         // Calcula quantos leads têm esse status
-        const quantidade = leads.filter(l => (l.status || 'nenhuma') === chave).length;
+        const quantidade = leads.filter(l => (l.status || 'nenhum') === chave).length;
 
         return (
           <div 
