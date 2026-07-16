@@ -1,52 +1,193 @@
 import React from 'react';
 
-// Dicionário de status (igual ao da tabela)
-const STATUS_CONFIG = {
-  'nenhum':                { label: 'Nenhum',               cls: 's-nenhum',                dot: 'var(--s-nenhum)' },
-  'lead-qualificado':      { label: 'Lead Qualificado',     cls: 's-lead-qualificado',      dot: 'var(--s-lead-qualificado)' },
-  'ligacao-feita':         { label: 'Ligação Feita',        cls: 's-ligacao-feita',         dot: 'var(--s-ligacao-feita)' },
-  'contato-decisor':       { label: 'Contato com decisor',  cls: 's-contato-decisor',       dot: 'var(--s-contato-decisor)' },
-  'reuniao-marcada':       { label: 'Reunião Marcada',      cls: 's-reuniao-marcada',       dot: 'var(--s-reuniao-marcada)' },
-  'contrato-realizado':    { label: 'Contrato Realizado',   cls: 's-contrato-realizado',    dot: 'var(--s-contrato-realizado)' },
-  'venda':                 { label: 'Venda',                cls: 's-venda',                 dot: 'var(--s-venda)' },
-  'perda':                 { label: 'Perda',                cls: 's-perda',                 dot: 'var(--s-perda)' },
-  'concluido':             { label: 'Concluído',            cls: 's-concluido',             dot: 'var(--s-concluido)' }
-};
+const NAV_ITEMS = [
+  { id: 'dashboard',     icon: '📊', label: 'Dashboard' },
+  { id: 'leads',         icon: '👥', label: 'Leads',        badgeKey: 'leads' },
+  { id: 'clientes',      icon: '🏢', label: 'Clientes' },
+  { id: 'tarefas',       icon: '✅', label: 'Tarefas',      badgeValue: '8', badgeAlert: true },
+  { id: 'agenda',        icon: '📅', label: 'Agenda' },
+  { id: 'financeiro',    icon: '💰', label: 'Financeiro' },
+  { id: 'relatorios',    icon: '📈', label: 'Relatórios' },
+];
 
-export default function Sidebar({ leads, filtroStatus, setFiltroStatus }) {
+export default function Sidebar({ paginaAtiva, setPaginaAtiva, leads = [], tarefasPendentes = 0 }) {
+  const isActive = (id) => paginaAtiva === id;
+
+  const navItemStyle = (id) => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '10px 16px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    color: isActive(id) ? 'var(--accent2)' : 'var(--text2)',
+    fontSize: '13px',
+    fontWeight: isActive(id) ? 600 : 500,
+    transition: 'all 0.15s',
+    borderLeft: isActive(id) ? '3px solid var(--accent)' : '3px solid transparent',
+    background: isActive(id) ? 'rgba(0,210,223,.12)' : 'transparent',
+    marginBottom: '2px',
+  });
+
+  const badgeStyle = (alert) => ({
+    marginLeft: 'auto',
+    background: alert ? 'rgba(239,68,68,.15)' : 'var(--surface3)',
+    color: alert ? 'var(--red)' : 'var(--text3)',
+    fontSize: '11px',
+    padding: '1px 8px',
+    borderRadius: '10px',
+    fontFamily: "'DM Mono', monospace",
+  });
+
   return (
-    <div className="sidebar">
-      <div className="sidebar-label">Pipeline</div>
-      
-      {/* Botão TODOS OS LEADS */}
-      <div 
-        className={`sidebar-item ${filtroStatus === null ? 'active' : ''}`} 
-        onClick={() => setFiltroStatus(null)}
-      >
-        <span>📋</span> Todos os Leads 
-        <span className="sidebar-count">{leads.length}</span>
+    <div className="sidebar-v2">
+      {/* ── LOGO ── */}
+      <div style={{ padding: '20px 16px 12px', borderBottom: '1px solid var(--border)', marginBottom: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{
+            width: '9px', height: '9px', borderRadius: '50%',
+            background: 'var(--accent)', boxShadow: '0 0 10px var(--accent)',
+            flexShrink: 0,
+          }} />
+          <span style={{
+            fontSize: '18px', fontWeight: 700, color: 'var(--accent2)',
+            letterSpacing: '-0.5px',
+          }}>
+            Grupo <span style={{ color: 'var(--text)', fontWeight: 400 }}>Portel</span>
+          </span>
+        </div>
+        <div style={{ fontSize: '10px', color: 'var(--text3)', marginTop: '4px', paddingLeft: '17px' }}>
+          CRM v2.0
+        </div>
       </div>
-      
-      <div className="sidebar-divider"></div>
-      <div className="sidebar-label">Por Status</div>
 
-      {/* Gerando os botões de status automaticamente */}
-      {Object.entries(STATUS_CONFIG).map(([chave, config]) => {
-        // Calcula quantos leads têm esse status
-        const quantidade = leads.filter(l => (l.status || 'nenhum') === chave).length;
+      {/* ── MENU PRINCIPAL ── */}
+      <div style={{ padding: '8px' }}>
+        <div className="nav-label" style={{
+          fontSize: '10px', fontWeight: 600, textTransform: 'uppercase',
+          letterSpacing: '1px', color: 'var(--text3)', padding: '12px 12px 6px',
+        }}>
+          Menu Principal
+        </div>
 
-        return (
-          <div 
-            key={chave}
-            className={`sidebar-item ${filtroStatus === chave ? 'active' : ''}`} 
-            onClick={() => setFiltroStatus(chave)}
-          >
-            <span className="sidebar-dot" style={{ background: config.dot }}></span> 
-            {config.label} 
-            <span className="sidebar-count">{quantidade}</span>
+        {NAV_ITEMS.map((item) => {
+          let badgeContent = null;
+          let isAlert = false;
+          
+          if (item.id === 'leads' && leads.length > 0) {
+            badgeContent = leads.length;
+          } else if (item.id === 'tarefas' && tarefasPendentes > 0) {
+            badgeContent = tarefasPendentes;
+            isAlert = true;
+          }
+
+          return (
+            <div
+              key={item.id}
+              style={navItemStyle(item.id)}
+              onClick={() => setPaginaAtiva(item.id)}
+              onMouseEnter={(e) => {
+                if (!isActive(item.id)) {
+                  e.currentTarget.style.background = 'var(--surface2)';
+                  e.currentTarget.style.paddingLeft = '20px';
+                  e.currentTarget.style.color = 'var(--text)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive(item.id)) {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.paddingLeft = '16px';
+                  e.currentTarget.style.color = 'var(--text2)';
+                }
+              }}
+            >
+              <span style={{ fontSize: '15px', lineHeight: 1 }}>{item.icon}</span>
+              <span>{item.label}</span>
+              {badgeContent !== null && (
+                <span style={badgeStyle(isAlert)}>{badgeContent}</span>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Divider */}
+        <div style={{ height: '1px', background: 'var(--border)', margin: '8px 12px' }} />
+
+        {/* Configurações */}
+        <div
+          style={navItemStyle('configuracoes')}
+          onClick={() => setPaginaAtiva('configuracoes')}
+          onMouseEnter={(e) => {
+            if (!isActive('configuracoes')) {
+              e.currentTarget.style.background = 'var(--surface2)';
+              e.currentTarget.style.paddingLeft = '20px';
+              e.currentTarget.style.color = 'var(--text)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!isActive('configuracoes')) {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.paddingLeft = '16px';
+              e.currentTarget.style.color = 'var(--text2)';
+            }
+          }}
+        >
+          <span style={{ fontSize: '15px', lineHeight: 1 }}>⚙️</span>
+          <span>Configurações</span>
+        </div>
+      </div>
+
+      {/* ── USER SECTION (pushed to bottom) ── */}
+      <div style={{
+        marginTop: 'auto',
+        borderTop: '1px solid var(--border)',
+        padding: '16px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{
+            width: '40px', height: '40px', borderRadius: '50%',
+            background: 'linear-gradient(135deg, var(--accent), var(--accent2))',
+            color: '#fff', fontSize: '14px', fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            GP
           </div>
-        );
-      })}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)' }}>
+              Grupo Portel
+            </div>
+            <div style={{
+              fontSize: '11px', color: 'var(--text3)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              admin@grupoportel.com
+            </div>
+          </div>
+        </div>
+
+        <div style={{ height: '1px', background: 'var(--border)', margin: '12px 0' }} />
+
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '8px 12px', borderRadius: '8px', cursor: 'pointer',
+            color: 'var(--text3)', fontSize: '13px',
+            transition: 'all 0.15s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'var(--surface2)';
+            e.currentTarget.style.color = 'var(--text)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.color = 'var(--text3)';
+          }}
+        >
+          <span style={{ fontSize: '15px' }}>🚪</span>
+          <span>Sair</span>
+        </div>
+      </div>
     </div>
   );
 }
