@@ -5,8 +5,6 @@
 
 import admin from 'firebase-admin';
 
-import admin from 'firebase-admin';
-
 // ── Handler Principal ──
 export default async function handler(req, res) {
   // Segurança: apenas aceitar requisições da Meta
