@@ -139,14 +139,49 @@ export default function ConversasPage({ leads = [] }) {
     const texto = novaMensagem.trim();
     if (!texto || !conversaSelecionada || enviando) return;
     setEnviando(true);
-    const criadoEm = new Date().toISOString();
-    const novaMsgRef = push(ref(database, `crm_data/conversas/${conversaSelecionada.id}/mensagens`));
-    await set(novaMsgRef, { texto, criadoEm, origem: 'saida', lida: false });
-    await update(ref(database, `crm_data/conversas/${conversaSelecionada.id}`), {
-      ultimaMensagem: texto, ultimaAt: criadoEm,
-    });
-    setNovaMensagem('');
-    setEnviando(false);
+    setNovaMensagem(''); // limpa o campo imediatamente para boa UX
+
+    try {
+      const telefone = conversaSelecionada.telefone;
+
+      // Se a conversa tem um número de telefone válido, envia pelo WhatsApp via backend
+      // O backend salva no Firebase E entrega no WhatsApp do cliente
+      if (telefone && telefone.length >= 10) {
+        const res = await fetch('/api/send-message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            conversaId:      conversaSelecionada.id,
+            texto,
+            telefoneDestino: telefone,
+          }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          console.error('[ConversasPage] Erro ao enviar pelo WhatsApp:', err);
+          // Fallback: salva no Firebase mesmo assim para não perder a mensagem
+          const criadoEm = new Date().toISOString();
+          const novaMsgRef = push(ref(database, `crm_data/conversas/${conversaSelecionada.id}/mensagens`));
+          await set(novaMsgRef, { texto, criadoEm, origem: 'saida', lida: true, erroEnvio: true });
+          await update(ref(database, `crm_data/conversas/${conversaSelecionada.id}`), { ultimaMensagem: texto, ultimaAt: criadoEm });
+          alert('⚠️ A mensagem foi salva, mas não pôde ser enviada ao WhatsApp. Verifique a configuração da API.');
+        }
+        // Sucesso: o backend já salvou no Firebase, o onValue vai atualizar a tela
+      } else {
+        // Conversa interna sem telefone (sem WhatsApp) — salva só no Firebase
+        const criadoEm = new Date().toISOString();
+        const novaMsgRef = push(ref(database, `crm_data/conversas/${conversaSelecionada.id}/mensagens`));
+        await set(novaMsgRef, { texto, criadoEm, origem: 'saida', lida: true });
+        await update(ref(database, `crm_data/conversas/${conversaSelecionada.id}`), { ultimaMensagem: texto, ultimaAt: criadoEm });
+      }
+    } catch (error) {
+      console.error('[ConversasPage] Erro inesperado:', error);
+      alert('Erro ao enviar a mensagem. Tente novamente.');
+      setNovaMensagem(texto); // devolve o texto ao campo se falhou
+    } finally {
+      setEnviando(false);
+    }
   };
 
   /* ── Criar nova conversa ── */
