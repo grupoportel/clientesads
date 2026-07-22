@@ -23,6 +23,7 @@ import AgendaPage from './components/AgendaPage';
 import FinanceiroPage from './components/FinanceiroPage';
 import RelatoriosPage from './components/RelatoriosPage';
 import ConfigPage from './components/ConfigPage';
+import ConversasPage from './components/ConversasPage';
 
 import './index.css';
 
@@ -47,6 +48,7 @@ function App() {
   const [carregando, setCarregando] = useState(true);
   const [leads, setLeads] = useState([]);
   const [tarefasGlobais, setTarefasGlobais] = useState([]);
+  const [conversasGlobais, setConversasGlobais] = useState([]);
   
   const [nichos, setNichos] = useState([]);
   const [responsaveis, setResponsaveis] = useState([]);
@@ -123,6 +125,15 @@ function App() {
             setTarefasGlobais(Object.entries(data).map(([id, t]) => ({ ...t, id })));
           } else {
             setTarefasGlobais([]);
+          }
+        });
+        
+        onValue(ref(database, 'crm_data/conversas'), (snap) => {
+          const data = snap.val();
+          if (data) {
+            setConversasGlobais(Object.entries(data).map(([id, c]) => ({ ...c, id })));
+          } else {
+            setConversasGlobais([]);
           }
         });
       }
@@ -247,6 +258,7 @@ function App() {
   // ---------------------------------------------------------
   const hojeApp = new Date().toISOString().slice(0, 10);
   const tarefasPendentesDia = tarefasGlobais.filter(t => t.data === hojeApp && !t.concluida);
+  const conversasNaoLidas = conversasGlobais.filter(c => c.naoLidas > 0 && !c.arquivada).length;
 
   // ---------------------------------------------------------
   // RENDER
@@ -333,6 +345,8 @@ function App() {
         return <ClientesPage nichos={nichos} responsaveis={responsaveis} />;
       case 'tarefas':
         return <TarefasPage leads={leads} responsaveis={responsaveis} />;
+      case 'conversas':
+        return <ConversasPage leads={leads} />;
       case 'agenda':
         return <AgendaPage leads={leads} />;
       case 'financeiro':
@@ -439,6 +453,7 @@ function App() {
           setPaginaAtiva={setPaginaAtiva} 
           leads={leads}
           tarefasPendentes={tarefasPendentesDia.length}
+          conversasNaoLidas={conversasNaoLidas}
         />
         
         {/* Área de conteúdo principal */}
