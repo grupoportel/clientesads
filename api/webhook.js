@@ -5,31 +5,15 @@
 
 import admin from 'firebase-admin';
 
-// ── Inicializa o Firebase Admin (uma única vez) ──
-// As credenciais vêm de variáveis de ambiente configuradas no Vercel
-// NUNCA colocar chaves diretamente aqui no código
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId:   process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      // A chave privada tem quebras de linha escapadas no Vercel — o replace corrige isso
-      privateKey:  process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    }),
-    databaseURL: process.env.FIREBASE_DATABASE_URL,
-  });
-}
-
-const db = admin.database();
+import admin from 'firebase-admin';
 
 // ── Handler Principal ──
 export default async function handler(req, res) {
   // Segurança: apenas aceitar requisições da Meta
-  const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
+  const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || 'portelcrm_token_123';
 
   // ────────────────────────────────────────────
-  // GET: Verificação do Webhook pela Meta
-  // A Meta faz um GET com esses parâmetros para confirmar que somos nós
+  // GET: Verificação do Webhook pela Meta (NÃO PRECISA DE FIREBASE)
   // ────────────────────────────────────────────
   if (req.method === 'GET') {
     const mode      = req.query['hub.mode'];
@@ -50,6 +34,19 @@ export default async function handler(req, res) {
   // ────────────────────────────────────────────
   if (req.method === 'POST') {
     try {
+      // ── Inicializa o Firebase Admin SOMENTE SE FOR UM POST ──
+      if (!admin.apps.length) {
+        admin.initializeApp({
+          credential: admin.credential.cert({
+            projectId:   process.env.FIREBASE_PROJECT_ID,
+            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+            privateKey:  process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+          }),
+          databaseURL: process.env.FIREBASE_DATABASE_URL,
+        });
+      }
+      const db = admin.database();
+
       const body = req.body;
 
       // Confirma que é uma mensagem de WhatsApp Business
