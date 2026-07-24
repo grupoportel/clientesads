@@ -6,12 +6,13 @@ const NAV_ITEMS = [
   { id: 'clientes',      icon: '🏢', label: 'Clientes' },
   { id: 'tarefas',       icon: '✅', label: 'Tarefas',      badgeValue: '8', badgeAlert: true },
   { id: 'conversas',     icon: '💬', label: 'Conversas' },
+  { id: 'emails',        icon: '✉️', label: 'E-mails' },
   { id: 'agenda',        icon: '📅', label: 'Agenda' },
   { id: 'financeiro',    icon: '💰', label: 'Financeiro' },
   { id: 'relatorios',    icon: '📈', label: 'Relatórios' },
 ];
 
-export default function Sidebar({ paginaAtiva, setPaginaAtiva, leads = [], tarefasPendentes = 0, conversasNaoLidas = 0 }) {
+export default function Sidebar({ paginaAtiva, setPaginaAtiva, leads = [], tarefasPendentes = 0, conversasNaoLidas = 0, emailsNaoLidos = 0 }) {
   const isActive = (id) => paginaAtiva === id;
 
   const navItemStyle = (id) => ({
@@ -82,6 +83,9 @@ export default function Sidebar({ paginaAtiva, setPaginaAtiva, leads = [], taref
             isAlert = true;
           } else if (item.id === 'conversas' && conversasNaoLidas > 0) {
             badgeContent = conversasNaoLidas;
+            isAlert = true;
+          } else if (item.id === 'emails' && emailsNaoLidos > 0) {
+            badgeContent = emailsNaoLidos;
             isAlert = true;
           }
 

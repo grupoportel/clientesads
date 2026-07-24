@@ -24,6 +24,7 @@ import FinanceiroPage from './components/FinanceiroPage';
 import RelatoriosPage from './components/RelatoriosPage';
 import ConfigPage from './components/ConfigPage';
 import ConversasPage from './components/ConversasPage';
+import EmailPage from './components/EmailPage';
 
 import './index.css';
 
@@ -49,6 +50,7 @@ function App() {
   const [leads, setLeads] = useState([]);
   const [tarefasGlobais, setTarefasGlobais] = useState([]);
   const [conversasGlobais, setConversasGlobais] = useState([]);
+  const [emailsGlobais, setEmailsGlobais] = useState([]);
   
   const [nichos, setNichos] = useState([]);
   const [responsaveis, setResponsaveis] = useState([]);
@@ -134,6 +136,15 @@ function App() {
             setConversasGlobais(Object.entries(data).map(([id, c]) => ({ ...c, id })));
           } else {
             setConversasGlobais([]);
+          }
+        });
+
+        onValue(ref(database, 'crm_data/emails'), (snap) => {
+          const data = snap.val();
+          if (data) {
+            setEmailsGlobais(Object.entries(data).map(([id, e]) => ({ ...e, id })));
+          } else {
+            setEmailsGlobais([]);
           }
         });
       }
@@ -259,6 +270,7 @@ function App() {
   const hojeApp = new Date().toISOString().slice(0, 10);
   const tarefasPendentesDia = tarefasGlobais.filter(t => t.data === hojeApp && !t.concluida);
   const conversasNaoLidas = conversasGlobais.filter(c => c.naoLidas > 0 && !c.arquivada).length;
+  const emailsNaoLidos = emailsGlobais.filter(e => e.naoLidas > 0).length;
 
   // ---------------------------------------------------------
   // RENDER
@@ -347,6 +359,8 @@ function App() {
         return <TarefasPage leads={leads} responsaveis={responsaveis} />;
       case 'conversas':
         return <ConversasPage leads={leads} />;
+      case 'emails':
+        return <EmailPage leads={leads} />;
       case 'agenda':
         return <AgendaPage leads={leads} />;
       case 'financeiro':
@@ -454,6 +468,7 @@ function App() {
           leads={leads}
           tarefasPendentes={tarefasPendentesDia.length}
           conversasNaoLidas={conversasNaoLidas}
+          emailsNaoLidos={emailsNaoLidos}
         />
         
         {/* Área de conteúdo principal */}
