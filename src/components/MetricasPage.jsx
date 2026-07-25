@@ -1,1121 +1,788 @@
 import React, { useState, useMemo } from 'react';
 
+// ─────────────────────────────────────────────────────────────
+// Sub-componentes reutilizáveis para manter o código organizado
+// ─────────────────────────────────────────────────────────────
+
+function SectionTitle({ icon, title, badge }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+      <span style={{ fontSize: '18px' }}>{icon}</span>
+      <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: 'var(--text)' }}>{title}</h2>
+      {badge && (
+        <span style={{
+          background: 'rgba(0,210,223,0.12)', color: 'var(--accent)', border: '1px solid rgba(0,210,223,0.25)',
+          padding: '1px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700,
+          fontFamily: "'DM Mono', monospace"
+        }}>
+          {badge}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function Card({ children, style = {}, accent = false }) {
+  return (
+    <div style={{
+      background: 'var(--surface)',
+      border: `1px solid ${accent ? 'var(--accent)' : 'var(--border)'}`,
+      borderRadius: '14px',
+      padding: '20px',
+      boxShadow: accent ? '0 0 24px rgba(0,210,223,0.10)' : 'none',
+      ...style
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function StatCard({ label, value, sub, color = 'var(--text)', icon }) {
+  return (
+    <Card>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+        <span style={{ fontSize: '11px', color: 'var(--text3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</span>
+        {icon && <span style={{ fontSize: '16px' }}>{icon}</span>}
+      </div>
+      <div style={{ fontSize: '26px', fontWeight: 800, color, fontFamily: "'DM Mono', monospace", lineHeight: 1.2 }}>
+        {value}
+      </div>
+      {sub && <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '6px', lineHeight: 1.4 }}>{sub}</div>}
+    </Card>
+  );
+}
+
+function SliderField({ label, value, min, max, step = 1, color = 'var(--accent)', onChange, leftNote, rightNote }) {
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+        <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{label}</span>
+        <strong style={{ fontSize: '13px', fontFamily: "'DM Mono', monospace", color }}>{value}</strong>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        style={{ width: '100%', accentColor: color }}
+      />
+      {(leftNote || rightNote) && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text3)', marginTop: '2px' }}>
+          <span>{leftNote}</span>
+          <span>{rightNote}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Componente principal
+// ─────────────────────────────────────────────────────────────
+
 export default function MetricasPage({ leads = [] }) {
-  const [abaAtiva, setAbaAtiva] = useState('pipeline'); // 'pipeline' | 'slas' | 'unit' | 'health' | 'scoring'
-
-  // ── Filtro de período ──
-  const [periodo, setPeriodo] = useState('30'); // '30' | '90' | '180' | '365'
-
-  // ── Sliders / Simuladores (Pipeline Velocity) ──
-  const [simOportunidades, setSimOportunidades] = useState(0);
+  const [abaAtiva, setAbaAtiva] = useState('pipeline');
+  const [simOpps, setSimOpps]     = useState(0);
   const [simTicket, setSimTicket] = useState(3500);
-  const [simWinRate, setSimWinRate] = useState(22);
-  const [simCiclo, setSimCiclo] = useState(18);
-  const [optSlider, setOptSlider] = useState(0); // 0% a 25% de otimização em todos os pilares
+  const [simWin, setSimWin]       = useState(22);
+  const [simCiclo, setSimCiclo]   = useState(18);
+  const [optPct, setOptPct]       = useState(0);
+  const [leadId, setLeadId]       = useState('');
 
-  // ── Lead selecionado para AI Scoring ──
-  const [leadSelecionadoId, setLeadSelecionadoId] = useState('');
+  // ── Dados reais do CRM ──
+  const crm = useMemo(() => {
+    const total   = leads.length || 1;
+    const ganhos  = leads.filter(l => l.status === 'venda' || l.status === 'contrato-realizado');
+    const emNegs  = leads.filter(l => ['contato-decisor','reuniao-marcada','contrato-realizado'].includes(l.status));
 
-  // ── Métricas Reais Extraídas do CRM ──
-  const statsCRM = useMemo(() => {
-    const totalLeads = leads.length || 1;
-    const ganhos = leads.filter(l => l.status === 'venda' || l.status === 'contrato-realizado');
-    const emNegociacao = leads.filter(l => ['contato-decisor', 'reuniao-marcada', 'contrato-realizado'].includes(l.status));
-    
-    // Taxa de conversão do CRM
-    const winRateReal = Math.round((ganhos.length / totalLeads) * 100) || 15;
-    
-    // Valor médio aproximado dos leads ganho ou estimativa
-    let somaValor = 0;
-    let countValor = 0;
+    const winRate = Math.round((ganhos.length / total) * 100) || 15;
+
+    let somaVal = 0, cntVal = 0;
     ganhos.forEach(l => {
       const v = parseFloat(String(l.valor || 0).replace(/[^0-9.]/g, ''));
-      if (v > 0) { somaValor += v; countValor++; }
+      if (v > 0) { somaVal += v; cntVal++; }
     });
-    const ticketReal = countValor > 0 ? Math.round(somaValor / countValor) : 3200;
-    
-    // Oportunidades ativas
-    const oppsAtivas = emNegociacao.length > 0 ? emNegociacao.length : Math.max(Math.round(totalLeads * 0.3), 5);
-    
-    // Ciclo de vendas estimado (em dias)
-    let somaDias = 0;
-    let countDias = 0;
+    const ticket = cntVal > 0 ? Math.round(somaVal / cntVal) : 3200;
+
+    const opps = emNegs.length > 0 ? emNegs.length : Math.max(Math.round(total * 0.3), 5);
+
+    let somaDias = 0, cntDias = 0;
     ganhos.forEach(l => {
       if (l.createdAt && l.updatedAt) {
-        const diff = new Date(l.updatedAt).getTime() - new Date(l.createdAt).getTime();
-        const dias = Math.max(1, Math.round(diff / (1000 * 3600 * 24)));
-        somaDias += dias;
-        countDias++;
+        const diff = new Date(l.updatedAt) - new Date(l.createdAt);
+        const dias = Math.max(1, Math.round(diff / 86400000));
+        somaDias += dias; cntDias++;
       }
     });
-    const cicloReal = countDias > 0 ? Math.round(somaDias / countDias) : 18;
+    const ciclo = cntDias > 0 ? Math.round(somaDias / cntDias) : 18;
 
-    return { totalLeads, ganhosCount: ganhos.length, oppsAtivas, winRateReal, ticketReal, cicloReal };
+    return { total, ganhos: ganhos.length, opps, winRate, ticket, ciclo };
   }, [leads]);
 
-  // Atualiza valores iniciais do simulador com os dados reais do CRM uma vez
+  // Preenche simulador com dados reais ao montar
   React.useEffect(() => {
-    if (statsCRM.oppsAtivas > 0 && simOportunidades === 0) {
-      setSimOportunidades(statsCRM.oppsAtivas);
-      setSimTicket(statsCRM.ticketReal);
-      setSimWinRate(statsCRM.winRateReal || 22);
-      setSimCiclo(statsCRM.cicloReal || 18);
+    if (crm.opps > 0 && simOpps === 0) {
+      setSimOpps(crm.opps);
+      setSimTicket(crm.ticket);
+      setSimWin(crm.winRate || 22);
+      setSimCiclo(crm.ciclo || 18);
     }
-  }, [statsCRM, simOportunidades]);
+  }, [crm, simOpps]);
 
-  // ── Cálculo do Pipeline Velocity ──
-  const calcVelocity = (opps, ticket, winRate, ciclo, fOpt = 0) => {
-    const o = opps * (1 + fOpt / 100);
-    const t = ticket * (1 + fOpt / 100);
-    const w = Math.min(100, winRate * (1 + fOpt / 100)) / 100;
-    const c = Math.max(1, ciclo * (1 - fOpt / 100)); // ciclo reduz com otimização
-    
-    const diario = (o * t * w) / c;
+  // ── Cálculo Pipeline Velocity ──
+  const calcVel = (o, t, w, c, opt = 0) => {
+    const fo = 1 + opt / 100;
+    const fr = 1 - opt / 100;
+    const diario = (o * fo * t * fo * Math.min(1, (w * fo) / 100)) / Math.max(1, c * fr);
     return {
-      diario: Math.round(diario),
-      mensal: Math.round(diario * 30),
-      anual: Math.round(diario * 365),
-      cicloDias: Math.round(c * 10) / 10,
-      winRatePct: Math.round(w * 100 * 10) / 10
+      diario:  Math.round(diario),
+      mensal:  Math.round(diario * 30),
+      anual:   Math.round(diario * 365),
     };
   };
 
-  const velAtual = calcVelocity(simOportunidades || 10, simTicket, simWinRate, simCiclo, 0);
-  const velOtimizada = calcVelocity(simOportunidades || 10, simTicket, simWinRate, simCiclo, optSlider);
+  const velBase = calcVel(simOpps || 10, simTicket, simWin, simCiclo, 0);
+  const velOpt  = calcVel(simOpps || 10, simTicket, simWin, simCiclo, optPct);
 
-  // ── IA Predictive Lead Scoring Helper ──
-  const leadScored = useMemo(() => {
-    const alvo = leads.find(l => l.id === leadSelecionadoId) || leads[0];
+  // ── IA Lead Scoring ──
+  const scored = useMemo(() => {
+    const alvo = leads.find(l => l.id === leadId) || leads[0];
     if (!alvo) return null;
-
-    let pontos = 50; // Base inicial
+    let pts = 50;
     const sinais = [];
 
-    // Sinais firmográficos e origem
-    if (alvo.origem === 'whatsapp' || alvo.origem === 'indicacao') {
-      pontos += 15;
-      sinais.push({ tipo: 'pos', texto: `Origem de alta confiança (${alvo.origem.toUpperCase()}) [+15 pts]` });
-    } else if (alvo.origem === 'instagram' || alvo.origem === 'site') {
-      pontos += 10;
-      sinais.push({ tipo: 'pos', texto: `Canal digital rastreado (${alvo.origem}) [+10 pts]` });
-    } else {
-      sinais.push({ tipo: 'neu', texto: `Origem geral (${alvo.origem || 'não informada'}) [0 pts]` });
-    }
+    if (['whatsapp','indicacao'].includes(alvo.origem))          { pts += 15; sinais.push({ t: '+', txt: `Origem de alta confiança (${alvo.origem}) [+15 pts]` }); }
+    else if (['instagram','site'].includes(alvo.origem))         { pts += 10; sinais.push({ t: '+', txt: `Canal digital (${alvo.origem}) [+10 pts]` }); }
+    else                                                          {           sinais.push({ t: '=', txt: `Origem geral (${alvo.origem || 'não informada'}) [0 pts]` }); }
 
-    // Status no funil
-    if (['contato-decisor', 'reuniao-marcada', 'contrato-realizado'].includes(alvo.status)) {
-      pontos += 25;
-      sinais.push({ tipo: 'pos', texto: `Estágio avançado de negociação (${alvo.status}) [+25 pts]` });
-    } else if (alvo.status === 'ligacao-feita' || alvo.status === 'lead-qualificado') {
-      pontos += 10;
-      sinais.push({ tipo: 'pos', texto: `Estágio de qualificação ativo [+10 pts]` });
-    } else if (alvo.status === 'perda') {
-      pontos -= 40;
-      sinais.push({ tipo: 'neg', texto: `Histórico marcado como perda [-40 pts]` });
-    }
+    if (['contato-decisor','reuniao-marcada','contrato-realizado'].includes(alvo.status)) { pts += 25; sinais.push({ t: '+', txt: `Estágio avançado de negociação [+25 pts]` }); }
+    else if (['ligacao-feita','lead-qualificado'].includes(alvo.status))                   { pts += 10; sinais.push({ t: '+', txt: `Estágio de qualificação ativo [+10 pts]` }); }
+    else if (alvo.status === 'perda')                                                      { pts -= 40; sinais.push({ t: '-', txt: `Marcado como perda [-40 pts]` }); }
 
-    // Campos de valor e contato
-    if (alvo.email && alvo.email.includes('@')) {
-      pontos += 5;
-      sinais.push({ tipo: 'pos', texto: 'E-mail validado na entrada [+5 pts]' });
-    } else {
-      pontos -= 10;
-      sinais.push({ tipo: 'neg', texto: 'E-mail ausente ou inválido (risco de higiene) [-10 pts]' });
-    }
+    if (alvo.email?.includes('@'))              { pts += 5;  sinais.push({ t: '+', txt: 'E-mail validado [+5 pts]' }); }
+    else                                        { pts -= 10; sinais.push({ t: '-', txt: 'E-mail ausente ou inválido [-10 pts]' }); }
 
-    if (alvo.telefone || alvo.whatsapp) {
-      pontos += 5;
-      sinais.push({ tipo: 'pos', texto: 'Telefone/WhatsApp de contato direto disponível [+5 pts]' });
-    }
+    if (alvo.telefone || alvo.whatsapp)         { pts += 5;  sinais.push({ t: '+', txt: 'Telefone disponível [+5 pts]' }); }
 
-    // Recência (Decaimento temporal)
     if (alvo.updatedAt) {
-      const dias = Math.floor((Date.now() - new Date(alvo.updatedAt).getTime()) / (1000 * 3600 * 24));
-      if (dias <= 2) {
-        pontos += 10;
-        sinais.push({ tipo: 'pos', texto: `Engajamento recente (${dias === 0 ? 'Hoje' : dias + ' dias atrás'}) [+10 pts]` });
-      } else if (dias > 14) {
-        pontos -= 15;
-        sinais.push({ tipo: 'neg', texto: `Decaimento temporal: sem atividade há ${dias} dias [-15 pts]` });
-      }
+      const dias = Math.floor((Date.now() - new Date(alvo.updatedAt)) / 86400000);
+      if (dias <= 2)   { pts += 10; sinais.push({ t: '+', txt: `Engajamento recente (${dias === 0 ? 'Hoje' : dias + 'd atrás'}) [+10 pts]` }); }
+      else if (dias > 14) { pts -= 15; sinais.push({ t: '-', txt: `Sem atividade há ${dias} dias [-15 pts]` }); }
     }
 
-    const scoreFinal = Math.max(0, Math.min(100, pontos));
-    let tier = 'MQL Básico';
-    let cor = 'var(--text3)';
-    let acao = 'Manter em fluxo de automação padronizado.';
+    const score = Math.max(0, Math.min(100, pts));
+    let tier = 'MQL Básico', cor = 'var(--text3)', acao = 'Manter em automação padrão.';
+    if (score >= 80)      { tier = '🔥 SQL — Prioridade Máxima';  cor = 'var(--green)';  acao = 'Contato humano imediato (Speed-to-Lead ≤ 5 min).'; }
+    else if (score >= 60) { tier = '⚡ MQL Quente';               cor = 'var(--accent)'; acao = 'Enviar estudo de caso ou demonstração personalizada.'; }
+    else if (score < 40)  { tier = '❄️ Desengajado';              cor = 'var(--red)';    acao = 'Reengajar via newsletter ou arquivar após 90 dias.'; }
 
-    if (scoreFinal >= 80) {
-      tier = '🔥 SQL / Prioridade Máxima';
-      cor = 'var(--green)';
-      acao = 'Contato humano imediato pelo Account Executive (Speed-to-Lead ≤ 5 min).';
-    } else if (scoreFinal >= 60) {
-      tier = '⚡ MQL Quente';
-      cor = 'var(--accent)';
-      acao = 'Enviar estudo de caso ou convite para demonstração personalizada.';
-    } else if (scoreFinal < 40) {
-      tier = '❄️ Baixa Propensão / Desengajado';
-      cor = 'var(--red)';
-      acao = 'Políticas de Pôr do Sol (Sunsetting): reengajar via newsletter ou arquivar após 90 dias.';
-    }
+    return { lead: alvo, score, tier, cor, acao, sinais };
+  }, [leads, leadId]);
 
-    return { lead: alvo, score: scoreFinal, tier, cor, acao, sinais };
-  }, [leads, leadSelecionadoId]);
+  // ── Health Score demo ──
+  const healthContas = [
+    { nome: 'Clínica Odonto Prime',    plano: 'Enterprise', arr: 'R$ 36.000', score: 92, adocao: 95, qbr: 'Assíduo',   risco: 'Baixo',      cor: 'var(--green)',  acao: 'Upsell módulo IA (+15% NRR)' },
+    { nome: 'Barbearia VIP Brothers',  plano: 'Pro',        arr: 'R$ 14.400', score: 78, adocao: 82, qbr: 'Pendente',  risco: 'Moderado',   cor: 'var(--yellow)', acao: 'Agendar revisão QBR' },
+    { nome: 'Academia Corpo & Alma',   plano: 'Pro',        arr: 'R$ 18.000', score: 64, adocao: 60, qbr: 'Realizado', risco: 'Atenção',    cor: 'var(--yellow)', acao: 'Reforçar treinamento da recepção' },
+    { nome: 'Restaurante Sabor do Mar',plano: 'Basic',      arr: 'R$ 7.200',  score: 38, adocao: 25, qbr: 'Ausente',   risco: 'Alto Churn', cor: 'var(--red)',    acao: '🚨 Intervenção executiva urgente' },
+  ];
 
-  // ── DADOS DE HEALTH SCORE (DEMO & CRM) ──
-  const healthAccounts = useMemo(() => {
-    const demos = [
-      { id: '1', nome: 'Clínica Odonto Prime', plano: 'Enterprise', arr: 'R$ 36.000', score: 92, adocao: 95, qbr: 'Assíduo', risco: 'Baixo', acao: 'Apresentar módulo de IA / Upsell (+15% NRR)', cor: 'var(--green)' },
-      { id: '2', nome: 'Barbearia VIP Brothers', plano: 'Pro', arr: 'R$ 14.400', score: 78, adocao: 82, qbr: 'Pend.', risco: 'Moderado', acao: 'Agendar revisão trimestral de sucesso (QBR)', cor: 'var(--yellow)' },
-      { id: '3', nome: 'Academia Corpo & Alma', plano: 'Pro', arr: 'R$ 18.000', score: 64, adocao: 60, qbr: 'Realizado', risco: 'Atenção', acao: 'Reforçar treinamento da recepção e uso de agendamento', cor: 'var(--yellow)' },
-      { id: '4', nome: 'Restaurante Sabor do Mar', plano: 'Basic', arr: 'R$ 7.200', score: 38, adocao: 25, qbr: 'Ausente', risco: 'Alto Churn', acao: '🚨 Alerta Vermelho: Intervenção executiva inadiável 60d antes de vencer', cor: 'var(--red)' },
-    ];
-    return demos;
-  }, []);
+  // ── Abas de navegação ──
+  const ABAS = [
+    { id: 'pipeline', icon: '⚡', label: 'Pipeline Velocity' },
+    { id: 'slas',     icon: '🤝', label: 'SLAs & Speed' },
+    { id: 'unit',     icon: '💰', label: 'Economia de Unidade' },
+    { id: 'health',   icon: '💓', label: 'Saúde do Cliente' },
+    { id: 'scoring',  icon: '🤖', label: 'IA Lead Scoring' },
+  ];
 
+  // ═══════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', flex: 1, overflowY: 'auto',
-      padding: '24px 32px 80px', color: 'var(--text)', background: 'transparent'
+      padding: '20px 28px 60px', color: 'var(--text)'
     }}>
-      {/* ── HEADER SUPERIOR ── */}
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-        marginBottom: '24px', borderBottom: '1px solid var(--border)', paddingBottom: '20px',
-        flexWrap: 'wrap', gap: '16px'
-      }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-            <span style={{ fontSize: '26px' }}>🎯</span>
-            <h1 style={{ fontSize: '24px', fontWeight: 700, margin: 0, color: 'var(--text)', letterSpacing: '-0.5px' }}>
-              RevOps & KPIs <span style={{ color: 'var(--accent)', fontWeight: 400 }}>| Arquitetura de Métricas</span>
-            </h1>
-            <span style={{
-              background: 'rgba(0, 210, 223, 0.12)', color: 'var(--accent)', border: '1px solid rgba(0, 210, 223, 0.3)',
-              padding: '2px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, fontFamily: "'DM Mono', monospace"
-            }}>
-              BENCHMARKS 2026
-            </span>
-          </div>
-          <p style={{ margin: 0, color: 'var(--text2)', fontSize: '14px', maxWidth: '750px', lineHeight: 1.5 }}>
-            Orquestração preditiva de receitas, higiene de dados e inteligência de vendas. Elimine métricas de vaidade e tome decisões com base na economia de unidade real e na velocidade do funil.
-          </p>
-        </div>
 
-        {/* Seletor de Período Global */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--surface)',
-          padding: '4px', borderRadius: '10px', border: '1px solid var(--border)'
-        }}>
-          {[
-            { id: '30', label: '30 Dias' },
-            { id: '90', label: '90 Dias' },
-            { id: '180', label: '6 Meses' },
-            { id: '365', label: '1 Ano' }
-          ].map(p => (
-            <button
-              key={p.id}
-              onClick={() => setPeriodo(p.id)}
-              style={{
-                background: periodo === p.id ? 'var(--accent)' : 'transparent',
-                color: periodo === p.id ? '#000' : 'var(--text2)',
-                border: 'none', padding: '6px 14px', borderRadius: '6px',
-                fontSize: '12px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s'
-              }}
-            >
-              {p.label}
-            </button>
-          ))}
+      {/* ── HEADER ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexWrap: 'wrap', gap: '12px', marginBottom: '20px',
+        paddingBottom: '16px', borderBottom: '1px solid var(--border)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '22px' }}>🎯</span>
+          <div>
+            <h1 style={{ fontSize: '20px', fontWeight: 700, margin: 0, letterSpacing: '-0.3px' }}>
+              Métricas & RevOps
+            </h1>
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--text3)', marginTop: '2px' }}>
+              KPIs, Velocidade de Receita e Inteligência de Vendas
+            </p>
+          </div>
+          <span style={{
+            background: 'rgba(0,210,223,0.1)', color: 'var(--accent)', border: '1px solid rgba(0,210,223,0.25)',
+            padding: '2px 10px', borderRadius: '20px', fontSize: '10px', fontWeight: 700,
+            fontFamily: "'DM Mono', monospace"
+          }}>BENCHMARKS 2026</span>
         </div>
       </div>
 
       {/* ── NAVEGAÇÃO DE ABAS ── */}
       <div style={{
-        display: 'flex', gap: '8px', marginBottom: '28px', borderBottom: '1px solid var(--border)',
-        paddingBottom: '12px', overflowX: 'auto'
+        display: 'flex', gap: '4px', marginBottom: '24px',
+        borderBottom: '1px solid var(--border)', paddingBottom: '0'
       }}>
-        {[
-          { id: 'pipeline', icon: '⚡', label: 'Pipeline Velocity', desc: 'Motor de Receita' },
-          { id: 'slas',     icon: '🤝', label: 'Alinhamento & SLAs', desc: 'Speed-to-Lead' },
-          { id: 'unit',     icon: '💰', label: 'Economia de Unidade', desc: 'CAC, LTV & NRR' },
-          { id: 'health',   icon: '💓', label: 'Saúde do Cliente',   desc: 'Health Score & CSAT' },
-          { id: 'scoring',  icon: '🤖', label: 'IA Lead Scoring',     desc: 'Triagem Preditiva' }
-        ].map(aba => {
-          const isAtiva = abaAtiva === aba.id;
+        {ABAS.map(aba => {
+          const ativa = abaAtiva === aba.id;
           return (
-            <button
-              key={aba.id}
-              onClick={() => setAbaAtiva(aba.id)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '10px',
-                padding: '10px 18px', borderRadius: '10px', border: '1px solid',
-                borderColor: isAtiva ? 'var(--accent)' : 'transparent',
-                background: isAtiva ? 'rgba(0, 210, 223, 0.1)' : 'var(--surface)',
-                color: isAtiva ? 'var(--accent)' : 'var(--text2)',
-                cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
-                boxShadow: isAtiva ? '0 0 20px rgba(0, 210, 223, 0.15)' : 'none'
-              }}
-              onMouseEnter={e => {
-                if (!isAtiva) { e.currentTarget.style.background = 'var(--surface2)'; e.currentTarget.style.color = 'var(--text)'; }
-              }}
-              onMouseLeave={e => {
-                if (!isAtiva) { e.currentTarget.style.background = 'var(--surface)'; e.currentTarget.style.color = 'var(--text2)'; }
-              }}
-            >
-              <span style={{ fontSize: '18px' }}>{aba.icon}</span>
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ fontSize: '13px', fontWeight: 600 }}>{aba.label}</div>
-                <div style={{ fontSize: '11px', color: isAtiva ? 'var(--accent2)' : 'var(--text3)', opacity: 0.9 }}>{aba.desc}</div>
-              </div>
+            <button key={aba.id} onClick={() => setAbaAtiva(aba.id)} style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '9px 16px', background: 'transparent',
+              border: 'none', borderBottom: ativa ? '2px solid var(--accent)' : '2px solid transparent',
+              color: ativa ? 'var(--accent)' : 'var(--text3)',
+              fontSize: '13px', fontWeight: ativa ? 700 : 500,
+              cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
+              marginBottom: '-1px'
+            }}>
+              <span>{aba.icon}</span> {aba.label}
             </button>
           );
         })}
       </div>
 
-      {/* ════════════════════════════════════════════════════════════════════
-          ABA 1: PIPELINE VELOCITY (MOTOR DE RECEITA)
-         ════════════════════════════════════════════════════════════════════ */}
+      {/* ══════════════════════════════════════════════════════
+          ABA 1 — PIPELINE VELOCITY
+         ══════════════════════════════════════════════════════ */}
       {abaAtiva === 'pipeline' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.25s ease' }}>
-          
-          {/* Banner Explicativo e Fórmula */}
-          <div style={{
-            background: 'linear-gradient(135deg, var(--surface), rgba(0, 210, 223, 0.05))',
-            border: '1px solid var(--border)', borderRadius: '16px', padding: '24px',
-            display: 'flex', flexWrap: 'wrap', gap: '24px', alignItems: 'center',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
-          }}>
-            <div style={{ flex: '1 1 350px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <span style={{
-                  background: 'rgba(0, 210, 223, 0.2)', color: 'var(--accent)', padding: '2px 8px',
-                  borderRadius: '6px', fontSize: '11px', fontWeight: 700
-                }}>
-                  FÓRMULA DIRETIVA REVOPS
-                </span>
-              </div>
-              <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text)', margin: '0 0 10px 0' }}>
-                O Velocímetro do Crescimento Previsível
-              </h2>
-              <p style={{ fontSize: '13px', color: 'var(--text2)', margin: 0, lineHeight: 1.6 }}>
-                Enquanto medições estáticas oferecem constatações excessivamente retroativas, a <strong>Pipeline Velocity</strong> funde quatro dimensões críticas num único coeficiente operacional: revela a velocidade diária/mensal em que transações abertas se convertem em capital faturado.
-              </p>
-            </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-            <div style={{
-              flex: '1 1 320px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border)',
-              borderRadius: '12px', padding: '16px', textAlign: 'center'
-            }}>
-              <div style={{ fontSize: '11px', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>
-                Fórmula de Cálculo (V)
+          {/* Fórmula */}
+          <Card>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', alignItems: 'center' }}>
+              <div style={{ flex: '1 1 280px' }}>
+                <span style={{
+                  background: 'rgba(0,210,223,0.15)', color: 'var(--accent)', padding: '2px 8px',
+                  borderRadius: '6px', fontSize: '10px', fontWeight: 700
+                }}>FÓRMULA REVOPS</span>
+                <h2 style={{ fontSize: '16px', fontWeight: 700, margin: '8px 0 6px 0' }}>
+                  Velocidade de Geração de Receita
+                </h2>
+                <p style={{ fontSize: '12px', color: 'var(--text2)', margin: 0, lineHeight: 1.5 }}>
+                  Funde quatro dimensões críticas em um único coeficiente operacional. Mede a velocidade diária em que oportunidades abertas se convertem em receita faturada.
+                </p>
               </div>
               <div style={{
-                fontFamily: "'DM Mono', monospace", fontSize: '14px', color: 'var(--accent)',
-                padding: '10px', background: 'rgba(0,210,223,0.08)', borderRadius: '8px', border: '1px dashed rgba(0,210,223,0.3)'
+                flex: '1 1 260px', textAlign: 'center',
+                background: 'rgba(0,0,0,0.3)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border)'
               }}>
-                V = (Opps Qualificadas × Ticket × Win Rate) / Ciclo
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '8px' }}>
-                *Aumento simultâneo de apenas 10% nos 4 pilares gera salto exponencial de <strong style={{ color: 'var(--green)' }}>+46.4%</strong> na receita!
+                <div style={{ fontSize: '10px', color: 'var(--text3)', letterSpacing: '1px', marginBottom: '6px' }}>CÁLCULO</div>
+                <div style={{
+                  fontFamily: "'DM Mono', monospace", fontSize: '13px', color: 'var(--accent)',
+                  background: 'rgba(0,210,223,0.06)', padding: '10px', borderRadius: '8px',
+                  border: '1px dashed rgba(0,210,223,0.3)'
+                }}>
+                  V = (SQLs × Ticket × Win Rate) / Ciclo
+                </div>
+                <div style={{ fontSize: '10px', color: 'var(--text3)', marginTop: '8px' }}>
+                  10% de melhoria em todos os pilares = <strong style={{ color: 'var(--green)' }}>+46.4%</strong> de receita
+                </div>
               </div>
             </div>
-          </div>
+          </Card>
 
-          {/* Cards de Métricas Reais + Simulador Interativo */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
-            
-            {/* Painel Esquerdo: Controle dos 4 Pilares */}
-            <div style={{
-              background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', padding: '24px',
-              display: 'flex', flexDirection: 'column', gap: '20px'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>Parâmetros do Pipeline (Simulador)</h3>
-                <button
-                  onClick={() => {
-                    setSimOportunidades(statsCRM.oppsAtivas);
-                    setSimTicket(statsCRM.ticketReal);
-                    setSimWinRate(statsCRM.winRateReal);
-                    setSimCiclo(statsCRM.cicloReal);
-                    setOptSlider(0);
-                  }}
+          {/* Simulador + Resultado */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+
+            {/* Sliders */}
+            <Card>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <SectionTitle icon="🎛️" title="Parâmetros do Pipeline" />
+                <button onClick={() => { setSimOpps(crm.opps); setSimTicket(crm.ticket); setSimWin(crm.winRate); setSimCiclo(crm.ciclo); setOptPct(0); }}
                   style={{
                     background: 'transparent', border: '1px solid var(--border)', color: 'var(--text3)',
-                    padding: '4px 10px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer'
-                  }}
-                  title="Restaurar valores reais do seu CRM"
-                >
+                    padding: '4px 10px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer', marginTop: '-12px'
+                  }}>
                   🔄 Usar Dados Reais
                 </button>
               </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <SliderField label="1. SQLs / Oportunidades Qualificadas" value={`${simOpps} opps`}
+                  min={1} max={150} onChange={setSimOpps}
+                  leftNote={`CRM atual: ${crm.opps} opps`} rightNote="Qualidade > volume" color="var(--accent)" />
+                <SliderField label="2. Ticket Médio (ACV)" value={`R$ ${simTicket.toLocaleString('pt-BR')}`}
+                  min={500} max={25000} step={500} onChange={setSimTicket}
+                  leftNote={`CRM: ~R$ ${crm.ticket.toLocaleString('pt-BR')}`} rightNote="Value-based selling" color="var(--accent)" />
+                <SliderField label="3. Win Rate (Taxa de Fechamento)" value={`${simWin}%`}
+                  min={5} max={60} onChange={setSimWin}
+                  leftNote={`CRM atual: ${crm.winRate}%`} rightNote="Benchmark SMB: 22-28%" color="var(--green)" />
+                <SliderField label="4. Ciclo de Vendas" value={`${simCiclo} dias`}
+                  min={3} max={90} onChange={setSimCiclo}
+                  leftNote={`CRM: ~${crm.ciclo} dias`} rightNote="Benchmark: 14-30 dias" color="var(--yellow)" />
 
-              {/* Slider 1: Oportunidades */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
-                  <span style={{ color: 'var(--text2)' }}>1. Oportunidades Qualificadas (SQLs)</span>
-                  <strong style={{ fontFamily: "'DM Mono', monospace", color: 'var(--text)' }}>{simOportunidades} opps</strong>
-                </div>
-                <input
-                  type="range" min="1" max="150" value={simOportunidades}
-                  onChange={e => setSimOportunidades(Number(e.target.value))}
-                  style={{ width: '100%', accentColor: 'var(--accent)' }}
-                />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text3)', marginTop: '2px' }}>
-                  <span>Seu CRM atual: {statsCRM.oppsAtivas} opps ativas</span>
-                  <span>Alvo: Qualidade sobre volume</span>
+                <div style={{ height: '1px', background: 'var(--border)' }} />
+
+                <div style={{ background: 'rgba(0,210,223,0.06)', padding: '12px', borderRadius: '10px', border: '1px solid rgba(0,210,223,0.2)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent)' }}>🚀 Efeito Composto (otimizar todos os pilares)</span>
+                    <span style={{
+                      background: 'var(--accent)', color: '#000', padding: '1px 8px',
+                      borderRadius: '6px', fontSize: '11px', fontWeight: 700, fontFamily: "'DM Mono', monospace"
+                    }}>+{optPct}%</span>
+                  </div>
+                  <input type="range" min={0} max={25} value={optPct}
+                    onChange={e => setOptPct(Number(e.target.value))}
+                    style={{ width: '100%', accentColor: 'var(--accent)' }}
+                  />
+                  <div style={{ fontSize: '10px', color: 'var(--text3)', marginTop: '4px' }}>
+                    Simula melhoria simultânea em win rate, ciclo e ticket.
+                  </div>
                 </div>
               </div>
+            </Card>
 
-              {/* Slider 2: Ticket Médio / Deal Size */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
-                  <span style={{ color: 'var(--text2)' }}>2. Valor Médio do Contrato (ACV / Deal Size)</span>
-                  <strong style={{ fontFamily: "'DM Mono', monospace", color: 'var(--text)' }}>R$ {simTicket.toLocaleString('pt-BR')}</strong>
-                </div>
-                <input
-                  type="range" min="500" max="25000" step="500" value={simTicket}
-                  onChange={e => setSimTicket(Number(e.target.value))}
-                  style={{ width: '100%', accentColor: 'var(--accent)' }}
-                />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text3)', marginTop: '2px' }}>
-                  <span>Seu CRM atual: ~R$ {statsCRM.ticketReal.toLocaleString('pt-BR')}</span>
-                  <span>Estratégia: Value-based selling</span>
-                </div>
-              </div>
-
-              {/* Slider 3: Win Rate */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
-                  <span style={{ color: 'var(--text2)' }}>3. Taxa de Fechamento (Win Rate)</span>
-                  <strong style={{ fontFamily: "'DM Mono', monospace", color: 'var(--green)' }}>{simWinRate}%</strong>
-                </div>
-                <input
-                  type="range" min="5" max="60" value={simWinRate}
-                  onChange={e => setSimWinRate(Number(e.target.value))}
-                  style={{ width: '100%', accentColor: 'var(--green)' }}
-                />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text3)', marginTop: '2px' }}>
-                  <span>Seu CRM atual: {statsCRM.winRateReal}%</span>
-                  <span>Benchmark SaaS SMB 2026: 22% a 28%</span>
-                </div>
-              </div>
-
-              {/* Slider 4: Ciclo de Vendas */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
-                  <span style={{ color: 'var(--text2)' }}>4. Ciclo de Vendas (Dias até assinatura)</span>
-                  <strong style={{ fontFamily: "'DM Mono', monospace", color: 'var(--yellow)' }}>{simCiclo} dias</strong>
-                </div>
-                <input
-                  type="range" min="3" max="90" value={simCiclo}
-                  onChange={e => setSimCiclo(Number(e.target.value))}
-                  style={{ width: '100%', accentColor: 'var(--yellow)' }}
-                />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text3)', marginTop: '2px' }}>
-                  <span>Seu CRM atual: ~{statsCRM.cicloReal} dias</span>
-                  <span>Benchmark SMB: 14 a 30 dias</span>
-                </div>
-              </div>
-
-              {/* Divisor */}
-              <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
-
-              {/* Slider de Otimização Simultânea (O Segredo Exponencial) */}
-              <div style={{ background: 'rgba(0, 210, 223, 0.05)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(0, 210, 223, 0.2)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent)' }}>🚀 Efeito Composto: Otimizar todos os pilares</span>
-                  <span style={{
-                    background: 'var(--accent)', color: '#000', padding: '2px 8px',
-                    borderRadius: '6px', fontSize: '12px', fontWeight: 700, fontFamily: "'DM Mono', monospace"
-                  }}>
-                    +{optSlider}%
-                  </span>
-                </div>
-                <input
-                  type="range" min="0" max="25" value={optSlider}
-                  onChange={e => setOptSlider(Number(e.target.value))}
-                  style={{ width: '100%', accentColor: 'var(--accent)', marginTop: '4px' }}
-                />
-                <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '6px' }}>
-                  Simule o impacto de treinar o time (+win rate), melhorar qualificação (-ciclo) e ajustar preços (+ticket) simultaneamente.
-                </div>
-              </div>
-            </div>
-
-            {/* Painel Direito: Resultados de Velocidade */}
+            {/* Resultado */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              
-              {/* Box Principal do Resultado */}
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(0, 210, 223, 0.15), rgba(0,0,0,0.4))',
-                border: '2px solid var(--accent)', borderRadius: '16px', padding: '24px',
-                textAlign: 'center', position: 'relative', overflow: 'hidden',
-                boxShadow: '0 12px 40px rgba(0, 210, 223, 0.15)'
-              }}>
-                <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '8px' }}>
-                  Velocidade de Geração de Receita (V)
+              <Card accent style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>
+                  Velocidade Mensal de Receita
                 </div>
-
-                <div style={{ fontSize: '42px', fontWeight: 800, color: '#fff', fontFamily: "'DM Mono', monospace", letterSpacing: '-1px', margin: '10px 0' }}>
-                  R$ {velOtimizada.mensal.toLocaleString('pt-BR')} <span style={{ fontSize: '18px', color: 'var(--accent2)', fontWeight: 500 }}>/mês</span>
+                <div style={{ fontSize: '38px', fontWeight: 800, fontFamily: "'DM Mono', monospace", lineHeight: 1.1, marginBottom: '8px' }}>
+                  R$ {velOpt.mensal.toLocaleString('pt-BR')}
+                  <span style={{ fontSize: '16px', color: 'var(--text3)', fontWeight: 400 }}> /mês</span>
                 </div>
-
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', margin: '16px 0', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '12px 0' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', padding: '12px 0', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', margin: '12px 0' }}>
                   <div>
-                    <div style={{ fontSize: '11px', color: 'var(--text3)' }}>POR DIA</div>
-                    <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--green)', fontFamily: "'DM Mono', monospace" }}>
-                      R$ {velOtimizada.diario.toLocaleString('pt-BR')}
+                    <div style={{ fontSize: '10px', color: 'var(--text3)' }}>POR DIA</div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--green)', fontFamily: "'DM Mono', monospace" }}>
+                      R$ {velOpt.diario.toLocaleString('pt-BR')}
                     </div>
                   </div>
-                  <div style={{ width: '1px', background: 'rgba(255,255,255,0.1)' }} />
+                  <div style={{ width: '1px', background: 'var(--border)' }} />
                   <div>
-                    <div style={{ fontSize: '11px', color: 'var(--text3)' }}>PROJEÇÃO ANUAL (ARR)</div>
-                    <div style={{ fontSize: '16px', fontWeight: 700, color: '#fff', fontFamily: "'DM Mono', monospace" }}>
-                      R$ {velOtimizada.anual.toLocaleString('pt-BR')}
+                    <div style={{ fontSize: '10px', color: 'var(--text3)' }}>PROJEÇÃO ANUAL</div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)', fontFamily: "'DM Mono', monospace" }}>
+                      R$ {velOpt.anual.toLocaleString('pt-BR')}
                     </div>
                   </div>
                 </div>
-
-                {optSlider > 0 && (
+                {optPct > 0 && (
                   <div style={{
-                    background: 'rgba(16, 185, 129, 0.2)', border: '1px solid var(--green)', color: 'var(--green)',
-                    padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, display: 'inline-block',
-                    animation: 'pulse 2s infinite'
+                    background: 'rgba(16,185,129,0.15)', border: '1px solid var(--green)', color: 'var(--green)',
+                    padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600
                   }}>
-                    📈 Salto de R$ {(velOtimizada.mensal - velAtual.mensal).toLocaleString('pt-BR')}/mês ({Math.round(((velOtimizada.mensal / velAtual.mensal) - 1) * 100)}% de ganho composto!)
+                    📈 +R$ {(velOpt.mensal - velBase.mensal).toLocaleString('pt-BR')}/mês vs. baseline
+                    ({Math.round(((velOpt.mensal / Math.max(velBase.mensal, 1)) - 1) * 100)}% de ganho)
                   </div>
                 )}
-              </div>
+              </Card>
 
-              {/* Benchmarks e Insights 2026 */}
-              <div style={{
-                background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', padding: '20px',
-                display: 'flex', flexDirection: 'column', gap: '14px', flex: 1
-              }}>
-                <h4 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: 'var(--text)' }}>
-                  📊 Diagnóstico Executivo de RevOps (2026)
-                </h4>
-
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', fontSize: '13px', color: 'var(--text2)' }}>
-                  <span style={{ fontSize: '16px' }}>💡</span>
-                  <div>
-                    <strong style={{ color: 'var(--text)' }}>Taxa de Vitória vs Ciclo:</strong> No mercado PME (SMB), propostas &lt; R$ 15k fecham a uma média de <strong>28% em até 30 dias</strong>. Contratos Enterprise (&gt; R$ 100k) exigem até 180 dias com win rate de ~15%.
-                  </div>
+              <Card>
+                <SectionTitle icon="📊" title="Diagnóstico Executivo" />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {[
+                    { icon: '💡', title: 'Win Rate vs Ciclo', text: 'PMEs com ticket < R$ 15k fecham em média com 28% em até 30 dias. Contratos Enterprise exigem até 180 dias com win rate de ~15%.' },
+                    { icon: '🚀', title: 'Lead Velocity Rate (LVR)', text: 'Crescimento mensal de SQLs deve ser de 15% a 20% para garantir expansão previsível de receitas.' },
+                    { icon: '🛡️', title: 'Atenção ao Funil', text: 'Nunca relaxe critérios de qualificação para inflar o topo do funil. Isso aumenta o ciclo e destrói a velocidade.' },
+                  ].map((item, i) => (
+                    <div key={i} style={{ display: 'flex', gap: '10px', fontSize: '12px', color: 'var(--text2)' }}>
+                      <span style={{ fontSize: '14px', flexShrink: 0, marginTop: '1px' }}>{item.icon}</span>
+                      <div><strong style={{ color: 'var(--text)' }}>{item.title}:</strong> {item.text}</div>
+                    </div>
+                  ))}
                 </div>
-
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', fontSize: '13px', color: 'var(--text2)' }}>
-                  <span style={{ fontSize: '16px' }}>🚀</span>
-                  <div>
-                    <strong style={{ color: 'var(--text)' }}>Lead Velocity Rate (LVR):</strong> O crescimento percentual de leads qualificadas de um mês para outro deve se manter em <strong>15% a 20%</strong> para garantir a expansão contínua das receitas futuras.
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', fontSize: '13px', color: 'var(--text2)' }}>
-                  <span style={{ fontSize: '16px' }}>🛡️</span>
-                  <div>
-                    <strong style={{ color: 'var(--text)' }}>Ação Direta no seu CRM:</strong> Separe rigorosamente a qualificação de entrada (MQL) da validação de fechamento (SQL). Nunca inflacione o topo do funil relaxando critérios, ou o ciclo aumentará destruindo sua velocidade.
-                  </div>
-                </div>
-              </div>
-
+              </Card>
             </div>
-
           </div>
         </div>
       )}
 
-      {/* ════════════════════════════════════════════════════════════════════
-          ABA 2: ALINHAMENTO MARKETING-VENDAS & SLAS (SPEED-TO-LEAD)
-         ════════════════════════════════════════════════════════════════════ */}
+      {/* ══════════════════════════════════════════════════════
+          ABA 2 — SLAs & SPEED-TO-LEAD
+         ══════════════════════════════════════════════════════ */}
       {abaAtiva === 'slas' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.25s ease' }}>
-          
-          {/* Banner O Abismo dos 15 Minutos */}
-          <div style={{
-            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', padding: '24px',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
-              <div>
-                <span style={{
-                  background: 'rgba(239, 68, 68, 0.15)', color: 'var(--red)', padding: '2px 8px',
-                  borderRadius: '6px', fontSize: '11px', fontWeight: 700
-                }}>
-                  CRÍTICO: SPEED-TO-LEAD
-                </span>
-                <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '6px 0 0 0' }}>
-                  A Tirania do Relógio: O Abismo dos 15 Minutos
-                </h2>
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--text3)', background: 'var(--surface2)', padding: '6px 12px', borderRadius: '8px' }}>
-                ⏱️ Média global do mercado: <strong style={{ color: 'var(--red)' }}>47 horas</strong> | Meta Portel CRM: <strong style={{ color: 'var(--green)' }}>&le; 5 minutos</strong>
-              </div>
-            </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-            <p style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '20px', lineHeight: 1.6 }}>
-              A janela de conversão tem natureza profundamente perecível. <strong>78% dos clientes fecham negócio com a primeira empresa que estabelece um contato humano qualificado.</strong> Veja como a probabilidade despenca em função do tempo de primeira resposta:
+          {/* Linha do Tempo de Resposta */}
+          <Card>
+            <SectionTitle icon="⏱️" title="O Abismo dos 15 Minutos" badge="SPEED-TO-LEAD" />
+            <p style={{ fontSize: '12px', color: 'var(--text2)', margin: '0 0 16px 0', lineHeight: 1.5 }}>
+              <strong>78% dos clientes fecham com a primeira empresa a fazer contato humano qualificado.</strong> Veja como a probabilidade de conversão cai em função do tempo de resposta:
             </p>
-
-            {/* Linha do Tempo de Resposta */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
               {[
-                { tempo: '0 a 5 min', label: 'Ótimo Absoluto', impacto: '+391%', desc: 'Intenção de compra no zênite. Probabilidade de conversão recorde.', cor: 'var(--green)', bg: 'rgba(16, 185, 129, 0.1)' },
-                { tempo: '5 a 15 min', label: 'Aceitável', impacto: 'Alta Retenção', desc: 'Retém o prospecto conectado sem transmitir desespero excessivo.', cor: 'var(--accent)', bg: 'rgba(0, 210, 223, 0.1)' },
-                { tempo: '15 a 60 min', label: 'Queda no Abismo', impacto: '-21x menos', desc: 'Após 30 min, chance de fechar é 21x menor que no 5º minuto. Atenção evadiu.', cor: 'var(--yellow)', bg: 'rgba(245, 158, 11, 0.1)' },
-                { tempo: '&gt; 60 minutos', label: 'Zona Crítica', impacto: 'Apenas 7%', desc: 'Após 24h a taxa de fecho desvanece para ínfimos 7%. Concorrente interceptou.', cor: 'var(--red)', bg: 'rgba(239, 68, 68, 0.1)' },
-              ].map((item, idx) => (
-                <div key={idx} style={{
-                  background: item.bg, border: `1px solid ${item.cor}`, borderRadius: '12px', padding: '16px',
-                  display: 'flex', flexDirection: 'column', gap: '8px', position: 'relative'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: item.cor, fontFamily: "'DM Mono', monospace" }} dangerouslySetInnerHTML={{ __html: item.tempo }} />
-                    <span style={{ fontSize: '10px', fontWeight: 600, background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px', color: '#fff' }}>{item.label}</span>
+                { tempo: '0 — 5 min', label: 'Ótimo', impacto: '+391%', desc: 'Intenção de compra no pico. Conversão recorde.', cor: 'var(--green)', bg: 'rgba(16,185,129,0.08)' },
+                { tempo: '5 — 15 min', label: 'Aceitável', impacto: 'Alta Retenção', desc: 'Mantém o prospecto engajado sem perder momentum.', cor: 'var(--accent)', bg: 'rgba(0,210,223,0.08)' },
+                { tempo: '15 — 60 min', label: 'Queda', impacto: '21x menos', desc: 'Após 30 min, chance de fechar é 21x menor que no 5º minuto.', cor: 'var(--yellow)', bg: 'rgba(245,158,11,0.08)' },
+                { tempo: '> 60 minutos', label: 'Crítico', impacto: 'Apenas 7%', desc: 'Após 24h a taxa de fechamento desvanece para 7%.', cor: 'var(--red)', bg: 'rgba(239,68,68,0.08)' },
+              ].map((item, i) => (
+                <div key={i} style={{ background: item.bg, border: `1px solid ${item.cor}`, borderRadius: '10px', padding: '14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: item.cor, fontFamily: "'DM Mono', monospace" }}>{item.tempo}</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text3)', background: 'rgba(0,0,0,0.3)', padding: '1px 6px', borderRadius: '4px' }}>{item.label}</span>
                   </div>
-                  <div style={{ fontSize: '22px', fontWeight: 800, color: item.cor, fontFamily: "'DM Mono', monospace" }}>
-                    {item.impacto}
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text2)', lineHeight: 1.4 }}>
-                    {item.desc}
-                  </div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: item.cor, marginBottom: '4px' }}>{item.impacto}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text2)', lineHeight: 1.4 }}>{item.desc}</div>
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
 
-          {/* Funil B2B de Qualificação e Custos Ponderados */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
-            
-            {/* Tabela de Matriz de Escalada (SLAs Internos) */}
-            <div style={{
-              background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', padding: '20px',
-              display: 'flex', flexDirection: 'column', gap: '16px'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>📋 Matriz de SLAs & Gatilhos no CRM</h3>
-                <span style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: 600 }}>Governança RevOps</span>
-              </div>
-              <p style={{ fontSize: '12px', color: 'var(--text2)', margin: 0 }}>
-                Parâmetros que regulam o pacto entre Marketing (geração) e Vendas (fechamento), com automatismos de punição e escalada.
-              </p>
+          {/* Tabelas lado a lado */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
 
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text3)' }}>
-                      <th style={{ padding: '8px 4px' }}>Origem / Canal</th>
-                      <th style={{ padding: '8px 4px' }}>Prioridade</th>
-                      <th style={{ padding: '8px 4px' }}>SLA Máximo</th>
-                      <th style={{ padding: '8px 4px' }}>Gatilho de Escalada Automática</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '10px 4px', fontWeight: 600 }}>Inbound (Web/Demo)</td>
-                      <td style={{ padding: '10px 4px' }}><span style={{ background: 'rgba(239,68,68,0.2)', color: 'var(--red)', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>Tier 1</span></td>
-                      <td style={{ padding: '10px 4px', fontFamily: "'DM Mono', monospace" }}>&le; 5 min</td>
-                      <td style={{ padding: '10px 4px', color: 'var(--text2)' }}>Atraso de 10 min: Notifica chefia no Slack/WhatsApp e emite alerta de violação.</td>
-                    </tr>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '10px 4px', fontWeight: 600 }}>Redes (LinkedIn/IG)</td>
-                      <td style={{ padding: '10px 4px' }}><span style={{ background: 'rgba(245,158,11,0.2)', color: 'var(--yellow)', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>Tier 2</span></td>
-                      <td style={{ padding: '10px 4px', fontFamily: "'DM Mono', monospace" }}>&le; 15 min</td>
-                      <td style={{ padding: '10px 4px', color: 'var(--text2)' }}>Atraso de 30 min: Reatribuição imediata da lead na fila global (Round-Robin).</td>
-                    </tr>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '10px 4px', fontWeight: 600 }}>Indicação / Orgânico</td>
-                      <td style={{ padding: '10px 4px' }}><span style={{ background: 'rgba(0,210,223,0.2)', color: 'var(--accent)', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>Moderada</span></td>
-                      <td style={{ padding: '10px 4px', fontFamily: "'DM Mono', monospace" }}>&le; 60 min</td>
-                      <td style={{ padding: '10px 4px', color: 'var(--text2)' }}>Atraso de 120 min: Relatório para lideranças e perda de bônus de rapidez.</td>
-                    </tr>
-                    <tr>
-                      <td style={{ padding: '10px 4px', fontWeight: 600 }}>MOPs Back-office</td>
-                      <td style={{ padding: '10px 4px' }}><span style={{ background: 'var(--surface2)', color: 'var(--text3)', padding: '2px 6px', borderRadius: '4px', fontSize: '10px' }}>Suporte</span></td>
-                      <td style={{ padding: '10px 4px', fontFamily: "'DM Mono', monospace" }}>3 a 7 dias</td>
-                      <td style={{ padding: '10px 4px', color: 'var(--text2)' }}>Importação de listas e higienização. Exige escopo fechado e governança.</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Funil de Qualificação & Custo Ponderado */}
-            <div style={{
-              background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', padding: '20px',
-              display: 'flex', flexDirection: 'column', gap: '14px'
-            }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>⚖️ Custo Ponderado do Funil (MQL vs SQL)</h3>
-              <p style={{ fontSize: '12px', color: 'var(--text2)', margin: 0 }}>
-                O desgaste de conversão entre camadas justifica por que leads qualificados por vendas (SQLs) custam de 3x a 5x mais que um MQL.
-              </p>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '6px' }}>
-                {[
-                  { etapa: 'Lead Bruto → MQL', conv: '25%', custo: 'R$ 200 - R$ 500', desc: 'Filtro demográfico e interatividade digital.', cor: 'var(--text2)' },
-                  { etapa: 'MQL → SQL', conv: '40%', custo: 'R$ 800 - R$ 2.000', desc: 'Validação humana AE: BANT / MEDDIC aprovado.', cor: 'var(--accent)' },
-                  { etapa: 'SQL → Oportunidade', conv: '60%', custo: 'R$ 1.500 - R$ 3.000', desc: 'Orçamento alocado e cronograma de compra definido.', cor: 'var(--yellow)' },
-                  { etapa: 'Oportunidade → Venda', conv: '30%', custo: 'CAC Final consolidado', desc: 'Fechamento de contrato e início de onboarding.', cor: 'var(--green)' }
-                ].map((st, i) => (
-                  <div key={i} style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '10px 12px', background: 'var(--surface2)', borderRadius: '8px', borderLeft: `4px solid ${st.cor}`
-                  }}>
-                    <div>
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)' }}>{st.etapa}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text3)' }}>{st.desc}</div>
-                    </div>
-                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: st.cor, fontFamily: "'DM Mono', monospace" }}>{st.conv} conv.</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text2)' }}>{st.custo}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{
-                background: 'rgba(0,0,0,0.3)', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border)',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px'
-              }}>
-                <span style={{ color: 'var(--text3)' }}>Taxa Global de Conversão (Lead → Fecho):</span>
-                <strong style={{ color: 'var(--accent)', fontFamily: "'DM Mono', monospace", fontSize: '14px' }}>~ 1.8% (Média B2B)</strong>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* ════════════════════════════════════════════════════════════════════
-          ABA 3: ECONOMIA DE UNIDADE (UNIT ECONOMICS & SAAS KPIS)
-         ════════════════════════════════════════════════════════════════════ */}
-      {abaAtiva === 'unit' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.25s ease' }}>
-          
-          {/* Grid de KPIs de Unit Economics */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-            
-            {/* CAC */}
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', padding: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '12px', color: 'var(--text3)', fontWeight: 600 }}>CAC (CUSTO DE AQUISIÇÃO)</span>
-                <span style={{ fontSize: '18px' }}>💸</span>
-              </div>
-              <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--text)', fontFamily: "'DM Mono', monospace" }}>
-                R$ 1.450 <span style={{ fontSize: '13px', color: 'var(--text3)', fontWeight: 400 }}>/ new logo</span>
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ color: 'var(--green)' }}>✓ Referência SaaS:</span> R$ 2.00 gastos para cada R$ 1 de ARR gerado.
-              </div>
-            </div>
-
-            {/* CAC Payback */}
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', padding: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '12px', color: 'var(--text3)', fontWeight: 600 }}>CAC PAYBACK PERIOD</span>
-                <span style={{ fontSize: '18px' }}>⏱️</span>
-              </div>
-              <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--yellow)', fontFamily: "'DM Mono', monospace" }}>
-                7.4 meses
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ color: 'var(--green)' }}>✓ Meta SMB:</span> 8 a 12 meses (PLG alcança ~4.2 meses).
-              </div>
-            </div>
-
-            {/* Rácio LTV:CAC */}
-            <div style={{
-              background: 'linear-gradient(135deg, var(--surface), rgba(16, 185, 129, 0.08))',
-              border: '1px solid var(--green)', borderRadius: '16px', padding: '20px'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '12px', color: 'var(--green)', fontWeight: 700 }}>RÁCIO LTV : CAC</span>
-                <span style={{ fontSize: '18px' }}>💎</span>
-              </div>
-              <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--green)', fontFamily: "'DM Mono', monospace" }}>
-                4.2 : 1
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '8px' }}>
-                ✓ <strong>Excelência (4:1 a 5:1).</strong> Mínimo existencial incontornável é 3:1.
-              </div>
-            </div>
-
-            {/* Rule of 40 */}
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', padding: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '12px', color: 'var(--text3)', fontWeight: 600 }}>RULE OF 40 (REGRA DOS 40)</span>
-                <span style={{ fontSize: '18px' }}>🔥</span>
-              </div>
-              <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--accent)', fontFamily: "'DM Mono', monospace" }}>
-                48% <span style={{ fontSize: '13px', color: 'var(--green)', fontWeight: 600 }}>✓ Aprovado</span>
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '8px' }}>
-                Crescimento ARR (31%) + Margem Lucro (17%) &gt; 40 pts.
-              </div>
-            </div>
-
-          </div>
-
-          {/* NRR vs GRR: A Genética da Retenção */}
-          <div style={{
-            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', padding: '24px',
-            display: 'flex', flexWrap: 'wrap', gap: '28px', alignItems: 'center'
-          }}>
-            <div style={{ flex: '1 1 350px' }}>
-              <span style={{
-                background: 'rgba(16, 185, 129, 0.15)', color: 'var(--green)', padding: '2px 8px',
-                borderRadius: '6px', fontSize: '11px', fontWeight: 700, marginBottom: '8px', display: 'inline-block'
-              }}>
-                O FAROL GUIA REVOPS
-              </span>
-              <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 12px 0' }}>
-                A Genética da Retenção: NRR vs GRR
-              </h2>
-              <p style={{ fontSize: '13px', color: 'var(--text2)', margin: '0 0 14px 0', lineHeight: 1.6 }}>
-                Para estruturas SaaS e subscrições, a <strong>Net Revenue Retention (NRR)</strong> é o supremo oráculo de viabilidade. Empresas com NRR de 120% a 130% multiplicam sua receita perpetuamente apenas com a base atual (via upsells e expansões), sem precisar de novos clientes.
-              </p>
-              <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '8px', borderLeft: '3px solid var(--red)', fontSize: '12px', color: 'var(--text2)' }}>
-                ⚠️ <strong>Atenção ao GRR (Gross Revenue Retention):</strong> O GRR mede a retenção sem contar upsells. Um NRR alto pode mascarar evasão massiva de clientes descontentes se o GRR estiver baixo (&lt; 85%).
-              </div>
-            </div>
-
-            {/* Gráficos de Barras NRR e GRR */}
-            <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              
-              {/* NRR Bar */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
-                  <div>
-                    <strong style={{ fontSize: '14px', color: 'var(--green)' }}>NRR (Retenção Líquida)</strong>
-                    <span style={{ fontSize: '11px', color: 'var(--text3)', marginLeft: '6px' }}>Inclui Expansões/Upsell</span>
-                  </div>
-                  <strong style={{ fontSize: '20px', fontFamily: "'DM Mono', monospace", color: 'var(--green)' }}>124%</strong>
-                </div>
-                <div style={{ width: '100%', height: '12px', background: 'var(--surface2)', borderRadius: '6px', overflow: 'hidden', position: 'relative' }}>
-                  <div style={{ width: '100%', height: '100%', background: 'linear-gradient(90deg, var(--accent), var(--green))', borderRadius: '6px' }} />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text3)', marginTop: '4px' }}>
-                  <span>0%</span>
-                  <span>Limiar de Sobrevivência (100%)</span>
-                  <span style={{ color: 'var(--green)', fontWeight: 700 }}>Meta Zênite (120%+)</span>
-                </div>
-              </div>
-
-              {/* GRR Bar */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
-                  <div>
-                    <strong style={{ fontSize: '14px', color: 'var(--accent)' }}>GRR (Retenção Bruta)</strong>
-                    <span style={{ fontSize: '11px', color: 'var(--text3)', marginLeft: '6px' }}>Teto máximo de 100%</span>
-                  </div>
-                  <strong style={{ fontSize: '20px', fontFamily: "'DM Mono', monospace", color: 'var(--accent)' }}>92%</strong>
-                </div>
-                <div style={{ width: '100%', height: '12px', background: 'var(--surface2)', borderRadius: '6px', overflow: 'hidden' }}>
-                  <div style={{ width: '92%', height: '100%', background: 'var(--accent)', borderRadius: '6px' }} />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text3)', marginTop: '4px' }}>
-                  <span>Risco de Produto (&lt; 80%)</span>
-                  <span>Média Aceitável (85%)</span>
-                  <span style={{ color: 'var(--accent)', fontWeight: 700 }}>Saudável (90%+)</span>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-        </div>
-      )}
-
-      {/* ════════════════════════════════════════════════════════════════════
-          ABA 4: SAÚDE DO CLIENTE (HEALTH SCORE & CSAT/NPS/CES)
-         ════════════════════════════════════════════════════════════════════ */}
-      {abaAtiva === 'health' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.25s ease' }}>
-          
-          {/* Signal Stack & Pesos do Health Score */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
-            
-            {/* Explicação da Matriz 0-100 */}
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', padding: '22px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                <span style={{ fontSize: '20px' }}>💓</span>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>O "Signal Stack": Índice Holístico (0-100)</h3>
-              </div>
-              <p style={{ fontSize: '13px', color: 'var(--text2)', lineHeight: 1.6, marginBottom: '16px' }}>
-                A administração moderna abole a espera pelo cancelamento formal (churn logístico). O <strong>Customer Health Score</strong> antecipa microfissuras e desintegração meses antes de acontecer, pesando 5 dimensões vitais:
-              </p>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {[
-                  { dim: '1. Adoção & Uso do Produto Core', peso: '35%', desc: 'Assiduidade diária (DAU/WAU) e uso de funções nucleares.', cor: 'var(--green)' },
-                  { dim: '2. Engajamento Mútuo & QBRs', peso: '25%', desc: 'Presença em reuniões executivas e sentimento em tickets (NLP).', cor: 'var(--accent)' },
-                  { dim: '3. Marcos Cronológicos (Milestones)', peso: '20%', desc: 'Sucesso no Onboarding e ativação de módulos essenciais no prazo.', cor: 'var(--yellow)' },
-                  { dim: '4. Fortaleza do Relacionamento', peso: '10%', desc: 'Estabilidade do Champion/Sponsor e conexões multi-stakeholder.', cor: 'var(--purple)' },
-                  { dim: '5. Recência & Fatores Externos', peso: '10%', desc: 'Decaimento temporal de contato, notícias de layoffs ou fusões.', cor: 'var(--red)' },
-                ].map((item, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--surface2)', borderRadius: '8px' }}>
-                    <div>
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)' }}>{item.dim}</span>
-                      <div style={{ fontSize: '11px', color: 'var(--text3)' }}>{item.desc}</div>
-                    </div>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: item.cor, fontFamily: "'DM Mono', monospace", background: 'rgba(0,0,0,0.3)', padding: '2px 8px', borderRadius: '6px' }}>
-                      {item.peso}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Termômetros de Satisfação (NPS, CSAT, CES) */}
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>🏷️ Termômetros da Camada Semântica</h3>
-                <span style={{ fontSize: '11px', color: 'var(--text3)' }}>Sem Survey Gaming</span>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                
-                {/* NPS */}
-                <div style={{ background: 'var(--surface2)', padding: '14px', borderRadius: '12px', borderLeft: '4px solid var(--green)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <strong style={{ fontSize: '14px', color: 'var(--text)' }}>NPS (Net Promoter Score)</strong>
-                    <span style={{ fontSize: '22px', fontWeight: 800, color: 'var(--green)', fontFamily: "'DM Mono', monospace" }}>+74</span>
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '4px' }}>
-                    Mede lealdade dogmática e recomendação espontânea da marca. NPS alto blinda contra deserções contratuais massivas.
-                  </div>
-                </div>
-
-                {/* CSAT */}
-                <div style={{ background: 'var(--surface2)', padding: '14px', borderRadius: '12px', borderLeft: '4px solid var(--accent)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <strong style={{ fontSize: '14px', color: 'var(--text)' }}>CSAT (Customer Satisfaction)</strong>
-                    <span style={{ fontSize: '22px', fontWeight: 800, color: 'var(--accent)', fontFamily: "'DM Mono', monospace" }}>94%</span>
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '4px' }}>
-                    Termômetro cirúrgico focado em interações pontuais e imediatas (ex: atendimento de suporte ou resolução de ticket).
-                  </div>
-                </div>
-
-                {/* CES */}
-                <div style={{ background: 'var(--surface2)', padding: '14px', borderRadius: '12px', borderLeft: '4px solid var(--yellow)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <strong style={{ fontSize: '14px', color: 'var(--text)' }}>CES (Customer Effort Score)</strong>
-                    <span style={{ fontSize: '22px', fontWeight: 800, color: 'var(--yellow)', fontFamily: "'DM Mono', monospace" }}>1.8 / 7</span>
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '4px' }}>
-                    Mede atrito e burocracia absurda. Baixo esforço (&lt; 2.5) é o maior previsor de prevenção contra churn burocrático e frustração.
-                  </div>
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          {/* Tabela de Contas Monitoradas no Health Score */}
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', padding: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
-              <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>🚨 Radar de Contas & Previsão de Churn (60-90 dias)</h3>
-                <span style={{ fontSize: '12px', color: 'var(--text3)' }}>IA prevê risco com 85% de exatidão, permitindo resgatar de 30% a 50% dos contratos em perigo.</span>
-              </div>
-            </div>
-
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+            {/* Matriz de SLAs */}
+            <Card>
+              <SectionTitle icon="📋" title="Matriz de SLAs por Canal" />
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text3)', fontSize: '11px', textTransform: 'uppercase' }}>
-                    <th style={{ padding: '10px 8px' }}>Cliente / Conta</th>
-                    <th style={{ padding: '10px 8px' }}>ARR</th>
-                    <th style={{ padding: '10px 8px' }}>Health Score</th>
-                    <th style={{ padding: '10px 8px' }}>Adoção Core</th>
-                    <th style={{ padding: '10px 8px' }}>QBR</th>
-                    <th style={{ padding: '10px 8px' }}>Risco</th>
-                    <th style={{ padding: '10px 8px' }}>Ação Recomendada (CSM / RevOps)</th>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    {['Canal', 'Prioridade', 'SLA', 'Escalada'].map(h => (
+                      <th key={h} style={{ padding: '6px 4px', color: 'var(--text3)', fontWeight: 600, textAlign: 'left', fontSize: '10px', textTransform: 'uppercase' }}>{h}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {healthAccounts.map(acc => (
-                    <tr key={acc.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '14px 8px', fontWeight: 600, color: 'var(--text)' }}>
-                        {acc.nome} <span style={{ fontSize: '11px', color: 'var(--text3)', fontWeight: 400 }}>({acc.plano})</span>
+                  {[
+                    { canal: 'Inbound / Demo', prio: 'Tier 1', sla: '≤ 5 min', cor: 'var(--red)', bg: 'rgba(239,68,68,0.15)', escalada: 'Atraso 10 min → Alerta à chefia' },
+                    { canal: 'Redes Sociais', prio: 'Tier 2', sla: '≤ 15 min', cor: 'var(--yellow)', bg: 'rgba(245,158,11,0.15)', escalada: 'Atraso 30 min → Round-Robin' },
+                    { canal: 'Indicação', prio: 'Moderada', sla: '≤ 60 min', cor: 'var(--accent)', bg: 'rgba(0,210,223,0.12)', escalada: 'Atraso 2h → Relatório para liderança' },
+                    { canal: 'Back-office', prio: 'Suporte', sla: '3-7 dias', cor: 'var(--text3)', bg: 'var(--surface2)', escalada: 'Importação / higienização de listas' },
+                  ].map((row, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '10px 4px', fontWeight: 600, color: 'var(--text)' }}>{row.canal}</td>
+                      <td style={{ padding: '10px 4px' }}>
+                        <span style={{ background: row.bg, color: row.cor, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>
+                          {row.prio}
+                        </span>
                       </td>
-                      <td style={{ padding: '14px 8px', fontFamily: "'DM Mono', monospace" }}>{acc.arr}</td>
-                      <td style={{ padding: '14px 8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <div style={{ width: '36px', height: '6px', background: 'var(--surface2)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <td style={{ padding: '10px 4px', fontFamily: "'DM Mono', monospace", fontWeight: 600 }}>{row.sla}</td>
+                      <td style={{ padding: '10px 4px', color: 'var(--text3)' }}>{row.escalada}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+
+            {/* Custo do Funil */}
+            <Card>
+              <SectionTitle icon="⚖️" title="Custo Ponderado do Funil" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {[
+                  { etapa: 'Lead Bruto → MQL', conv: '25%', custo: 'R$ 200 – 500',   cor: 'var(--text3)', desc: 'Filtro demográfico e interação digital' },
+                  { etapa: 'MQL → SQL',         conv: '40%', custo: 'R$ 800 – 2.000', cor: 'var(--accent)', desc: 'Validação humana: BANT / MEDDIC' },
+                  { etapa: 'SQL → Oportunidade',conv: '60%', custo: 'R$ 1.500 – 3.000',cor: 'var(--yellow)',desc: 'Budget definido e cronograma confirmado' },
+                  { etapa: 'Opp → Venda',       conv: '30%', custo: 'CAC consolidado', cor: 'var(--green)', desc: 'Assinatura e início de onboarding' },
+                ].map((st, i) => (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '10px 12px', background: 'var(--surface2)', borderRadius: '8px',
+                    borderLeft: `3px solid ${st.cor}`
+                  }}>
+                    <div>
+                      <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)' }}>{st.etapa}</div>
+                      <div style={{ fontSize: '10px', color: 'var(--text3)' }}>{st.desc}</div>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: st.cor, fontFamily: "'DM Mono', monospace" }}>{st.conv}</div>
+                      <div style={{ fontSize: '10px', color: 'var(--text2)' }}>{st.custo}</div>
+                    </div>
+                  </div>
+                ))}
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '8px 12px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px',
+                  border: '1px solid var(--border)', fontSize: '11px'
+                }}>
+                  <span style={{ color: 'var(--text3)' }}>Taxa Global Lead → Fechamento:</span>
+                  <strong style={{ color: 'var(--accent)', fontFamily: "'DM Mono', monospace" }}>~1.8% (B2B médio)</strong>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════
+          ABA 3 — ECONOMIA DE UNIDADE
+         ══════════════════════════════════════════════════════ */}
+      {abaAtiva === 'unit' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+          {/* KPI Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+            <StatCard icon="💸" label="CAC (Custo de Aquisição)" value="R$ 1.450"
+              sub="~R$ 2 gastos para cada R$ 1 de ARR gerado. Referência saudável para PMEs." />
+            <StatCard icon="⏱️" label="CAC Payback Period" value="7.4 meses" color="var(--yellow)"
+              sub="Meta SMB: 8–12 meses. PLG alcança ~4.2 meses." />
+            <StatCard icon="💎" label="Rácio LTV : CAC" value="4.2 : 1" color="var(--green)"
+              sub="✓ Excelência (4:1 – 5:1). Mínimo existencial incontornável: 3:1." />
+            <StatCard icon="🔥" label="Rule of 40" value="48%" color="var(--accent)"
+              sub="Crescimento ARR (31%) + Margem Lucro (17%) > 40 pts. ✓ Aprovado." />
+          </div>
+
+          {/* NRR vs GRR */}
+          <Card>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', alignItems: 'flex-start' }}>
+              <div style={{ flex: '1 1 300px' }}>
+                <SectionTitle icon="📡" title="A Genética da Retenção: NRR vs GRR" badge="FAROL REVOPS" />
+                <p style={{ fontSize: '12px', color: 'var(--text2)', margin: '0 0 12px 0', lineHeight: 1.5 }}>
+                  Para modelos de assinatura, a <strong>NRR (Net Revenue Retention)</strong> é o supremo oráculo de viabilidade. Empresas com NRR de 120%+ multiplicam receita perpetuamente via upsells, sem precisar de novos clientes.
+                </p>
+                <div style={{ padding: '10px 12px', background: 'rgba(239,68,68,0.06)', borderRadius: '8px', borderLeft: '3px solid var(--red)', fontSize: '11px', color: 'var(--text2)' }}>
+                  ⚠️ <strong>Cuidado com GRR baixo:</strong> Um NRR alto pode mascarar evasão massiva se o GRR estiver abaixo de 85%. São métricas complementares.
+                </div>
+              </div>
+
+              <div style={{ flex: '1 1 260px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {[
+                  { label: 'NRR (Retenção Líquida)', sub: 'Inclui expansões e upsells', value: 124, pct: '124%', cor: 'var(--green)', gradient: true,
+                    notas: ['0%', 'Limiar (100%)', '🏆 Meta (120%+)'] },
+                  { label: 'GRR (Retenção Bruta)', sub: 'Teto máximo de 100%', value: 92, pct: '92%', cor: 'var(--accent)',
+                    notas: ['Risco (<80%)', 'Aceitável (85%)', '✓ Saudável (90%+)'] },
+                ].map((item, i) => (
+                  <div key={i}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '5px' }}>
+                      <div>
+                        <strong style={{ fontSize: '13px', color: item.cor }}>{item.label}</strong>
+                        <span style={{ fontSize: '10px', color: 'var(--text3)', marginLeft: '6px' }}>{item.sub}</span>
+                      </div>
+                      <strong style={{ fontSize: '18px', fontFamily: "'DM Mono', monospace", color: item.cor }}>{item.pct}</strong>
+                    </div>
+                    <div style={{ width: '100%', height: '10px', background: 'var(--surface2)', borderRadius: '5px', overflow: 'hidden' }}>
+                      <div style={{
+                        width: `${Math.min(item.value, 100)}%`, height: '100%', borderRadius: '5px',
+                        background: item.gradient ? 'linear-gradient(90deg, var(--accent), var(--green))' : item.cor
+                      }} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: 'var(--text3)', marginTop: '3px' }}>
+                      {item.notas.map((n, j) => <span key={j}>{n}</span>)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════
+          ABA 4 — SAÚDE DO CLIENTE
+         ══════════════════════════════════════════════════════ */}
+      {abaAtiva === 'health' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+          {/* Signal Stack + NPS/CSAT/CES */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+
+            {/* Pesos do Health Score */}
+            <Card>
+              <SectionTitle icon="💓" title='Índice "Signal Stack" (0-100)' />
+              <p style={{ fontSize: '11px', color: 'var(--text2)', margin: '0 0 12px 0', lineHeight: 1.4 }}>
+                Antecipa microfissuras e risco de churn meses antes que o cancelamento formal ocorra.
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {[
+                  { dim: 'Adoção & Uso do Produto Core',     peso: '35%', cor: 'var(--green)' },
+                  { dim: 'Engajamento Mútuo & QBRs',         peso: '25%', cor: 'var(--accent)' },
+                  { dim: 'Marcos de Onboarding (Milestones)',peso: '20%', cor: 'var(--yellow)' },
+                  { dim: 'Fortaleza do Relacionamento',       peso: '10%', cor: 'var(--purple)' },
+                  { dim: 'Recência & Fatores Externos',       peso: '10%', cor: 'var(--red)' },
+                ].map((item, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', background: 'var(--surface2)', borderRadius: '8px' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--text)' }}>{item.dim}</span>
+                    <span style={{
+                      fontSize: '11px', fontWeight: 700, color: item.cor,
+                      fontFamily: "'DM Mono', monospace", background: 'rgba(0,0,0,0.25)',
+                      padding: '2px 8px', borderRadius: '6px'
+                    }}>{item.peso}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            {/* NPS / CSAT / CES */}
+            <Card>
+              <SectionTitle icon="🏷️" title="Termômetros de Satisfação" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {[
+                  { nome: 'NPS — Net Promoter Score',    valor: '+74', cor: 'var(--green)',  desc: 'Mede lealdade e recomendação espontânea. NPS alto blinda contra deserções em massa.' },
+                  { nome: 'CSAT — Customer Satisfaction',valor: '94%', cor: 'var(--accent)', desc: 'Termômetro de interações pontuais (suporte, tickets). Útil para medir qualidade de atendimento.' },
+                  { nome: 'CES — Customer Effort Score', valor: '1.8/7',cor: 'var(--yellow)',desc: 'Mede atrito e burocracia. Esforço baixo (< 2.5) é o maior previsor de churn evitável.' },
+                ].map((item, i) => (
+                  <div key={i} style={{ background: 'var(--surface2)', padding: '12px', borderRadius: '10px', borderLeft: `3px solid ${item.cor}` }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <strong style={{ fontSize: '13px', color: 'var(--text)' }}>{item.nome}</strong>
+                      <span style={{ fontSize: '18px', fontWeight: 800, color: item.cor, fontFamily: "'DM Mono', monospace" }}>{item.valor}</span>
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text2)', lineHeight: 1.4 }}>{item.desc}</div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+
+          {/* Radar de Contas */}
+          <Card>
+            <SectionTitle icon="🚨" title="Radar de Contas — Previsão de Churn (60-90 dias)" />
+            <p style={{ fontSize: '11px', color: 'var(--text3)', margin: '0 0 14px 0' }}>
+              IA prevê risco com 85% de exatidão, permitindo resgatar de 30% a 50% dos contratos em perigo.
+            </p>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    {['Cliente', 'ARR', 'Health Score', 'Adoção', 'QBR', 'Risco', 'Ação Recomendada'].map(h => (
+                      <th key={h} style={{ padding: '8px 6px', color: 'var(--text3)', fontWeight: 600, textAlign: 'left', fontSize: '10px', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {healthContas.map((acc, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '12px 6px', fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap' }}>
+                        {acc.nome} <span style={{ fontSize: '10px', color: 'var(--text3)', fontWeight: 400 }}>({acc.plano})</span>
+                      </td>
+                      <td style={{ padding: '12px 6px', fontFamily: "'DM Mono', monospace' ", whiteSpace: 'nowrap' }}>{acc.arr}</td>
+                      <td style={{ padding: '12px 6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <div style={{ width: '32px', height: '5px', background: 'var(--surface2)', borderRadius: '3px', overflow: 'hidden', flexShrink: 0 }}>
                             <div style={{ width: `${acc.score}%`, height: '100%', background: acc.cor }} />
                           </div>
                           <strong style={{ color: acc.cor, fontFamily: "'DM Mono', monospace" }}>{acc.score}</strong>
                         </div>
                       </td>
-                      <td style={{ padding: '14px 8px', fontFamily: "'DM Mono', monospace" }}>{acc.adocao}%</td>
-                      <td style={{ padding: '14px 8px' }}>
+                      <td style={{ padding: '12px 6px', fontFamily: "'DM Mono', monospace" }}>{acc.adocao}%</td>
+                      <td style={{ padding: '12px 6px' }}>
                         <span style={{
-                          background: acc.qbr === 'Assíduo' || acc.qbr === 'Realizado' ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
-                          color: acc.qbr === 'Assíduo' || acc.qbr === 'Realizado' ? 'var(--green)' : 'var(--yellow)',
-                          padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600
-                        }}>
-                          {acc.qbr}
-                        </span>
+                          padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600,
+                          background: ['Assíduo','Realizado'].includes(acc.qbr) ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
+                          color: ['Assíduo','Realizado'].includes(acc.qbr) ? 'var(--green)' : 'var(--yellow)'
+                        }}>{acc.qbr}</span>
                       </td>
-                      <td style={{ padding: '14px 8px' }}>
-                        <span style={{ color: acc.cor, fontWeight: 700 }}>{acc.risco}</span>
-                      </td>
-                      <td style={{ padding: '14px 8px', color: 'var(--text2)', fontSize: '12px' }}>{acc.acao}</td>
+                      <td style={{ padding: '12px 6px', fontWeight: 700, color: acc.cor, whiteSpace: 'nowrap' }}>{acc.risco}</td>
+                      <td style={{ padding: '12px 6px', color: 'var(--text2)' }}>{acc.acao}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </div>
-
+          </Card>
         </div>
       )}
 
-      {/* ════════════════════════════════════════════════════════════════════
-          ABA 5: IA & PREDICTIVE LEAD SCORING (TRIAGEM PREDITIVA)
-         ════════════════════════════════════════════════════════════════════ */}
+      {/* ══════════════════════════════════════════════════════
+          ABA 5 — IA LEAD SCORING
+         ══════════════════════════════════════════════════════ */}
       {abaAtiva === 'scoring' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.25s ease' }}>
-          
-          {/* Introdução AI Lead Scoring */}
-          <div style={{
-            background: 'linear-gradient(135deg, var(--surface), rgba(139, 92, 246, 0.08))',
-            border: '1px solid var(--purple)', borderRadius: '16px', padding: '24px',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-              <span style={{
-                background: 'rgba(139, 92, 246, 0.2)', color: 'var(--purple)', padding: '2px 10px',
-                borderRadius: '6px', fontSize: '11px', fontWeight: 700
-              }}>
-                MACHINE LEARNING REVOPS
-              </span>
-            </div>
-            <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 10px 0', color: 'var(--text)' }}>
-              Subvertendo a Intuição com Inteligência Artificial
-            </h2>
-            <p style={{ fontSize: '13px', color: 'var(--text2)', margin: 0, lineHeight: 1.6, maxWidth: '800px' }}>
-              O <strong>Predictive Lead Scoring</strong> abole a dependência do instinto subjetivo e da adivinhação manual dos vendedores. Cruzando sinais firmográficos, canal de origem, engajamento e recência, nosso algoritmo categoriza com &gt;90% de exatidão a probabilidade real de fechamento, priorizando quem está pronto para comprar.
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+          {/* Intro */}
+          <Card style={{ borderColor: 'var(--purple)', background: 'linear-gradient(135deg, var(--surface), rgba(139,92,246,0.06))' }}>
+            <SectionTitle icon="🤖" title="Predictive Lead Scoring — Triagem com IA" badge="ML REVOPS" />
+            <p style={{ fontSize: '12px', color: 'var(--text2)', margin: 0, lineHeight: 1.5, maxWidth: '700px' }}>
+              Cruzando sinais firmográficos, canal de origem, engajamento e recência, o algoritmo classifica a <strong>probabilidade real de fechamento</strong> de cada lead com precisão superior a 90%, priorizando automaticamente quem está pronto para comprar.
             </p>
-          </div>
+          </Card>
 
-          {/* Simulador / Seletor de Leads Reais para Scoring */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
-            
-            {/* Seletor de Lead do CRM */}
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>🔍 Selecione um Lead do seu CRM para Auditoria IA</h3>
-              <p style={{ fontSize: '12px', color: 'var(--text3)', margin: 0 }}>
-                Escolha qualquer contato na sua base para ver o raio-x preditivo em tempo real.
-              </p>
+          {/* Seletor + Resultado lado a lado */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
 
-              <select
-                value={leadSelecionadoId}
-                onChange={e => setLeadSelecionadoId(e.target.value)}
-                style={{
-                  width: '100%', padding: '12px', borderRadius: '10px', background: 'var(--surface2)',
-                  border: '1px solid var(--border)', color: 'var(--text)', fontSize: '14px', outline: 'none', cursor: 'pointer'
-                }}
-              >
-                <option value="">-- Selecione o lead ({leads.length} disponíveis) --</option>
+            {/* Seletor */}
+            <Card>
+              <SectionTitle icon="🔍" title="Selecione um Lead do CRM" />
+              <select value={leadId} onChange={e => setLeadId(e.target.value)} style={{
+                width: '100%', padding: '10px 12px', borderRadius: '8px',
+                background: 'var(--surface2)', border: '1px solid var(--border)',
+                color: 'var(--text)', fontSize: '13px', outline: 'none', cursor: 'pointer', marginBottom: '14px'
+              }}>
+                <option value="">-- {leads.length} leads disponíveis --</option>
                 {leads.map(l => (
                   <option key={l.id} value={l.id}>
-                    {l.nome || 'Sem nome'} | Status: {l.status} | Origem: {l.origem || 'Outro'}
+                    {l.nome || 'Sem nome'} | {l.status} | {l.origem || 'Sem origem'}
                   </option>
                 ))}
               </select>
 
-              {leadScored?.lead && (
-                <div style={{ background: 'var(--surface2)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)', marginTop: '6px' }}>
-                  <div style={{ fontSize: '11px', color: 'var(--text3)', textTransform: 'uppercase', marginBottom: '8px' }}>
-                    Resumo do Lead no CRM
+              {scored?.lead && (
+                <div style={{ background: 'var(--surface2)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text)', marginBottom: '10px' }}>
+                    {scored.lead.nome || 'Lead sem nome'}
                   </div>
-                  <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text)', marginBottom: '4px' }}>
-                    {leadScored.lead.nome || 'Cliente Sem Nome'}
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px', color: 'var(--text2)', marginTop: '8px' }}>
-                    <div><strong>Email:</strong> {leadScored.lead.email || 'Não informado'}</div>
-                    <div><strong>WhatsApp:</strong> {leadScored.lead.whatsapp || leadScored.lead.telefone || 'Não informado'}</div>
-                    <div><strong>Nicho:</strong> {leadScored.lead.nicho || 'Geral'}</div>
-                    <div><strong>Responsável:</strong> {leadScored.lead.responsavel || 'Sem dono'}</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '11px', color: 'var(--text2)' }}>
+                    <div><span style={{ color: 'var(--text3)' }}>Status: </span>{scored.lead.status || '—'}</div>
+                    <div><span style={{ color: 'var(--text3)' }}>Origem: </span>{scored.lead.origem || '—'}</div>
+                    <div><span style={{ color: 'var(--text3)' }}>E-mail: </span>{scored.lead.email || '—'}</div>
+                    <div><span style={{ color: 'var(--text3)' }}>Nicho: </span>{scored.lead.nicho || '—'}</div>
+                    <div><span style={{ color: 'var(--text3)' }}>Responsável: </span>{scored.lead.responsavel || '—'}</div>
                   </div>
                 </div>
               )}
-            </div>
+            </Card>
 
-            {/* Raio-X do Score AI */}
-            <div style={{
-              background: 'var(--surface)', border: `2px solid ${leadScored?.cor || 'var(--border)'}`,
-              borderRadius: '16px', padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px',
-              boxShadow: leadScored ? `0 8px 32px ${leadScored.cor}22` : 'none'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', fontWeight: 700, color: leadScored?.cor || 'var(--text3)', textTransform: 'uppercase' }}>
-                  {leadScored?.tier || 'Aguardando seleção'}
+            {/* Score Resultado */}
+            <Card style={{ border: `1px solid ${scored?.cor || 'var(--border)'}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: scored?.cor || 'var(--text3)', textTransform: 'uppercase' }}>
+                  {scored?.tier || 'Aguardando seleção'}
                 </span>
-                <span style={{ fontSize: '11px', color: 'var(--text3)' }}>Precisão IA: 91.4%</span>
+                <span style={{ fontSize: '10px', color: 'var(--text3)', background: 'var(--surface2)', padding: '2px 8px', borderRadius: '6px' }}>
+                  Precisão IA: 91.4%
+                </span>
               </div>
 
-              {leadScored ? (
+              {scored ? (
                 <>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', margin: '4px 0' }}>
-                    <span style={{ fontSize: '48px', fontWeight: 800, color: leadScored.cor, fontFamily: "'DM Mono', monospace", lineHeight: 1 }}>
-                      {leadScored.score}
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '10px' }}>
+                    <span style={{ fontSize: '52px', fontWeight: 800, color: scored.cor, fontFamily: "'DM Mono', monospace", lineHeight: 1 }}>
+                      {scored.score}
                     </span>
-                    <span style={{ fontSize: '16px', color: 'var(--text3)' }}>/ 100 pts (Propensão de Fechamento)</span>
+                    <span style={{ fontSize: '14px', color: 'var(--text3)' }}>/ 100 pts</span>
                   </div>
 
-                  {/* Barra de Progresso */}
-                  <div style={{ width: '100%', height: '8px', background: 'var(--surface2)', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div style={{ width: `${leadScored.score}%`, height: '100%', background: leadScored.cor, transition: 'width 0.4s ease' }} />
+                  <div style={{ width: '100%', height: '6px', background: 'var(--surface2)', borderRadius: '3px', overflow: 'hidden', marginBottom: '12px' }}>
+                    <div style={{ width: `${scored.score}%`, height: '100%', background: scored.cor, transition: 'width 0.4s ease' }} />
                   </div>
 
-                  {/* Ação Direcionada */}
-                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '13px' }}>
-                    <strong style={{ color: '#fff' }}>Ação Recomendada: </strong>
-                    <span style={{ color: 'var(--text2)' }}>{leadScored.acao}</span>
+                  <div style={{ background: 'rgba(0,0,0,0.25)', padding: '10px', borderRadius: '8px', fontSize: '12px', marginBottom: '12px', border: '1px solid var(--border)' }}>
+                    <strong style={{ color: 'var(--text)' }}>Ação Recomendada: </strong>
+                    <span style={{ color: 'var(--text2)' }}>{scored.acao}</span>
                   </div>
 
-                  {/* Detalhamento dos Sinais */}
-                  <div>
-                    <div style={{ fontSize: '11px', color: 'var(--text3)', textTransform: 'uppercase', marginBottom: '8px' }}>
-                      Sinais Detectados pelo Algoritmo
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
-                      {leadScored.sinais.map((s, idx) => (
-                        <div key={idx} style={{
-                          fontSize: '12px', padding: '6px 10px', borderRadius: '6px',
-                          background: s.tipo === 'pos' ? 'rgba(16, 185, 129, 0.1)' : s.tipo === 'neg' ? 'rgba(239, 68, 68, 0.1)' : 'var(--surface2)',
-                          color: s.tipo === 'pos' ? 'var(--green)' : s.tipo === 'neg' ? 'var(--red)' : 'var(--text2)',
-                          borderLeft: `3px solid ${s.tipo === 'pos' ? 'var(--green)' : s.tipo === 'neg' ? 'var(--red)' : 'var(--text3)'}`
-                        }}>
-                          {s.texto}
-                        </div>
-                      ))}
-                    </div>
+                  <div style={{ fontSize: '10px', color: 'var(--text3)', textTransform: 'uppercase', marginBottom: '6px' }}>
+                    Sinais do Algoritmo
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', maxHeight: '160px', overflowY: 'auto' }}>
+                    {scored.sinais.map((s, i) => (
+                      <div key={i} style={{
+                        fontSize: '11px', padding: '5px 8px', borderRadius: '6px',
+                        background: s.t === '+' ? 'rgba(16,185,129,0.1)' : s.t === '-' ? 'rgba(239,68,68,0.1)' : 'var(--surface2)',
+                        color: s.t === '+' ? 'var(--green)' : s.t === '-' ? 'var(--red)' : 'var(--text2)',
+                        borderLeft: `2px solid ${s.t === '+' ? 'var(--green)' : s.t === '-' ? 'var(--red)' : 'var(--text3)'}`
+                      }}>
+                        {s.txt}
+                      </div>
+                    ))}
                   </div>
                 </>
               ) : (
-                <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text3)', fontSize: '14px' }}>
-                  👈 Selecione um lead à esquerda ou cadastre novos contatos para ver o score preditivo.
+                <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text3)', fontSize: '13px' }}>
+                  👈 Selecione um lead para ver o score preditivo
                 </div>
               )}
-            </div>
-
+            </Card>
           </div>
 
-          {/* Aviso Legal de Governança sobre Dados e IA */}
+          {/* Nota de Governança */}
           <div style={{
-            background: 'var(--surface2)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)',
-            display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12px', color: 'var(--text2)'
+            display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '12px 16px',
+            background: 'var(--surface2)', borderRadius: '10px', border: '1px solid var(--border)', fontSize: '11px', color: 'var(--text2)'
           }}>
-            <span style={{ fontSize: '20px' }}>⚖️</span>
+            <span style={{ fontSize: '16px', flexShrink: 0 }}>⚖️</span>
             <div>
-              <strong style={{ color: 'var(--text)' }}>Regra de Ouro de Governança RevOps (Regra 1-10-100):</strong> Custa $1 para validar um dado na entrada, $10 para limpar depois e $100 em prejuízo quando dados falhos (como duplicidades ou e-mails sem validação regex) poluem os algoritmos de predição de IA. Mantenha sua taxa de validade de e-mails &gt; 90% e duplicidade &lt; 3%.
+              <strong style={{ color: 'var(--text)' }}>Regra de Ouro de Governança (Regra 1-10-100):</strong>{' '}
+              Custa R$ 1 para validar um dado na entrada, R$ 10 para limpar depois e R$ 100 em prejuízo quando dados falhos poluem os algoritmos de predição de IA.
+              Mantenha validade de e-mails &gt; 90% e duplicidade &lt; 3%.
             </div>
           </div>
-
         </div>
       )}
 
