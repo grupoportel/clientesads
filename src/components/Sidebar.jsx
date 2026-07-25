@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { id: 'emails',        icon: '✉️', label: 'E-mails' },
   { id: 'agenda',        icon: '📅', label: 'Agenda' },
   { id: 'financeiro',    icon: '💰', label: 'Financeiro' },
+  { id: 'metricas',      icon: '🎯', label: 'Métricas' },
   { id: 'relatorios',    icon: '📈', label: 'Relatórios' },
 ];
 

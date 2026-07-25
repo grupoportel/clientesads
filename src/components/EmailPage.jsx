@@ -106,8 +106,10 @@ export default function EmailPage({ leads = [] }) {
   const threadsFiltradas = threads.filter((t) => {
     const matchFiltro =
       filtro === 'todos' ||
-      (filtro === 'inbox' && t.origem === 'entrada') ||
-      (filtro === 'enviados' && t.origem === 'saida');
+      // Recebidos: threads criadas por clientes OU threads enviadas que receberam respostas
+      (filtro === 'inbox' && (t.origem === 'entrada' || t.temResposta === true || t.naoLidas > 0)) ||
+      // Enviados: apenas threads que saíram e ainda não tiveram resposta
+      (filtro === 'enviados' && t.origem === 'saida' && !t.temResposta);
     const matchBusca =
       !busca ||
       (t.nome || '').toLowerCase().includes(busca.toLowerCase()) ||

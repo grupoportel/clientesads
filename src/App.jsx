@@ -25,6 +25,7 @@ import RelatoriosPage from './components/RelatoriosPage';
 import ConfigPage from './components/ConfigPage';
 import ConversasPage from './components/ConversasPage';
 import EmailPage from './components/EmailPage';
+import MetricasPage from './components/MetricasPage';
 
 import './index.css';
 
@@ -365,6 +366,8 @@ function App() {
         return <AgendaPage leads={leads} />;
       case 'financeiro':
         return <FinanceiroPage leads={leads} />;
+      case 'metricas':
+        return <MetricasPage leads={leads} />;
       case 'relatorios':
         return <RelatoriosPage leads={leads} />;
       case 'config':
