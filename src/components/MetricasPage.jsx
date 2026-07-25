@@ -247,58 +247,168 @@ export default function MetricasPage({ leads = [] }) {
   const velBase = calcVel(simOpps || 10, simTicket, simWin, simCiclo, 0);
   const velOpt  = calcVel(simOpps || 10, simTicket, simWin, simCiclo, optPct);
 
-  // ── IA Lead Scoring ──
-  const scored = useMemo(() => {
-    const alvo = leads.find(l => l.id === leadId) || leads[0];
-    if (!alvo) return null;
+  // ═══════════════════════════════════════════════════════════
+  // FUNÇÃO CENTRAL DE SCORING — 15 sinais, todos campos reais
+  // Usada tanto no score individual quanto na distribuição geral
+  // ═══════════════════════════════════════════════════════════
+  const calcScore = (l) => {
     let pts = 50;
     const sinais = [];
+    const hoje = new Date().toISOString().slice(0, 10);
 
-    // Origem
-    if (['whatsapp', 'indicacao'].includes(alvo.origem))        { pts += 15; sinais.push({ t: '+', txt: `Origem de alta confiança: ${alvo.origem} [+15]` }); }
-    else if (['instagram', 'site'].includes(alvo.origem))       { pts += 10; sinais.push({ t: '+', txt: `Canal digital rastreável: ${alvo.origem} [+10]` }); }
-    else if (['gmn', 'telefone'].includes(alvo.origem))         { pts += 5;  sinais.push({ t: '+', txt: `Canal direto: ${alvo.origem} [+5]` }); }
-    else                                                         {           sinais.push({ t: '=', txt: `Origem não informada [0]` }); }
-
-    // Estágio no funil
-    if (['reuniao-marcada', 'contrato-realizado'].includes(alvo.status))  { pts += 30; sinais.push({ t: '+', txt: `Estágio avançado: ${alvo.status} [+30]` }); }
-    else if (['contato-decisor'].includes(alvo.status))                   { pts += 20; sinais.push({ t: '+', txt: `Contato com decisor confirmado [+20]` }); }
-    else if (['ligacao-feita', 'lead-qualificado'].includes(alvo.status)) { pts += 10; sinais.push({ t: '+', txt: `Em qualificação ativa [+10]` }); }
-    else if (alvo.status === 'perda')                                      { pts -= 40; sinais.push({ t: '-', txt: `Marcado como perda [-40]` }); }
-    else if (alvo.status === 'nenhum')                                     { pts -= 10; sinais.push({ t: '-', txt: `Sem nenhuma ação registrada [-10]` }); }
-
-    // Dados de contato
-    if (alvo.email?.includes('@'))           { pts += 5;  sinais.push({ t: '+', txt: 'E-mail válido cadastrado [+5]' }); }
-    else                                     { pts -= 8;  sinais.push({ t: '-', txt: 'E-mail ausente ou inválido [-8]' }); }
-
-    if (alvo.whatsapp || alvo.telefone)      { pts += 5;  sinais.push({ t: '+', txt: 'Telefone/WhatsApp disponível [+5]' }); }
-    else                                     { pts -= 5;  sinais.push({ t: '-', txt: 'Sem contato direto cadastrado [-5]' }); }
-
-    // Decisor confirmado
-    if (alvo.decisor)                        { pts += 8;  sinais.push({ t: '+', txt: 'Decisor identificado e registrado [+8]' }); }
-
-    // Reunião marcada
-    if (alvo.reuniao && alvo.reuniao >= new Date().toISOString().slice(0,10)) {
-      pts += 10; sinais.push({ t: '+', txt: `Reunião agendada para ${alvo.reuniao} [+10]` });
+    // 1. ORIGEM DO LEAD ───────────────────────────────────────
+    if (['whatsapp', 'indicacao'].includes(l.origem)) {
+      pts += 15; sinais.push({ t: '+', cat: 'Origem', txt: `Canal de alta confiança: ${l.origem === 'indicacao' ? 'Indicação pessoal' : 'WhatsApp'} [+15]` });
+    } else if (['instagram', 'site'].includes(l.origem)) {
+      pts += 10; sinais.push({ t: '+', cat: 'Origem', txt: `Canal digital rastreável: ${l.origem} [+10]` });
+    } else if (['gmn', 'telefone', 'email'].includes(l.origem)) {
+      pts += 6;  sinais.push({ t: '+', cat: 'Origem', txt: `Contato direto via ${l.origem} [+6]` });
+    } else {
+      sinais.push({ t: '=', cat: 'Origem', txt: 'Origem não informada — rastreamento comprometido [0]' });
     }
 
-    // Recência de atualização
-    if (alvo.updatedAt) {
-      const dias = Math.floor((Date.now() - new Date(alvo.updatedAt)) / 86400000);
-      if (dias <= 2)       { pts += 10; sinais.push({ t: '+', txt: `Atividade recente: ${dias === 0 ? 'hoje' : dias + ' dia(s) atrás'} [+10]` }); }
-      else if (dias > 14)  { pts -= 12; sinais.push({ t: '-', txt: `Sem atividade há ${dias} dias [-12]` }); }
+    // 2. ESTÁGIO NO FUNIL ────────────────────────────────────
+    if (['reuniao-marcada', 'contrato-realizado'].includes(l.status)) {
+      pts += 30; sinais.push({ t: '+', cat: 'Funil', txt: `Estágio avançado: ${l.status === 'reuniao-marcada' ? 'Reunião Marcada' : 'Contrato Realizado'} [+30]` });
+    } else if (l.status === 'contato-decisor') {
+      pts += 20; sinais.push({ t: '+', cat: 'Funil', txt: 'Chegou ao decisor — grande avanço na negociação [+20]' });
+    } else if (['ligacao-feita', 'lead-qualificado'].includes(l.status)) {
+      pts += 10; sinais.push({ t: '+', cat: 'Funil', txt: `Em qualificação ativa: ${l.status === 'ligacao-feita' ? 'Ligação feita' : 'Lead qualificado'} [+10]` });
+    } else if (l.status === 'perda') {
+      pts -= 40; sinais.push({ t: '-', cat: 'Funil', txt: 'Marcado como perda [-40]' });
+    } else if (l.status === 'nenhum') {
+      pts -= 10; sinais.push({ t: '-', cat: 'Funil', txt: 'Sem nenhuma ação registrada no CRM [-10]' });
+    }
+
+    // 3. CANAIS DE CONTATO DIRETO ────────────────────────────
+    if (l.whatsapp && l.telefone) {
+      pts += 8;  sinais.push({ t: '+', cat: 'Contato', txt: 'WhatsApp + Telefone cadastrados — dois canais disponíveis [+8]' });
+    } else if (l.whatsapp || l.telefone) {
+      pts += 5;  sinais.push({ t: '+', cat: 'Contato', txt: `${l.whatsapp ? 'WhatsApp' : 'Telefone'} cadastrado [+5]` });
     } else {
-      pts -= 10; sinais.push({ t: '-', txt: 'Data de atualização não registrada [-10]' });
+      pts -= 8;  sinais.push({ t: '-', cat: 'Contato', txt: 'Sem telefone nem WhatsApp — contato direto impossível [-8]' });
+    }
+
+    // 4. E-MAIL ──────────────────────────────────────────────
+    if (l.email?.includes('@')) {
+      pts += 5;  sinais.push({ t: '+', cat: 'Contato', txt: `E-mail válido: ${l.email} [+5]` });
+    } else {
+      pts -= 6;  sinais.push({ t: '-', cat: 'Contato', txt: 'E-mail ausente ou inválido — higiene comprometida [-6]' });
+    }
+
+    // 5. DECISOR IDENTIFICADO ────────────────────────────────
+    if (l.decisor) {
+      pts += 10; sinais.push({ t: '+', cat: 'Qualificação', txt: `Decisor identificado: "${l.decisor}" — elimina gatekeepers [+10]` });
+    } else {
+      pts -= 5;  sinais.push({ t: '-', cat: 'Qualificação', txt: 'Decisor não identificado — risco de bloqueio por intermediário [-5]' });
+    }
+
+    // 6. OPORTUNIDADES MAPEADAS ──────────────────────────────
+    if (l.oportunidades && l.oportunidades.trim().length > 10) {
+      pts += 10; sinais.push({ t: '+', cat: 'Qualificação', txt: `Oportunidades mapeadas: "${l.oportunidades.trim().slice(0, 70)}${l.oportunidades.length > 70 ? '...' : ''}" [+10]` });
+    } else {
+      pts -= 5;  sinais.push({ t: '-', cat: 'Qualificação', txt: 'Campo "Oportunidades" vazio — proposta sem embasamento estratégico [-5]' });
+    }
+
+    // 7. PONTOS FORTES / DIFERENCIAL DO CLIENTE ─────────────
+    if (l.pontos && l.pontos.trim().length > 10) {
+      pts += 6;  sinais.push({ t: '+', cat: 'Qualificação', txt: `Pontos fortes registrados: "${l.pontos.trim().slice(0, 70)}${l.pontos.length > 70 ? '...' : ''}" [+6]` });
+    } else {
+      sinais.push({ t: '=', cat: 'Qualificação', txt: 'Pontos fortes/diferenciais não preenchidos — diagnóstico incompleto [0]' });
+    }
+
+    // 8. POTENCIAL DE ESCALA ─────────────────────────────────
+    if (l.escalar && l.escalar.trim().length > 5) {
+      pts += 8;  sinais.push({ t: '+', cat: 'Potencial', txt: `Potencial de escala identificado: "${l.escalar.trim().slice(0, 70)}${l.escalar.length > 70 ? '...' : ''}" — maior LTV esperado [+8]` });
+    } else {
+      sinais.push({ t: '=', cat: 'Potencial', txt: 'Potencial de escala não avaliado [0]' });
+    }
+
+    // 9. REUNIÃO FUTURA CONFIRMADA ───────────────────────────
+    if (l.reuniao && l.reuniao >= hoje) {
+      pts += 12; sinais.push({ t: '+', cat: 'Engajamento', txt: `Reunião confirmada para ${l.reuniao} — compromisso firme de compra [+12]` });
+    } else if (l.reuniao && l.reuniao < hoje) {
+      sinais.push({ t: '=', cat: 'Engajamento', txt: `Reunião já ocorreu em ${l.reuniao} — verificar andamento pós-reunião [0]` });
+    }
+
+    // 10. NOTA E AVALIAÇÕES GOOGLE ───────────────────────────
+    const nota = parseFloat(l.nota || 0);
+    const avals = parseInt(l.avaliacoes || 0);
+    if (nota >= 4.5 && avals >= 50) {
+      pts += 8;  sinais.push({ t: '+', cat: 'Autoridade', txt: `Google: ${nota}⭐ com ${avals} avaliações — negócio estabelecido e confiável [+8]` });
+    } else if (nota >= 4.0 && avals >= 20) {
+      pts += 5;  sinais.push({ t: '+', cat: 'Autoridade', txt: `Google: ${nota}⭐ com ${avals} avaliações — boa reputação local [+5]` });
+    } else if (nota > 0) {
+      pts += 2;  sinais.push({ t: '+', cat: 'Autoridade', txt: `Google Maps registrado: ${nota}⭐ (${avals} aval.) [+2]` });
+    } else {
+      sinais.push({ t: '=', cat: 'Autoridade', txt: 'Nota Google não cadastrada — autoridade do negócio desconhecida [0]' });
+    }
+
+    // 11. PRESENÇA DIGITAL (Site + Instagram) ────────────────
+    const temSite   = l.site && l.site.trim().length > 4;
+    const temIG     = l.instagram && l.instagram.trim().length > 1;
+    const temIGDono = l.ig_dono && l.ig_dono.trim().length > 1;
+    if (temSite && temIG) {
+      pts += 6;  sinais.push({ t: '+', cat: 'Presença Digital', txt: 'Site + Instagram da empresa cadastrados — presença digital completa [+6]' });
+    } else if (temSite || temIG) {
+      pts += 3;  sinais.push({ t: '+', cat: 'Presença Digital', txt: `${temSite ? 'Site' : 'Instagram'} cadastrado [+3]` });
+    } else {
+      sinais.push({ t: '=', cat: 'Presença Digital', txt: 'Sem site nem Instagram — presença digital desconhecida [0]' });
+    }
+    if (temIGDono) {
+      pts += 4;  sinais.push({ t: '+', cat: 'Presença Digital', txt: `Instagram do dono (${l.ig_dono}) — acesso direto ao decisor via DM [+4]` });
+    }
+
+    // 12. CNPJ (Formalidade) ─────────────────────────────────
+    if (l.cnpj && l.cnpj.replace(/\D/g, '').length >= 14) {
+      pts += 4;  sinais.push({ t: '+', cat: 'Potencial', txt: `CNPJ cadastrado — empresa formalizada, capacidade contratual [+4]` });
+    } else {
+      sinais.push({ t: '=', cat: 'Potencial', txt: 'CNPJ não cadastrado — verificar formalidade do negócio [0]' });
+    }
+
+    // 13. HISTÓRICO DE CONTATOS ──────────────────────────────
+    if (l.historico && l.historico.trim().length > 20) {
+      pts += 5;  sinais.push({ t: '+', cat: 'Engajamento', txt: 'Histórico de contatos documentado — interações rastreáveis [+5]' });
+    } else {
+      pts -= 3;  sinais.push({ t: '-', cat: 'Engajamento', txt: 'Histórico de contatos não preenchido — sem trilha de interações [-3]' });
+    }
+
+    // 14. ÚLTIMO CONTATO EXPLÍCITO ───────────────────────────
+    if (l.ultimo_contato) {
+      const diasUlt = Math.floor((Date.now() - new Date(l.ultimo_contato)) / 86400000);
+      if (diasUlt <= 3)       { pts += 8;  sinais.push({ t: '+', cat: 'Engajamento', txt: `Último contato: ${diasUlt === 0 ? 'hoje' : diasUlt + ' dia(s) atrás'} — lead quente [+8]` }); }
+      else if (diasUlt <= 10) { pts += 4;  sinais.push({ t: '+', cat: 'Engajamento', txt: `Último contato há ${diasUlt} dias — dentro da janela de atenção [+4]` }); }
+      else if (diasUlt <= 21) { sinais.push({ t: '=', cat: 'Engajamento', txt: `Último contato há ${diasUlt} dias — próximo do limite de reengajamento [0]` }); }
+      else                    { pts -= 10; sinais.push({ t: '-', cat: 'Engajamento', txt: `Último contato há ${diasUlt} dias — alto risco de esfriamento [-10]` }); }
+    } else if (l.updatedAt) {
+      const dias = Math.floor((Date.now() - new Date(l.updatedAt)) / 86400000);
+      if (dias <= 2)      { pts += 6;  sinais.push({ t: '+', cat: 'Engajamento', txt: `Registro atualizado recentemente (${dias === 0 ? 'hoje' : dias + 'd atrás'}) [+6]` }); }
+      else if (dias > 14) { pts -= 10; sinais.push({ t: '-', cat: 'Engajamento', txt: `Sem atualização há ${dias} dias — lead esfriando [-10]` }); }
+    } else {
+      pts -= 8;  sinais.push({ t: '-', cat: 'Engajamento', txt: 'Nenhum registro de contato — lead fantasma [-8]' });
+    }
+
+    // 15. MELHORES HORÁRIOS DE CONTATO ───────────────────────
+    if (l.melhores && l.melhores.trim().length > 3) {
+      pts += 4;  sinais.push({ t: '+', cat: 'Engajamento', txt: `Melhores horários registrados: "${l.melhores.trim().slice(0, 50)}" — contato no momento certo [+4]` });
     }
 
     const score = Math.max(0, Math.min(100, pts));
     let tier = '⚪ MQL Básico', cor = 'var(--text3)', acao = 'Manter em sequência de nutrição padrão.';
-    if (score >= 80)      { tier = '🔥 SQL — Prioridade Máxima'; cor = 'var(--green)';  acao = 'Contato humano imediato. Não deixe esfriar — Speed-to-Lead ≤ 5 min.'; }
-    else if (score >= 65) { tier = '⚡ MQL Quente';              cor = 'var(--accent)'; acao = 'Enviar proposta ou convidar para reunião de diagnóstico.'; }
-    else if (score >= 45) { tier = '🔵 MQL Morno';              cor = 'var(--yellow)'; acao = 'Nutrir com cases e conteúdo. Ligação de acompanhamento em até 3 dias.'; }
-    else                  { tier = '❄️ Baixo Potencial';         cor = 'var(--red)';    acao = 'Avaliar reengajamento ou arquivar após 90 dias sem resposta.'; }
+    if (score >= 80)      { tier = '🔥 SQL — Prioridade Máxima'; cor = 'var(--green)';  acao = 'Contato humano imediato (Speed-to-Lead ≤ 5 min). Não deixe esfriar!'; }
+    else if (score >= 65) { tier = '⚡ MQL Quente';              cor = 'var(--accent)'; acao = 'Enviar proposta ou agendar reunião de diagnóstico nos próximos 2 dias.'; }
+    else if (score >= 45) { tier = '🔵 MQL Morno';              cor = 'var(--yellow)'; acao = 'Nutrir com cases e conteúdo relevante. Ligação de acompanhamento em até 3 dias.'; }
+    else                  { tier = '❄️ Baixo Potencial';         cor = 'var(--red)';    acao = 'Avaliar reengajamento. Arquivar após 90 dias sem resposta (Sunsetting).'; }
 
-    return { lead: alvo, score, tier, cor, acao, sinais };
+    return { score, tier, cor, acao, sinais };
+  };
+
+  // ── IA Lead Scoring (individual) ──
+  const scored = useMemo(() => {
+    const alvo = leads.find(l => l.id === leadId) || leads[0];
+    if (!alvo) return null;
+    return { lead: alvo, ...calcScore(alvo) };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leads, leadId]);
 
   // ── Abas ──
@@ -763,27 +873,8 @@ export default function MetricasPage({ leads = [] }) {
                   { label: '❄️ Baixo Potencial (< 45)', min: 0, max: 45, cor: 'var(--red)' },
                 ];
 
-                // Calcular score simples para todos os leads (versão rápida)
-                const scoresRapidos = leads.map(l => {
-                  let p = 50;
-                  if (['whatsapp','indicacao'].includes(l.origem)) p += 15;
-                  else if (['instagram','site'].includes(l.origem)) p += 10;
-                  else if (['gmn','telefone'].includes(l.origem)) p += 5;
-                  if (['reuniao-marcada','contrato-realizado'].includes(l.status)) p += 30;
-                  else if (l.status === 'contato-decisor') p += 20;
-                  else if (['ligacao-feita','lead-qualificado'].includes(l.status)) p += 10;
-                  else if (l.status === 'perda') p -= 40;
-                  else if (l.status === 'nenhum') p -= 10;
-                  if (l.email?.includes('@')) p += 5; else p -= 8;
-                  if (l.whatsapp || l.telefone) p += 5; else p -= 5;
-                  if (l.decisor) p += 8;
-                  if (l.reuniao && l.reuniao >= new Date().toISOString().slice(0,10)) p += 10;
-                  if (l.updatedAt) {
-                    const d = Math.floor((Date.now() - new Date(l.updatedAt)) / 86400000);
-                    if (d <= 2) p += 10; else if (d > 14) p -= 12;
-                  } else p -= 10;
-                  return Math.max(0, Math.min(100, p));
-                });
+                // Reutiliza a mesma função centralizada calcScore
+                const scoresRapidos = leads.map(l => calcScore(l).score);
 
                 const total = scoresRapidos.length || 1;
                 return (
