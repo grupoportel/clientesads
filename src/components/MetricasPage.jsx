@@ -112,6 +112,10 @@ export default function MetricasPage({ leads = [] }) {
 
   // ── IA Scoring ──
   const [leadId, setLeadId] = useState('');
+  const [filtroResp,   setFiltroResp]   = useState('');
+  const [filtroNicho,  setFiltroNicho]  = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('');
+  const [filtroCidade, setFiltroCidade] = useState('');
 
   // ═══════════════════════════════════════════
   // CÁLCULOS REAIS DOS LEADS
@@ -766,46 +770,155 @@ export default function MetricasPage({ leads = [] }) {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
 
-            {/* Seletor */}
+            {/* Seletor com Filtros */}
             <Card>
               <SectionTitle icon="🔍" title="Selecione um Lead" />
-              <p style={{ fontSize: '12px', color: 'var(--text3)', margin: '0 0 12px 0', lineHeight: 1.4 }}>
-                O algoritmo analisa os dados reais do lead no seu CRM e calcula a probabilidade de fechamento baseado em origem, estágio, dados de contato e recência.
-              </p>
-              <select value={leadId} onChange={e => setLeadId(e.target.value)} style={{
-                width: '100%', padding: '10px 12px', borderRadius: '8px',
-                background: 'var(--surface2)', border: '1px solid var(--border)',
-                color: 'var(--text)', fontSize: '13px', outline: 'none', cursor: 'pointer', marginBottom: '14px'
-              }}>
-                <option value="">— selecione entre {leads.length} lead{leads.length !== 1 ? 's' : ''} —</option>
-                {[...leads].sort((a,b) => (a.nome||'').localeCompare(b.nome||'')).map(l => (
-                  <option key={l.id} value={l.id}>
-                    {l.nome || 'Sem nome'} | {l.status} | {l.origem || 'sem origem'}
-                  </option>
-                ))}
-              </select>
 
-              {scored?.lead && (
-                <div style={{ background: 'var(--surface2)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border)' }}>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)', marginBottom: '10px' }}>
-                    {scored.lead.nome || 'Lead sem nome'}
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '11px', color: 'var(--text2)' }}>
-                    {[
-                      ['Status', scored.lead.status],
-                      ['Origem', scored.lead.origem || '—'],
-                      ['Nicho', scored.lead.nicho || '—'],
-                      ['Responsável', scored.lead.responsavel || '—'],
-                      ['E-mail', scored.lead.email || '—'],
-                      ['WhatsApp', scored.lead.whatsapp || scored.lead.telefone || '—'],
-                      ['Decisor', scored.lead.decisor || '—'],
-                      ['Reunião', scored.lead.reuniao || '—'],
-                    ].map(([k, v], i) => (
-                      <div key={i}><span style={{ color: 'var(--text3)' }}>{k}: </span>{v}</div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Filtros */}
+              {(() => {
+                const optsResp   = [...new Set(leads.map(l => l.responsavel).filter(Boolean))].sort();
+                const optsNicho  = [...new Set(leads.map(l => l.nicho).filter(Boolean))].sort();
+                const optsEstado = [...new Set(leads.map(l => l.estado).filter(Boolean))].sort();
+                const optsCidade = [...new Set(
+                  leads
+                    .filter(l => !filtroEstado || l.estado === filtroEstado)
+                    .map(l => l.cidade).filter(Boolean)
+                )].sort();
+
+                const leadsFiltrados = leads.filter(l => {
+                  if (filtroResp   && l.responsavel !== filtroResp)   return false;
+                  if (filtroNicho  && l.nicho       !== filtroNicho)  return false;
+                  if (filtroEstado && l.estado       !== filtroEstado) return false;
+                  if (filtroCidade && l.cidade       !== filtroCidade) return false;
+                  return true;
+                }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
+                const hasFiltro = filtroResp || filtroNicho || filtroEstado || filtroCidade;
+
+                const selectStyle = {
+                  width: '100%', padding: '7px 10px', borderRadius: '8px',
+                  background: 'var(--surface2)', border: '1px solid var(--border)',
+                  color: 'var(--text)', fontSize: '12px', outline: 'none', cursor: 'pointer'
+                };
+                const activeSelectStyle = {
+                  ...selectStyle,
+                  borderColor: 'var(--accent)',
+                  background: 'rgba(0,210,223,0.08)',
+                };
+
+                return (
+                  <>
+                    {/* Grid de filtros */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
+                      {/* Responsável */}
+                      <div>
+                        <div style={{ fontSize: '10px', color: 'var(--text3)', marginBottom: '4px', textTransform: 'uppercase' }}>Responsável</div>
+                        <select value={filtroResp} onChange={e => { setFiltroResp(e.target.value); setLeadId(''); }}
+                          style={filtroResp ? activeSelectStyle : selectStyle}>
+                          <option value="">Todos</option>
+                          {optsResp.map(r => <option key={r} value={r}>{r}</option>)}
+                        </select>
+                      </div>
+
+                      {/* Nicho */}
+                      <div>
+                        <div style={{ fontSize: '10px', color: 'var(--text3)', marginBottom: '4px', textTransform: 'uppercase' }}>Nicho</div>
+                        <select value={filtroNicho} onChange={e => { setFiltroNicho(e.target.value); setLeadId(''); }}
+                          style={filtroNicho ? activeSelectStyle : selectStyle}>
+                          <option value="">Todos</option>
+                          {optsNicho.map(n => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      </div>
+
+                      {/* Estado */}
+                      <div>
+                        <div style={{ fontSize: '10px', color: 'var(--text3)', marginBottom: '4px', textTransform: 'uppercase' }}>Estado</div>
+                        <select value={filtroEstado} onChange={e => { setFiltroEstado(e.target.value); setFiltroCidade(''); setLeadId(''); }}
+                          style={filtroEstado ? activeSelectStyle : selectStyle}>
+                          <option value="">Todos</option>
+                          {optsEstado.map(e => <option key={e} value={e}>{e}</option>)}
+                        </select>
+                      </div>
+
+                      {/* Cidade */}
+                      <div>
+                        <div style={{ fontSize: '10px', color: 'var(--text3)', marginBottom: '4px', textTransform: 'uppercase' }}>
+                          Cidade {filtroEstado ? `(${filtroEstado})` : ''}
+                        </div>
+                        <select value={filtroCidade} onChange={e => { setFiltroCidade(e.target.value); setLeadId(''); }}
+                          style={filtroCidade ? activeSelectStyle : selectStyle}
+                          disabled={!filtroEstado && optsCidade.length === 0}>
+                          <option value="">Todas</option>
+                          {optsCidade.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Contador + botão limpar */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '11px', color: hasFiltro ? 'var(--accent)' : 'var(--text3)' }}>
+                        {hasFiltro
+                          ? `${leadsFiltrados.length} lead${leadsFiltrados.length !== 1 ? 's' : ''} encontrado${leadsFiltrados.length !== 1 ? 's' : ''}`
+                          : `${leads.length} leads no total`}
+                      </span>
+                      {hasFiltro && (
+                        <button onClick={() => { setFiltroResp(''); setFiltroNicho(''); setFiltroEstado(''); setFiltroCidade(''); setLeadId(''); }}
+                          style={{ background: 'transparent', border: 'none', color: 'var(--red)', fontSize: '11px', cursor: 'pointer', padding: '0' }}>
+                          ✕ Limpar filtros
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Dropdown de leads filtrados */}
+                    <select value={leadId} onChange={e => setLeadId(e.target.value)} style={{
+                      width: '100%', padding: '10px 12px', borderRadius: '8px',
+                      background: 'var(--surface2)', border: '1px solid var(--border)',
+                      color: 'var(--text)', fontSize: '13px', outline: 'none', cursor: 'pointer',
+                      marginBottom: '14px'
+                    }}>
+                      <option value="">
+                        {leadsFiltrados.length === 0
+                          ? '— nenhum lead neste filtro —'
+                          : `— escolha entre ${leadsFiltrados.length} lead${leadsFiltrados.length !== 1 ? 's' : ''} —`}
+                      </option>
+                      {leadsFiltrados.map(l => {
+                        const s = calcScore(l);
+                        const emoji = s.score >= 80 ? '🔥' : s.score >= 65 ? '⚡' : s.score >= 45 ? '🔵' : '❄️';
+                        return (
+                          <option key={l.id} value={l.id}>
+                            {emoji} {l.nome || 'Sem nome'} — {s.score}pts | {l.responsavel || 'sem resp.'} | {l.nicho || 'sem nicho'}
+                          </option>
+                        );
+                      })}
+                    </select>
+
+                    {/* Card do lead selecionado */}
+                    {scored?.lead && (
+                      <div style={{ background: 'var(--surface2)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)', marginBottom: '10px' }}>
+                          {scored.lead.nome || 'Lead sem nome'}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '11px', color: 'var(--text2)' }}>
+                          {[
+                            ['Status',      scored.lead.status],
+                            ['Origem',      scored.lead.origem || '—'],
+                            ['Nicho',       scored.lead.nicho || '—'],
+                            ['Responsável', scored.lead.responsavel || '—'],
+                            ['Estado',      scored.lead.estado || '—'],
+                            ['Cidade',      scored.lead.cidade || '—'],
+                            ['E-mail',      scored.lead.email || '—'],
+                            ['WhatsApp',    scored.lead.whatsapp || scored.lead.telefone || '—'],
+                            ['Decisor',     scored.lead.decisor || '—'],
+                            ['Reunião',     scored.lead.reuniao || '—'],
+                          ].map(([k, v], i) => (
+                            <div key={i}><span style={{ color: 'var(--text3)' }}>{k}: </span>{v}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </Card>
 
             {/* Resultado */}
