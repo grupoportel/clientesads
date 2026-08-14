@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ref, onValue, set, remove, push } from 'firebase/database';
+import { ref, onValue, set, update, remove, push } from 'firebase/database';
 import { database } from '../firebase';
 import PropostaModal from './PropostaModal';
+import { registrarAtividade } from '../atividades';
+import { formatarBRL } from '../pipeline';
 
 
 const statusBadge = (status) => {
@@ -48,7 +50,7 @@ const KpiCard = ({ label, value, icon, color, sub, progress }) => (
   </div>
 );
 
-export default function FinanceiroPage({ leads = [] }) {
+export default function FinanceiroPage({ leads = [], metas = {} }) {
   const [propostas, setPropostas] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
@@ -96,7 +98,7 @@ export default function FinanceiroPage({ leads = [] }) {
     const fechadas = aceitas.length + rejeitadas.length;
     const taxaFechamento = fechadas > 0 ? Math.round((aceitas.length / fechadas) * 100) : 0;
     const ticketMedio = aceitas.length > 0 ? Math.round(receita / aceitas.length) : 0;
-    const metaMensal = 60000;
+    const metaMensal = Number(metas.receitaMensal) || 0;
     const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     const now = new Date();
     const receitaMensalMap = {};
@@ -124,23 +126,29 @@ export default function FinanceiroPage({ leads = [] }) {
       enviadas: enviadas.length,
       taxaFechamento,
       ticketMedio,
-      progressReceita: Math.min(Math.round((receita / metaMensal) * 100), 100),
+      metaMensal,
+      progressReceita: metaMensal > 0 ? Math.min(Math.round((receita / metaMensal) * 100), 100) : 0,
       progressTaxa: taxaFechamento,
       receitaAceita: receita,
       enviadasCount: enviadas.length,
       chartData
     };
-  }, [propostasFiltradas, propostas]);
+  }, [propostasFiltradas, metas]);
 
   /* ── CRUD ── */
   const salvarProposta = (dados) => {
     const agora = new Date().toISOString();
     if (!propostaEmEdicao) {
       const novaRef = push(ref(database, 'crm_data/propostas'));
-      set(novaRef, { ...dados, id: novaRef.key, createdAt: agora });
+      set(novaRef, { ...dados, id: novaRef.key, createdAt: agora, updatedAt: agora });
+      registrarAtividade({
+        leadId: dados.leadId, leadNome: dados.leadNome, tipo: 'proposta',
+        descricao: `Proposta de ${formatarBRL(dados.valor)} criada`,
+      });
     } else {
-      set(ref(database, 'crm_data/propostas/' + dados.id), {
-        ...dados,
+      const { id, createdAt, ...camposEditaveis } = dados;
+      update(ref(database, 'crm_data/propostas/' + (id || propostaEmEdicao.id)), {
+        ...camposEditaveis,
         updatedAt: agora,
       });
     }
@@ -154,10 +162,15 @@ export default function FinanceiroPage({ leads = [] }) {
   };
 
   const atualizarStatus = (proposta, novoStatus) => {
-    set(ref(database, 'crm_data/propostas/' + proposta.id), {
-      ...proposta,
+    if (proposta.status === novoStatus) return;
+    update(ref(database, 'crm_data/propostas/' + proposta.id), {
       status: novoStatus,
       updatedAt: new Date().toISOString(),
+    });
+    const rotulos = { rascunho: 'voltou para rascunho', enviada: 'enviada ao cliente', aceita: 'ACEITA', rejeitada: 'rejeitada' };
+    registrarAtividade({
+      leadId: proposta.leadId, leadNome: proposta.leadNome, tipo: 'proposta',
+      descricao: `Proposta de ${formatarBRL(proposta.valor)} ${rotulos[novoStatus] || novoStatus}`,
     });
   };
 
@@ -212,7 +225,7 @@ export default function FinanceiroPage({ leads = [] }) {
             value={`R$ ${kpiData.receita.toLocaleString('pt-BR')}`}
             icon="💰"
             color="var(--green)"
-            sub="Meta: R$ 60.000"
+            sub={kpiData.metaMensal > 0 ? `Meta: ${formatarBRL(kpiData.metaMensal)}` : "Defina a meta em Configurações"}
             progress={kpiData.progressReceita}
           />
           <KpiCard
@@ -449,7 +462,7 @@ export default function FinanceiroPage({ leads = [] }) {
                     fontFamily: "'DM Mono', monospace",
                   }}
                 >
-                  R$ 60.000
+                  {kpiData.metaMensal > 0 ? formatarBRL(kpiData.metaMensal) : '— não definida'}
                 </span>
               </div>
             </div>

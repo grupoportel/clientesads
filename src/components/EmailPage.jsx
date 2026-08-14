@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { database } from '../firebase';
 import { ref, onValue, update, push, set } from 'firebase/database';
+import { apiPost } from '../api';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const formatarData = (iso) => {
@@ -26,7 +27,7 @@ const getCor = (str = '') => {
 };
 
 // ── Componente Principal ──────────────────────────────────────────────────────
-export default function EmailPage({ leads = [] }) {
+export default function EmailPage() {
   const [threads, setThreads] = useState([]);
   const [threadAtiva, setThreadAtiva] = useState(null);
   const [mensagens, setMensagens] = useState([]);
@@ -34,6 +35,7 @@ export default function EmailPage({ leads = [] }) {
   const [busca, setBusca] = useState('');
   const [redigindo, setRedigindo] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState('');
 
   // Form de novo e-mail
   const [para, setPara] = useState('');
@@ -119,16 +121,14 @@ export default function EmailPage({ leads = [] }) {
 
   // ── Enviar novo e-mail ────────────────────────────────────────────────────
   const enviarEmail = async () => {
-    if (!para || !assunto || !corpo) return alert('Preencha todos os campos!');
+    if (!para || !assunto || !corpo) {
+      setErro('Preencha destinatário, assunto e mensagem.');
+      return;
+    }
     setEnviando(true);
+    setErro('');
     try {
-      const res = await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ para, assunto, corpo }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao enviar');
+      await apiPost('/api/send-email', { para, assunto, corpo });
 
       // Salvar no Firebase
       const novaThreadRef = push(ref(database, 'crm_data/emails'));
@@ -157,7 +157,7 @@ export default function EmailPage({ leads = [] }) {
       setPara(''); setAssunto(''); setCorpo('');
       setRedigindo(false);
     } catch (e) {
-      alert('Erro: ' + e.message);
+      setErro(e.message);
     } finally {
       setEnviando(false);
     }
@@ -167,18 +167,13 @@ export default function EmailPage({ leads = [] }) {
   const responderEmail = async () => {
     if (!respostaTexto || !threadAtiva) return;
     setRespondendo(true);
+    setErro('');
     try {
-      const res = await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          para: threadAtiva.email,
-          assunto: `Re: ${threadAtiva.assunto}`,
-          corpo: respostaTexto,
-        }),
+      await apiPost('/api/send-email', {
+        para: threadAtiva.email,
+        assunto: `Re: ${threadAtiva.assunto}`,
+        corpo: respostaTexto,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao enviar resposta');
 
       const agora = new Date().toISOString();
       const msgRef = push(ref(database, `crm_data/emails/${threadAtiva.id}/mensagens`));
@@ -196,11 +191,28 @@ export default function EmailPage({ leads = [] }) {
       });
       setRespostaTexto('');
     } catch (e) {
-      alert('Erro: ' + e.message);
+      setErro(e.message);
     } finally {
       setRespondendo(false);
     }
   };
+
+  // ── Aviso de erro reaproveitado nas duas áreas de escrita ─────────────────
+  const avisoErro = erro ? (
+    <div style={{
+      display: 'flex', alignItems: 'flex-start', gap: '8px',
+      background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)',
+      borderRadius: '8px', padding: '10px 12px',
+      color: 'var(--red)', fontSize: '12.5px', lineHeight: 1.5,
+    }}>
+      <span style={{ flexShrink: 0 }}>⚠️</span>
+      <span style={{ flex: 1 }}>{erro}</span>
+      <button onClick={() => setErro('')} style={{
+        background: 'transparent', border: 'none', color: 'var(--red)',
+        cursor: 'pointer', fontSize: '15px', lineHeight: 1, padding: 0, flexShrink: 0,
+      }} title="Dispensar">×</button>
+    </div>
+  ) : null;
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -405,6 +417,8 @@ export default function EmailPage({ leads = [] }) {
             }}
           />
 
+          {avisoErro}
+
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
             <button onClick={() => setRedigindo(false)} style={{
               background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '8px',
@@ -502,6 +516,8 @@ export default function EmailPage({ leads = [] }) {
                 fontSize: '13px', resize: 'none', outline: 'none',
               }}
             />
+            {avisoErro}
+
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button
                 onClick={responderEmail}

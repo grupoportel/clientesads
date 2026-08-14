@@ -1,6 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
-import { ref, onValue } from 'firebase/database';
-import { database } from '../firebase';
+import { useState, useMemo } from 'react';
 
 function buildCalendar(year, month) {
   const firstDay = new Date(year, month, 1).getDay();
@@ -36,21 +34,13 @@ const monthNames = [
 const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const dayOfWeekNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
-export default function AgendaPage({ leads = [] }) {
+// As tarefas chegam por prop: o App já mantém esse dado carregado, então esta
+// tela não precisa abrir um segundo listener no mesmo caminho do banco.
+export default function AgendaPage({ leads = [], tarefas = [] }) {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [selectedDay, setSelectedDay] = useState(today.getDate());
-  const [tarefas, setTarefas] = useState([]);
-
-  /* ── Firebase: tarefas ── */
-  useEffect(() => {
-    const unsub = onValue(ref(database, 'crm_data/tarefas'), (snap) => {
-      const data = snap.val();
-      setTarefas(data ? Object.entries(data).map(([id, t]) => ({ ...t, id })) : []);
-    });
-    return () => unsub();
-  }, []);
 
   /* ── Build events from leads.reuniao + tarefas ── */
   const allEvents = useMemo(() => {
@@ -153,18 +143,18 @@ export default function AgendaPage({ leads = [] }) {
               →
             </button>
           </div>
-          <span
-            style={{
-              padding: '4px 14px',
-              borderRadius: 20,
-              background: 'var(--surface2)',
-              border: '1px solid var(--border)',
-              fontSize: 12,
-              color: 'var(--text2)',
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: 12, padding: '5px 14px' }}
+            onClick={() => {
+              const agora = new Date();
+              setViewYear(agora.getFullYear());
+              setViewMonth(agora.getMonth());
+              setSelectedDay(agora.getDate());
             }}
           >
-            Mês
-          </span>
+            Hoje
+          </button>
         </div>
       </div>
 

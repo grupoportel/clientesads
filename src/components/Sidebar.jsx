@@ -4,7 +4,7 @@ const NAV_ITEMS = [
   { id: 'dashboard',     icon: '📊', label: 'Dashboard' },
   { id: 'leads',         icon: '👥', label: 'Leads',        badgeKey: 'leads' },
   { id: 'clientes',      icon: '🏢', label: 'Clientes' },
-  { id: 'tarefas',       icon: '✅', label: 'Tarefas',      badgeValue: '8', badgeAlert: true },
+  { id: 'tarefas',       icon: '✅', label: 'Tarefas' },
   { id: 'conversas',     icon: '💬', label: 'Conversas' },
   { id: 'emails',        icon: '✉️', label: 'E-mails' },
   { id: 'agenda',        icon: '📅', label: 'Agenda' },
@@ -13,7 +13,12 @@ const NAV_ITEMS = [
   { id: 'relatorios',    icon: '📈', label: 'Relatórios' },
 ];
 
-export default function Sidebar({ paginaAtiva, setPaginaAtiva, leads = [], tarefasPendentes = 0, conversasNaoLidas = 0, emailsNaoLidos = 0 }) {
+export default function Sidebar({
+  paginaAtiva, setPaginaAtiva, leads = [],
+  tarefasPendentes = 0, conversasNaoLidas = 0, emailsNaoLidos = 0,
+  nomeEmpresa = 'Grupo Portel', nomeUsuario = 'Usuário', emailUsuario = '',
+  iniciaisUsuario = '?', onLogout,
+}) {
   const isActive = (id) => paginaAtiva === id;
 
   const navItemStyle = (id) => ({
@@ -54,9 +59,10 @@ export default function Sidebar({ paginaAtiva, setPaginaAtiva, leads = [], taref
           }} />
           <span style={{
             fontSize: '18px', fontWeight: 700, color: 'var(--accent2)',
-            letterSpacing: '-0.5px',
-          }}>
-            Grupo <span style={{ color: 'var(--text)', fontWeight: 400 }}>Portel</span>
+            letterSpacing: '-0.5px', overflow: 'hidden',
+            textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }} title={nomeEmpresa}>
+            {nomeEmpresa}
           </span>
         </div>
         <div style={{ fontSize: '10px', color: 'var(--text3)', marginTop: '4px', paddingLeft: '17px' }}>
@@ -160,29 +166,35 @@ export default function Sidebar({ paginaAtiva, setPaginaAtiva, leads = [], taref
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             flexShrink: 0,
           }}>
-            GP
+            {iniciaisUsuario}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)' }}>
-              Grupo Portel
+            <div style={{
+              fontSize: '13px', fontWeight: 600, color: 'var(--text)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {nomeUsuario}
             </div>
             <div style={{
               fontSize: '11px', color: 'var(--text3)',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              admin@grupoportel.com
+            }} title={emailUsuario}>
+              {emailUsuario}
             </div>
           </div>
         </div>
 
         <div style={{ height: '1px', background: 'var(--border)', margin: '12px 0' }} />
 
-        <div
+        <button
+          type="button"
+          onClick={onLogout}
           style={{
-            display: 'flex', alignItems: 'center', gap: '8px',
+            display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
             padding: '8px 12px', borderRadius: '8px', cursor: 'pointer',
-            color: 'var(--text3)', fontSize: '13px',
-            transition: 'all 0.15s',
+            color: 'var(--text3)', fontSize: '13px', textAlign: 'left',
+            background: 'transparent', border: 'none',
+            fontFamily: 'inherit', transition: 'all 0.15s',
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = 'var(--surface2)';
@@ -195,7 +207,7 @@ export default function Sidebar({ paginaAtiva, setPaginaAtiva, leads = [], taref
         >
           <span style={{ fontSize: '15px' }}>🚪</span>
           <span>Sair</span>
-        </div>
+        </button>
       </div>
     </div>
   );

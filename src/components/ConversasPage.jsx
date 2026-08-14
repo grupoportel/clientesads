@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { ref, onValue, push, set, update } from 'firebase/database';
 import { database } from '../firebase';
+import { apiPost } from '../api';
+import { acharEtapa } from '../pipeline';
 
 /* ── Helpers ── */
 const fmtHora = (iso) => {
@@ -20,29 +22,6 @@ const fmtData = (iso) => {
 const getInitials = (nome = '') =>
   nome.split(' ').slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';
 
-const STATUS_CORES = {
-  'nenhum': '#5865f2',
-  'lead-qualificado': '#3b82f6',
-  'ligacao-feita': '#eab308',
-  'contato-decisor': '#a855f7',
-  'reuniao-marcada': '#22c55e',
-  'contrato-realizado': '#ec4899',
-  'venda': '#14b8a6',
-  'perda': '#ef4444',
-  'concluido': '#8b5cf6',
-};
-const STATUS_LABELS = {
-  'nenhum': 'Nenhum',
-  'lead-qualificado': 'Lead Qualificado',
-  'ligacao-feita': 'Ligação Feita',
-  'contato-decisor': 'Contato Decisor',
-  'reuniao-marcada': 'Reunião Marcada',
-  'contrato-realizado': 'Contrato Realizado',
-  'venda': 'Venda',
-  'perda': 'Perda',
-  'concluido': 'Concluído',
-};
-
 const AVATAR_COLORS = [
   'linear-gradient(135deg,#5865f2,#3b82f6)',
   'linear-gradient(135deg,#22c55e,#06b6d4)',
@@ -56,7 +35,7 @@ const avatarColor = (nome = '') => AVATAR_COLORS[nome.charCodeAt(0) % AVATAR_COL
 /* ─────────────────────────────────────────────
    ConversasPage
 ───────────────────────────────────────────── */
-export default function ConversasPage({ leads = [] }) {
+export default function ConversasPage({ leads = [], etapas = [] }) {
   const [conversas, setConversas] = useState([]);
   const [conversaSelecionada, setConversaSelecionada] = useState(null);
   const [mensagens, setMensagens] = useState([]);
@@ -65,6 +44,7 @@ export default function ConversasPage({ leads = [] }) {
   const [abaInfo, setAbaInfo] = useState('Informações'); // 'Informações' | 'Histórico'
   const [filtroAba, setFiltroAba] = useState('Todos');
   const [enviando, setEnviando] = useState(false);
+  const [erroEnvio, setErroEnvio] = useState('');
   const [modalNovaConversa, setModalNovaConversa] = useState(false);
   const [leadSelecionadoNovo, setLeadSelecionadoNovo] = useState('');
 
@@ -139,46 +119,39 @@ export default function ConversasPage({ leads = [] }) {
     const texto = novaMensagem.trim();
     if (!texto || !conversaSelecionada || enviando) return;
     setEnviando(true);
+    setErroEnvio('');
     setNovaMensagem(''); // limpa o campo imediatamente para boa UX
 
+    const telefone = conversaSelecionada.telefone;
+    const temWhatsapp = telefone && telefone.replace(/\D/g, '').length >= 10;
+
     try {
-      const telefone = conversaSelecionada.telefone;
-
-      // Se a conversa tem um número de telefone válido, envia pelo WhatsApp via backend
-      // O backend salva no Firebase E entrega no WhatsApp do cliente
-      if (telefone && telefone.length >= 10) {
-        const res = await fetch('/api/send-message', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            conversaId:      conversaSelecionada.id,
-            texto,
-            telefoneDestino: telefone,
-          }),
+      if (temWhatsapp) {
+        // O backend entrega na Meta E salva no Firebase; o onValue atualiza a tela
+        await apiPost('/api/send-message', {
+          conversaId:      conversaSelecionada.id,
+          texto,
+          telefoneDestino: telefone,
         });
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          console.error('[ConversasPage] Erro ao enviar pelo WhatsApp:', err);
-          // Fallback: salva no Firebase mesmo assim para não perder a mensagem
-          const criadoEm = new Date().toISOString();
-          const novaMsgRef = push(ref(database, `crm_data/conversas/${conversaSelecionada.id}/mensagens`));
-          await set(novaMsgRef, { texto, criadoEm, origem: 'saida', lida: true, erroEnvio: true });
-          await update(ref(database, `crm_data/conversas/${conversaSelecionada.id}`), { ultimaMensagem: texto, ultimaAt: criadoEm });
-          alert('⚠️ A mensagem foi salva, mas não pôde ser enviada ao WhatsApp. Verifique a configuração da API.');
-        }
-        // Sucesso: o backend já salvou no Firebase, o onValue vai atualizar a tela
       } else {
-        // Conversa interna sem telefone (sem WhatsApp) — salva só no Firebase
+        // Conversa interna sem telefone — salva só no Firebase
         const criadoEm = new Date().toISOString();
         const novaMsgRef = push(ref(database, `crm_data/conversas/${conversaSelecionada.id}/mensagens`));
         await set(novaMsgRef, { texto, criadoEm, origem: 'saida', lida: true });
         await update(ref(database, `crm_data/conversas/${conversaSelecionada.id}`), { ultimaMensagem: texto, ultimaAt: criadoEm });
       }
     } catch (error) {
-      console.error('[ConversasPage] Erro inesperado:', error);
-      alert('Erro ao enviar a mensagem. Tente novamente.');
-      setNovaMensagem(texto); // devolve o texto ao campo se falhou
+      console.error('[ConversasPage] Falha ao enviar:', error);
+      // Não perde o que foi digitado: registra como não entregue e avisa
+      try {
+        const criadoEm = new Date().toISOString();
+        const novaMsgRef = push(ref(database, `crm_data/conversas/${conversaSelecionada.id}/mensagens`));
+        await set(novaMsgRef, { texto, criadoEm, origem: 'saida', lida: true, erroEnvio: true });
+        await update(ref(database, `crm_data/conversas/${conversaSelecionada.id}`), { ultimaMensagem: texto, ultimaAt: criadoEm });
+      } catch { /* se nem o Firebase respondeu, devolve o texto ao campo */
+        setNovaMensagem(texto);
+      }
+      setErroEnvio(error.message || 'Não foi possível enviar a mensagem.');
     } finally {
       setEnviando(false);
     }
@@ -363,24 +336,36 @@ export default function ConversasPage({ leads = [] }) {
             <div style={{ display: 'flex', gap: 6 }}>
               {leadAssociado && (
                 <span style={{
-                  background: `${STATUS_CORES[leadAssociado.status] || '#5865f2'}22`,
-                  color: STATUS_CORES[leadAssociado.status] || '#5865f2',
-                  border: `1px solid ${STATUS_CORES[leadAssociado.status] || '#5865f2'}44`,
+                  background: `${acharEtapa(etapas, leadAssociado.status).cor}22`,
+                  color: acharEtapa(etapas, leadAssociado.status).cor,
+                  border: `1px solid ${acharEtapa(etapas, leadAssociado.status).cor}44`,
                   fontSize: 11, padding: '3px 10px', borderRadius: 6, fontWeight: 600,
                 }}>
-                  {STATUS_LABELS[leadAssociado.status] || leadAssociado.status}
+                  {acharEtapa(etapas, leadAssociado.status).label}
                 </span>
               )}
-              <button
-                className="btn btn-ghost"
-                style={{ fontSize: 11, padding: '5px 10px' }}
-                onClick={() => {
-                  if (window.confirm('Arquivar esta conversa?')) {
-                    update(ref(database, `crm_data/conversas/${conversaSelecionada.id}`), { arquivada: true });
-                    setConversaSelecionada(null);
-                  }
-                }}
-              >📁 Arquivar</button>
+              {conversaSelecionada.arquivada ? (
+                <button
+                  className="btn btn-ghost"
+                  style={{ fontSize: 11, padding: '5px 10px' }}
+                  onClick={() => {
+                    update(ref(database, `crm_data/conversas/${conversaSelecionada.id}`), { arquivada: false });
+                    setConversaSelecionada(prev => ({ ...prev, arquivada: false }));
+                    setFiltroAba('Todos');
+                  }}
+                >📤 Desarquivar</button>
+              ) : (
+                <button
+                  className="btn btn-ghost"
+                  style={{ fontSize: 11, padding: '5px 10px' }}
+                  onClick={() => {
+                    if (window.confirm('Arquivar esta conversa? Ela continua acessível na aba "Arquivadas".')) {
+                      update(ref(database, `crm_data/conversas/${conversaSelecionada.id}`), { arquivada: true });
+                      setConversaSelecionada(null);
+                    }
+                  }}
+                >📁 Arquivar</button>
+              )}
             </div>
           </div>
 
@@ -420,15 +405,16 @@ export default function ConversasPage({ leads = [] }) {
                       )}
                       <div style={{
                         maxWidth: '65%', padding: '9px 14px', borderRadius: isSaida ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                        background: isSaida ? 'var(--accent)' : 'var(--surface2)',
-                        color: isSaida ? '#fff' : 'var(--text)',
+                        background: m.erroEnvio ? 'var(--surface2)' : isSaida ? 'var(--accent)' : 'var(--surface2)',
+                        color: m.erroEnvio ? 'var(--text2)' : isSaida ? '#fff' : 'var(--text)',
                         fontSize: 13, lineHeight: 1.5,
-                        border: isSaida ? 'none' : '1px solid var(--border)',
+                        border: m.erroEnvio ? '1px dashed var(--red)' : isSaida ? 'none' : '1px solid var(--border)',
                         boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
                       }}>
                         <div>{m.texto}</div>
-                        <div style={{ fontSize: 10, marginTop: 4, opacity: 0.7, textAlign: isSaida ? 'right' : 'left' }}>
-                          {fmtHora(m.criadoEm)}{isSaida ? ' ✓✓' : ''}
+                        <div style={{ fontSize: 10, marginTop: 4, opacity: 0.75, textAlign: isSaida ? 'right' : 'left' }}>
+                          {fmtHora(m.criadoEm)}
+                          {isSaida && (m.erroEnvio ? ' ⚠ não entregue' : ' ✓✓')}
                         </div>
                       </div>
                     </div>
@@ -438,25 +424,27 @@ export default function ConversasPage({ leads = [] }) {
             ))}
           </div>
 
+          {/* Aviso de falha no envio */}
+          {erroEnvio && (
+            <div style={{
+              display: 'flex', alignItems: 'flex-start', gap: 10, flexShrink: 0,
+              padding: '10px 20px', borderTop: '1px solid rgba(239,68,68,0.3)',
+              background: 'rgba(239,68,68,0.08)', color: 'var(--red)', fontSize: 12, lineHeight: 1.5,
+            }}>
+              <span style={{ flexShrink: 0 }}>⚠️</span>
+              <span style={{ flex: 1 }}>{erroEnvio}</span>
+              <button onClick={() => setErroEnvio('')} style={{
+                background: 'transparent', border: 'none', color: 'var(--red)',
+                cursor: 'pointer', fontSize: 15, lineHeight: 1, flexShrink: 0, padding: 0,
+              }} title="Dispensar">×</button>
+            </div>
+          )}
+
           {/* Barra de Input */}
           <div style={{
             padding: '12px 20px', borderTop: '1px solid var(--border)',
             background: 'var(--surface)', display: 'flex', gap: 10, alignItems: 'flex-end', flexShrink: 0,
           }}>
-            {/* Ações rápidas */}
-            <div style={{ display: 'flex', gap: 6 }}>
-              {['📎', '😊', '🎙️'].map(icon => (
-                <button key={icon} style={{
-                  background: 'transparent', border: '1px solid var(--border)', borderRadius: 8,
-                  padding: '8px', fontSize: 15, cursor: 'pointer', color: 'var(--text3)',
-                  transition: 'all 0.15s',
-                }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface2)'; e.currentTarget.style.color = 'var(--text)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text3)'; }}
-                >{icon}</button>
-              ))}
-            </div>
-
             <textarea
               value={novaMensagem}
               onChange={e => setNovaMensagem(e.target.value)}
@@ -483,22 +471,6 @@ export default function ConversasPage({ leads = [] }) {
             </button>
           </div>
 
-          {/* Ações de rodapé */}
-          <div style={{
-            display: 'flex', gap: 8, padding: '10px 20px', borderTop: '1px solid var(--border)',
-            background: 'var(--surface)', flexShrink: 0,
-          }}>
-            {[
-              { icon: '📄', label: 'Enviar PDF' },
-              { icon: '📅', label: 'Agendar reunião' },
-              { icon: '🎬', label: 'Enviar vídeo' },
-              { icon: '📊', label: 'Enviar proposta' },
-            ].map(a => (
-              <button key={a.label} className="btn btn-ghost" style={{ fontSize: 11, padding: '5px 12px', gap: 5 }}>
-                <span>{a.icon}</span>{a.label}
-              </button>
-            ))}
-          </div>
         </div>
       )}
 
@@ -541,12 +513,12 @@ export default function ConversasPage({ leads = [] }) {
                   {leadAssociado && (
                     <span style={{
                       display: 'inline-block', marginTop: 8,
-                      background: `${STATUS_CORES[leadAssociado.status] || '#5865f2'}22`,
-                      color: STATUS_CORES[leadAssociado.status] || '#5865f2',
-                      border: `1px solid ${STATUS_CORES[leadAssociado.status] || '#5865f2'}44`,
+                      background: `${acharEtapa(etapas, leadAssociado.status).cor}22`,
+                      color: acharEtapa(etapas, leadAssociado.status).cor,
+                      border: `1px solid ${acharEtapa(etapas, leadAssociado.status).cor}44`,
                       fontSize: 11, padding: '3px 12px', borderRadius: 6, fontWeight: 600,
                     }}>
-                      {STATUS_LABELS[leadAssociado.status] || leadAssociado.status}
+                      {acharEtapa(etapas, leadAssociado.status).label}
                     </span>
                   )}
                 </div>
@@ -665,12 +637,12 @@ export default function ConversasPage({ leads = [] }) {
                     {l.nicho && <div>🏢 {l.nicho}</div>}
                     <div style={{ marginTop: 6 }}>
                       <span style={{
-                        background: `${STATUS_CORES[l.status] || '#5865f2'}22`,
-                        color: STATUS_CORES[l.status] || '#5865f2',
-                        border: `1px solid ${STATUS_CORES[l.status] || '#5865f2'}44`,
+                        background: `${acharEtapa(etapas, l.status).cor}22`,
+                        color: acharEtapa(etapas, l.status).cor,
+                        border: `1px solid ${acharEtapa(etapas, l.status).cor}44`,
                         fontSize: 11, padding: '2px 10px', borderRadius: 6, fontWeight: 600,
                       }}>
-                        {STATUS_LABELS[l.status] || l.status}
+                        {acharEtapa(etapas, l.status).label}
                       </span>
                     </div>
                   </div>

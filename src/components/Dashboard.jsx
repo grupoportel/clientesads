@@ -1,19 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { ref, onValue } from 'firebase/database';
-import { database } from '../firebase';
-
-const STATUS_CONFIG = {
-  'nenhum':            { label: 'Nenhum',            cls: 's-nenhum' },
-  'lead-qualificado':  { label: 'Lead Qualificado',  cls: 's-lead-qualificado' },
-  'ligacao-feita':     { label: 'Ligação Feita',      cls: 's-ligacao-feita' },
-  'contato-decisor':   { label: 'Contato Decisor',    cls: 's-contato-decisor' },
-  'reuniao-marcada':   { label: 'Reunião Marcada',    cls: 's-reuniao-marcada' },
-  'contrato-realizado':{ label: 'Contrato Realizado', cls: 's-contrato-realizado' },
-  'venda':             { label: 'Venda',              cls: 's-venda' },
-  'perda':             { label: 'Perda',              cls: 's-perda' },
-  'concluido':         { label: 'Concluído',          cls: 's-concluido' },
-};
-
+import { useMemo } from 'react';
+import { acharEtapa, etapasDoFunil, ehGanho, ehAberto, valorEmAberto, previsaoPonderada, valorGanho, formatarBRL, formatarBRLCurto } from '../pipeline';
 
 const cardBase = {
   background: 'var(--surface)',
@@ -43,32 +29,18 @@ const statusMeetingType = {
   'venda':              'Apresentação',
 };
 
-export default function Dashboard({ leads = [] }) {
-  const [tarefasDia, setTarefasDia] = useState([]);
-
-  useEffect(() => {
-    const unsub = onValue(ref(database, 'crm_data/tarefas'), (snap) => {
-      const data = snap.val();
-      const hoje = new Date().toISOString().slice(0, 10);
-      if (data) {
-        const todasAsTarefas = Object.entries(data).map(([id, t]) => ({ ...t, id }));
-        setTarefasDia(todasAsTarefas.filter(t => t.data === hoje).sort((a,b) => (a.hora||'').localeCompare(b.hora||'')));
-      } else {
-        setTarefasDia([]);
-      }
-    });
-    return () => unsub();
-  }, []);
+export default function Dashboard({ leads = [], etapas = [], tarefas = [], metas = {} }) {
+  // As tarefas agora chegam por prop: o App já as carrega, não faz sentido um
+  // segundo listener lendo o mesmo caminho.
+  const tarefasDia = useMemo(() => {
+    const hoje = new Date().toISOString().slice(0, 10);
+    return tarefas
+      .filter(t => t.data === hoje)
+      .sort((a, b) => (a.hora || '').localeCompare(b.hora || ''));
+  }, [tarefas]);
 
   const {
-    hoje,
     totalLeads,
-    reunioesFuturas,
-    reunioesHoje,
-    contratos,
-    taxaConv,
-    receitaEstimada,
-    progressReceita,
     funilData,
     funilMax,
     leadsRecentes,
@@ -77,82 +49,101 @@ export default function Dashboard({ leads = [] }) {
     ranking,
   } = useMemo(() => {
     const hoje = new Date().toISOString().slice(0, 10);
-
     const totalLeads = leads.length;
 
     const reunioesFuturas = leads.filter(l => l.reuniao && l.reuniao >= hoje);
-    const reunioesHoje   = leads.filter(l => l.reuniao === hoje);
+    const reunioesHoje    = leads.filter(l => l.reuniao === hoje);
 
-    const contratos = leads.filter(l => l.status === 'venda' || l.status === 'contrato-realizado');
-    const taxaConv  = totalLeads > 0 ? Math.round(contratos.length / totalLeads * 100) : 0;
+    // "Ganho" agora vem da configuração do funil, não de uma lista solta em
+    // cada tela — era isso que fazia o Dashboard e a barra de estatísticas
+    // mostrarem números diferentes para a mesma pergunta.
+    const ganhos   = leads.filter(l => ehGanho(etapas, l.status));
+    const taxaConv = totalLeads > 0 ? Math.round(ganhos.length / totalLeads * 100) : 0;
 
-    const receitaEstimada = contratos.length * 1500;
-    const metaMensal      = 60000;
-    const progressReceita = Math.min(Math.round(receitaEstimada / metaMensal * 100), 100);
+    const receitaGanha = valorGanho(etapas, leads);
+    const emAberto     = valorEmAberto(etapas, leads);
+    const previsao     = previsaoPonderada(etapas, leads);
 
-    const statusFunil  = ['lead-qualificado', 'ligacao-feita', 'contato-decisor', 'reuniao-marcada', 'contrato-realizado', 'venda'];
-    const statusLabels = { 'lead-qualificado': 'Lead Qualificado', 'ligacao-feita': 'Ligação Feita', 'contato-decisor': 'Contato Decisor', 'reuniao-marcada': 'Reunião Marcada', 'contrato-realizado': 'Contrato Realizado', 'venda': 'Venda' };
-    const statusColors = { 'lead-qualificado': 'var(--s-lead-qualificado)', 'ligacao-feita': 'var(--s-ligacao-feita)', 'contato-decisor': 'var(--s-contato-decisor)', 'reuniao-marcada': 'var(--s-reuniao-marcada)', 'contrato-realizado': 'var(--s-contrato-realizado)', 'venda': 'var(--s-venda)' };
+    const metaMensal      = Number(metas.receitaMensal) || 0;
+    const progressReceita = metaMensal > 0
+      ? Math.min(Math.round(receitaGanha / metaMensal * 100), 100)
+      : 0;
 
-    const funilData = statusFunil.map(s => ({
-      key:   s,
-      label: statusLabels[s],
-      count: leads.filter(l => l.status === s).length,
-      color: statusColors[s],
-    }));
+    const funilData = etapasDoFunil(etapas).map(etapa => {
+      const daEtapa = leads.filter(l => l.status === etapa.id);
+      return {
+        key:   etapa.id,
+        label: etapa.label,
+        count: daEtapa.length,
+        valor: daEtapa.reduce((s, l) => s + (Number(l.valor) || 0), 0),
+        color: etapa.cor,
+      };
+    });
     const funilMax = Math.max(...funilData.map(f => f.count), 1);
 
     const leadsRecentes    = [...leads].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 5);
-    const proximasReunioes = [...leads].filter(l => l.reuniao && l.reuniao >= hoje).sort((a, b) => a.reuniao.localeCompare(b.reuniao)).slice(0, 4);
+    const proximasReunioes = reunioesFuturas.slice().sort((a, b) => a.reuniao.localeCompare(b.reuniao)).slice(0, 4);
 
     const ranking = Object.values(leads.reduce((acc, l) => {
       const resp = l.responsavel || 'Sem responsável';
-      if (!acc[resp]) acc[resp] = { name: resp, leads: 0, conversoes: 0, initials: resp.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase().slice(0,2) };
+      if (!acc[resp]) acc[resp] = { name: resp, leads: 0, conversoes: 0, valor: 0, initials: resp.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase().slice(0,2) };
       acc[resp].leads++;
-      if (l.status === 'venda' || l.status === 'contrato-realizado') acc[resp].conversoes++;
+      if (ehGanho(etapas, l.status)) {
+        acc[resp].conversoes++;
+        acc[resp].valor += Number(l.valor) || 0;
+      }
       return acc;
     }, {}))
     .map(r => ({ ...r, conversion: r.leads > 0 ? Math.round(r.conversoes / r.leads * 100) : 0 }))
-    .sort((a, b) => b.leads - a.leads)
+    .sort((a, b) => b.valor - a.valor || b.leads - a.leads)
     .slice(0, 5);
+
+    const semValor = leads.filter(l => ehAberto(etapas, l.status) && !(Number(l.valor) > 0)).length;
 
     const kpis = [
       {
-        label:    'Total de Leads',
-        value:    totalLeads,
-        sub:      `${leads.filter(l => l.status === 'nenhum').length} sem ação`,
-        icon:     '👥',
+        label:    'Pipeline em Aberto',
+        value:    formatarBRLCurto(emAberto),
+        sub:      semValor > 0
+                    ? `${semValor} lead(s) em aberto sem valor definido`
+                    : `${leads.filter(l => ehAberto(etapas, l.status)).length} negócios em andamento`,
+        icon:     '📊',
         accent:   'var(--accent)',
-        progress: Math.min(totalLeads / 300 * 100, 100),
+        progress: emAberto > 0 ? 100 : 0,
+        titulo:   formatarBRL(emAberto),
+      },
+      {
+        label:    'Previsão Ponderada',
+        value:    formatarBRLCurto(previsao),
+        sub:      'Valor × chance de fechar por etapa',
+        icon:     '🎯',
+        accent:   'var(--accent2)',
+        progress: emAberto > 0 ? Math.round(previsao / emAberto * 100) : 0,
+        titulo:   formatarBRL(previsao),
+      },
+      {
+        label:    'Receita Fechada',
+        value:    formatarBRLCurto(receitaGanha),
+        sub:      metaMensal > 0
+                    ? `${progressReceita}% da meta de ${formatarBRLCurto(metaMensal)}`
+                    : 'Defina a meta em Configurações → Metas',
+        icon:     '💰',
+        accent:   'var(--green)',
+        progress: progressReceita,
+        titulo:   formatarBRL(receitaGanha),
       },
       {
         label:    'Reuniões Agendadas',
         value:    reunioesFuturas.length,
-        sub:      `${reunioesHoje.length} hoje`,
+        sub:      `${reunioesHoje.length} hoje · taxa de conversão ${taxaConv}%`,
         icon:     '📅',
-        accent:   'var(--green)',
-        progress: Math.min(reunioesFuturas.length / 30 * 100, 100),
-      },
-      {
-        label:    'Contratos Fechados',
-        value:    contratos.length,
-        sub:      `Taxa: ${taxaConv}%`,
-        icon:     '📋',
-        accent:   'var(--pink)',
-        progress: taxaConv,
-      },
-      {
-        label:    'Receita Estimada',
-        value:    `R$ ${receitaEstimada.toLocaleString('pt-BR')}`,
-        sub:      'Meta: R$ 60.000',
-        icon:     '💰',
         accent:   'var(--yellow)',
-        progress: progressReceita,
+        progress: Math.min(reunioesFuturas.length / 30 * 100, 100),
       },
     ];
 
-    return { hoje, totalLeads, reunioesFuturas, reunioesHoje, contratos, taxaConv, receitaEstimada, progressReceita, funilData, funilMax, leadsRecentes, proximasReunioes, kpis, ranking };
-  }, [leads]);
+    return { totalLeads, funilData, funilMax, leadsRecentes, proximasReunioes, kpis, ranking };
+  }, [leads, etapas, metas]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
@@ -196,7 +187,10 @@ export default function Dashboard({ leads = [] }) {
             <p style={{ color: 'var(--text3)', fontSize: 13, margin: '0 0 8px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               {kpi.label}
             </p>
-            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--text)', margin: '0 0 4px' }}>
+            <p
+              style={{ fontFamily: "'DM Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--text)', margin: '0 0 4px' }}
+              title={kpi.titulo || undefined}
+            >
               {kpi.value}
             </p>
             <p style={{ color: 'var(--text3)', fontSize: 12, margin: '0 0 16px' }}>
@@ -251,8 +245,15 @@ export default function Dashboard({ leads = [] }) {
                       )}
                     </div>
                   </div>
-                  <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 13, color: 'var(--text2)', width: 28, textAlign: 'right', flexShrink: 0 }}>
-                    {stage.count}
+                  <span
+                    style={{
+                      fontFamily: "'DM Mono', monospace", fontSize: 12,
+                      color: stage.valor > 0 ? 'var(--green)' : 'var(--text3)',
+                      width: 62, textAlign: 'right', flexShrink: 0, fontWeight: 600,
+                    }}
+                    title={stage.valor > 0 ? formatarBRL(stage.valor) : 'Sem valor informado nesta etapa'}
+                  >
+                    {stage.valor > 0 ? formatarBRLCurto(stage.valor) : '—'}
                   </span>
                 </div>
               ))}
@@ -320,7 +321,7 @@ export default function Dashboard({ leads = [] }) {
               </p>
             ) : (
               leadsRecentes.map((lead, i) => {
-                const cfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG['nenhum'];
+                const cfg = acharEtapa(etapas, lead.status);
                 return (
                   <div key={lead.id || i} style={{
                     display: 'flex', alignItems: 'center', gap: 12, padding: '10px 8px', borderRadius: 8,
@@ -383,7 +384,12 @@ export default function Dashboard({ leads = [] }) {
                 </div>
                 <div style={{ flex: 1 }}>
                   <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{member.name}</p>
-                  <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text3)' }}>{member.leads} leads</p>
+                  <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text3)' }}>
+                    {member.leads} leads
+                    {member.valor > 0 && (
+                      <span style={{ color: 'var(--green)', fontWeight: 600 }}> · {formatarBRLCurto(member.valor)} fechados</span>
+                    )}
+                  </p>
                   <div style={{ marginTop: 6, height: 5, background: 'var(--surface2)', borderRadius: 4, overflow: 'hidden' }}>
                     <div style={{
                       width: `${member.conversion}%`, height: '100%',
@@ -412,7 +418,7 @@ export default function Dashboard({ leads = [] }) {
               </p>
             ) : (
               proximasReunioes.map((m, i) => {
-                const [ano, mes, dia] = m.reuniao.split('-');
+                const [, mes, dia] = m.reuniao.split('-');
                 const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
                 const mesStr = meses[parseInt(mes, 10) - 1] || mes;
                 const tipo = statusMeetingType[m.status] || 'Reunião';

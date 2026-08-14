@@ -407,13 +407,24 @@ export default function MetricasPage({ leads = [] }) {
     return { score, tier, cor, acao, sinais };
   };
 
+  // ── Scores calculados UMA vez por lista de leads ──
+  // Antes, calcScore() (15 blocos de regras) rodava uma vez por lead só para
+  // montar o texto de cada <option> do seletor, e mais uma rodada inteira para
+  // a distribuição — tudo fora de useMemo, a cada render.
+  const scorePorLead = useMemo(() => {
+    const mapa = new Map();
+    leads.forEach(l => mapa.set(l.id, calcScore(l)));
+    return mapa;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leads]);
+
   // ── IA Lead Scoring (individual) ──
   const scored = useMemo(() => {
     const alvo = leads.find(l => l.id === leadId) || leads[0];
     if (!alvo) return null;
-    return { lead: alvo, ...calcScore(alvo) };
+    return { lead: alvo, ...(scorePorLead.get(alvo.id) || calcScore(alvo)) };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leads, leadId]);
+  }, [leads, leadId, scorePorLead]);
 
   // ── Abas ──
   const ABAS = [
@@ -882,7 +893,7 @@ export default function MetricasPage({ leads = [] }) {
                           : `— escolha entre ${leadsFiltrados.length} lead${leadsFiltrados.length !== 1 ? 's' : ''} —`}
                       </option>
                       {leadsFiltrados.map(l => {
-                        const s = calcScore(l);
+                        const s = scorePorLead.get(l.id) || { score: 0 };
                         const emoji = s.score >= 80 ? '🔥' : s.score >= 65 ? '⚡' : s.score >= 45 ? '🔵' : '❄️';
                         return (
                           <option key={l.id} value={l.id}>
@@ -986,8 +997,8 @@ export default function MetricasPage({ leads = [] }) {
                   { label: '❄️ Baixo Potencial (< 45)', min: 0, max: 45, cor: 'var(--red)' },
                 ];
 
-                // Reutiliza a mesma função centralizada calcScore
-                const scoresRapidos = leads.map(l => calcScore(l).score);
+                // Reaproveita os scores já calculados, sem uma segunda rodada
+                const scoresRapidos = leads.map(l => (scorePorLead.get(l.id)?.score) ?? 0);
 
                 const total = scoresRapidos.length || 1;
                 return (

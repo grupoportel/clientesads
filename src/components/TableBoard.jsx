@@ -1,16 +1,5 @@
 import React, { useState, useMemo } from 'react';
-
-const STATUS_CONFIG = {
-  'nenhum':                { label: 'Nenhum',               cls: 's-nenhum' },
-  'lead-qualificado':      { label: 'Lead Qualificado',     cls: 's-lead-qualificado' },
-  'ligacao-feita':         { label: 'Ligação Feita',        cls: 's-ligacao-feita' },
-  'contato-decisor':       { label: 'Contato com decisor',  cls: 's-contato-decisor' },
-  'reuniao-marcada':       { label: 'Reunião Marcada',      cls: 's-reuniao-marcada'},
-  'contrato-realizado':    { label: 'Contrato Realizado',   cls: 's-contrato-realizado' },
-  'venda':                 { label: 'Venda',                cls: 's-venda' },
-  'perda':                 { label: 'Perda',                cls: 's-perda' },
-  'concluido':             { label: 'Concluído',            cls: 's-concluido' }
-};
+import { acharEtapa, etapasAtivas, formatarBRL } from '../pipeline';
 
 const ORIGEM_OPTIONS = [
   { value: 'gmn', label: 'GMN' }, { value: 'whatsapp', label: 'WhatsApp' },
@@ -19,7 +8,7 @@ const ORIGEM_OPTIONS = [
   { value: 'site', label: 'Site / Inbound' }, { value: 'outro', label: 'Outro' }
 ];
 
-const STATUS_OPTIONS = Object.entries(STATUS_CONFIG).map(([k, v]) => ({ value: k, label: v.label }));
+
 
 const limpaTel = (t) => String(t || '').replace(/\D/g, '');
 const formataData = (d) => d ? d.split('-').reverse().join('/') : '';
@@ -87,8 +76,13 @@ const EditableCell = ({ lead, field, type = "text", options = [], editCell, setE
 // ---------------------------------------------------------
 // COMPONENTE PRINCIPAL
 // ---------------------------------------------------------
-export default function TableBoard({ leads, onEdit, onDelete, onInlineEdit, selectedLeads, setSelectedLeads, onOpenDetail, nichos=[], responsaveis=[], estados=[], cidades=[] }) {
+export default function TableBoard({ leads, onEdit, onDelete, onInlineEdit, selectedLeads, setSelectedLeads, onOpenDetail, nichos=[], responsaveis=[], estados=[], cidades=[], etapas=[] }) {
   const [editCell, setEditCell] = useState({ id: null, field: null, value: '' });
+
+  const STATUS_OPTIONS = useMemo(
+    () => etapasAtivas(etapas).map(e => ({ value: e.id, label: e.label })),
+    [etapas]
+  );
   
   // Variáveis para a ordenação (Sort)
   const [sortConfig, setSortConfig] = useState({ key: null, dir: 1 });
@@ -157,6 +151,7 @@ export default function TableBoard({ leads, onEdit, onDelete, onInlineEdit, sele
               <th style={{ minWidth: '300px', cursor: 'pointer' }} onClick={() => handleSort('nome')}>Nome / Empresa{getSortIcon('nome')}</th>
               <th style={{ minWidth: '150px', cursor: 'pointer' }} onClick={() => handleSort('responsavel')}>Responsável{getSortIcon('responsavel')}</th>
               <th style={{ minWidth: '160px', cursor: 'pointer' }} onClick={() => handleSort('status')}>Status{getSortIcon('status')}</th>
+              <th style={{ minWidth: '130px', cursor: 'pointer' }} onClick={() => handleSort('valor')}>Valor{getSortIcon('valor')}</th>
               <th style={{ minWidth: '140px', cursor: 'pointer' }} onClick={() => handleSort('origem')}>Origem{getSortIcon('origem')}</th>
               <th style={{ minWidth: '150px', cursor: 'pointer' }} onClick={() => handleSort('nicho')}>Nicho{getSortIcon('nicho')}</th>
               <th style={{ minWidth: '120px', cursor: 'pointer' }} onClick={() => handleSort('estado')}>Estado{getSortIcon('estado')}</th>
@@ -183,7 +178,7 @@ export default function TableBoard({ leads, onEdit, onDelete, onInlineEdit, sele
           <tbody>
             {sortedLeads.map((lead) => {
               const isChecked = selectedLeads.includes(lead.id);
-              const status = STATUS_CONFIG[lead.status] || STATUS_CONFIG['nenhum'];
+              const status = acharEtapa(etapas, lead.status);
               const linkWpp = lead.whatsapp ? `https://wa.me/55${limpaTel(lead.whatsapp)}` : '';
               const linkIgEmpresa = urlIg(lead.instagram);
               const linkIgDono = urlIg(lead.ig_dono);
@@ -217,6 +212,7 @@ export default function TableBoard({ leads, onEdit, onDelete, onInlineEdit, sele
                   
                   <td><EditableCell {...cellProps} field="responsavel" type="select" options={formatOptions(responsaveis)}>{lead.responsavel ? <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><div className="avatar">{lead.responsavel.charAt(0)}</div>{lead.responsavel}</div> : <span className="td-empty">—</span>}</EditableCell></td>
                   <td><EditableCell {...cellProps} field="status" type="select" options={STATUS_OPTIONS}><button className={`status-badge ${status.cls}`}>{status.label} ▾</button></EditableCell></td>
+                  <td><EditableCell {...cellProps} field="valor" type="number">{Number(lead.valor) > 0 ? <span style={{ fontFamily: "'DM Mono', monospace", fontWeight: 600, color: 'var(--green)' }}>{formatarBRL(lead.valor)}</span> : <span className="td-empty">—</span>}</EditableCell></td>
                   <td><EditableCell {...cellProps} field="origem" type="select" options={ORIGEM_OPTIONS}>{lead.origem ? <span className="badge-pill" style={{textTransform: 'capitalize'}}>{lead.origem}</span> : <span className="td-empty">—</span>}</EditableCell></td>
                   <td><EditableCell {...cellProps} field="nicho" type="select" options={formatOptions(nichos)}>{lead.nicho ? <span className="badge-pill">{lead.nicho}</span> : <span className="td-empty">—</span>}</EditableCell></td>
                   <td><EditableCell {...cellProps} field="estado" type="select" options={formatOptions(estados)}>{lead.estado ? <span className="badge-pill">{lead.estado}</span> : <span className="td-empty">—</span>}</EditableCell></td>

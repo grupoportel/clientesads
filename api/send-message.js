@@ -1,46 +1,37 @@
 // api/send-message.js
 // Vercel Serverless Function — Envia mensagens via API do WhatsApp (Meta)
-// Chamado pelo frontend quando o atendente digita uma resposta no CRM
+// Chamado pelo frontend quando o atendente digita uma resposta no CRM.
+// Exige um token de sessão válido do Firebase: sem isso, qualquer pessoa na
+// internet poderia disparar WhatsApp pelo número oficial da empresa.
 
-import admin from 'firebase-admin';
+import { exigirUsuario, obterBanco } from './_auth.js';
 
-// ── Inicializa o Firebase Admin (uma única vez) ──
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId:   process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey:  process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    }),
-    databaseURL: process.env.FIREBASE_DATABASE_URL,
-  });
-}
-
-const db = admin.database();
-
-// ── Handler Principal ──
 export default async function handler(req, res) {
-  // Segurança: apenas aceitar POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Método não permitido' });
   }
 
-  const { conversaId, texto, telefoneDestino } = req.body;
+  // ── Porteiro ──
+  const usuario = await exigirUsuario(req, res);
+  if (!usuario) return; // exigirUsuario já respondeu 401
 
-  // Validação dos campos obrigatórios
+  const { conversaId, texto, telefoneDestino } = req.body || {};
+
   if (!conversaId || !texto || !telefoneDestino) {
-    return res.status(400).json({ error: 'Campos obrigatórios: conversaId, texto, telefoneDestino' });
+    return res.status(400).json({ error: 'Informe a conversa, o texto e o telefone de destino.' });
   }
 
-  const PHONE_ID    = process.env.WHATSAPP_PHONE_ID;
+  const PHONE_ID     = process.env.WHATSAPP_PHONE_ID;
   const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
 
   if (!PHONE_ID || !ACCESS_TOKEN) {
     console.error('[send-message] Variáveis de ambiente da Meta não configuradas.');
-    return res.status(500).json({ error: 'Configuração de WhatsApp incompleta no servidor' });
+    return res.status(500).json({ error: 'O WhatsApp ainda não foi configurado no servidor.' });
   }
 
   try {
+    const db = obterBanco();
+
     // ── 1. Enviar mensagem pela API da Meta ──
     const metaResponse = await fetch(
       `https://graph.facebook.com/v19.0/${PHONE_ID}/messages`,
@@ -64,9 +55,18 @@ export default async function handler(req, res) {
 
     if (!metaResponse.ok) {
       console.error('[send-message] Erro da API da Meta:', metaData);
+
+      // Fora da janela de 24h a Meta exige um template aprovado (HSM).
+      // Devolvemos o código para o front conseguir explicar isso ao atendente.
+      const codigo = metaData?.error?.code;
+      const foraDaJanela = codigo === 131047 || codigo === 131026;
+
       return res.status(502).json({
-        error:   'Erro ao enviar mensagem pela Meta',
-        details: metaData?.error?.message || 'Erro desconhecido',
+        error: foraDaJanela
+          ? 'Passaram-se mais de 24h desde a última mensagem do cliente. O WhatsApp só permite retomar a conversa com um modelo aprovado pela Meta.'
+          : (metaData?.error?.message || 'Não foi possível entregar a mensagem no WhatsApp.'),
+        metaCode: codigo || null,
+        foraDaJanela,
       });
     }
 
@@ -76,10 +76,12 @@ export default async function handler(req, res) {
 
     await msgRef.set({
       texto,
-      tipo:       'texto',
+      tipo:        'texto',
       criadoEm,
-      origem:     'saida',   // 'saida' = enviado pelo atendente do CRM
-      lida:       true,
+      origem:      'saida',   // 'saida' = enviado pelo atendente do CRM
+      lida:        true,
+      autorUid:    usuario.uid,
+      autorEmail:  usuario.email || null,
       waMessageId: metaData?.messages?.[0]?.id || null,
     });
 
@@ -89,11 +91,11 @@ export default async function handler(req, res) {
       ultimaAt:       criadoEm,
     });
 
-    console.log(`[send-message] Mensagem enviada com sucesso — conversa: ${conversaId}`);
+    console.log(`[send-message] Enviada por ${usuario.email} — conversa: ${conversaId}`);
     return res.status(200).json({ success: true, waMessageId: metaData?.messages?.[0]?.id });
 
   } catch (error) {
     console.error('[send-message] Erro interno:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor ao enviar mensagem' });
+    return res.status(500).json({ error: 'Não foi possível enviar a mensagem. Tente novamente.' });
   }
 }

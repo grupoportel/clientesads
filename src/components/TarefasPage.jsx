@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ref, onValue, set, remove, push } from 'firebase/database';
+import { ref, onValue, set, update, remove, push } from 'firebase/database';
 import { database } from '../firebase';
 import TarefaModal from './TarefaModal';
+import { registrarAtividade } from '../atividades';
 
 export default function TarefasPage({ leads = [], responsaveis = [] }) {
   const [tarefas, setTarefas] = useState([]);
@@ -68,20 +69,31 @@ export default function TarefasPage({ leads = [], responsaveis = [] }) {
     const agora = new Date().toISOString();
     if (!tarefaEmEdicao) {
       const novaRef = push(ref(database, 'crm_data/tarefas'));
-      set(novaRef, { ...dados, id: novaRef.key, concluida: false, createdAt: agora });
+      set(novaRef, { ...dados, id: novaRef.key, concluida: false, createdAt: agora, updatedAt: agora });
+      registrarAtividade({
+        leadId: dados.leadId, leadNome: dados.leadNome, tipo: 'tarefaCriada',
+        descricao: `Tarefa criada: "${dados.titulo}" para ${dados.data ? dados.data.split('-').reverse().join('/') : 'sem data'}`,
+      });
     } else {
-      set(ref(database, 'crm_data/tarefas/' + dados.id), { ...dados, updatedAt: agora });
+      const { id, createdAt, ...camposEditaveis } = dados;
+      update(ref(database, 'crm_data/tarefas/' + (id || tarefaEmEdicao.id)), { ...camposEditaveis, updatedAt: agora });
     }
     setModalAberto(false);
     setTarefaEmEdicao(null);
   };
 
   const toggleConcluida = (tarefa) => {
-    set(ref(database, 'crm_data/tarefas/' + tarefa.id), {
-      ...tarefa,
-      concluida: !tarefa.concluida,
+    const concluindo = !tarefa.concluida;
+    update(ref(database, 'crm_data/tarefas/' + tarefa.id), {
+      concluida: concluindo,
       updatedAt: new Date().toISOString(),
     });
+    if (concluindo) {
+      registrarAtividade({
+        leadId: tarefa.leadId, leadNome: tarefa.leadNome, tipo: 'tarefa',
+        descricao: `Tarefa concluída: "${tarefa.titulo}"`,
+      });
+    }
   };
 
   const deletarTarefa = (id) => {

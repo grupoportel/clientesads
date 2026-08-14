@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 
+import { etapasAtivas, acharEtapa, formatarBRL } from '../pipeline';
+
 const CAMPOS_INICIAIS = {
-  nome: '', status: 'nenhum', nicho: '', estado: '', cidade: '', origem: '', 
-  responsavel: '', decisor: '', cnpj: '', telefone: '', whatsapp: '', email: '', 
-  instagram: '', ig_dono: '', site: '', nota: '', avaliacoes: '', data_entrada: '', 
-  ultimo_contato: '', reuniao: '', melhores: '', oportunidades: '', pontos: '', 
+  nome: '', status: 'nenhum', valor: '', nicho: '', estado: '', cidade: '', origem: '',
+  responsavel: '', decisor: '', cnpj: '', telefone: '', whatsapp: '', email: '',
+  instagram: '', ig_dono: '', site: '', nota: '', avaliacoes: '', data_entrada: '',
+  ultimo_contato: '', reuniao: '', melhores: '', oportunidades: '', pontos: '',
   escalar: '', obs: '', motivoPerda: '', historico: ''
 };
 
 // Recebemos as listas do Firebase (nichos, responsaveis, etc.)
-export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos = [], responsaveis = [], estados = [], cidades = [] }) {
+export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos = [], responsaveis = [], estados = [], cidades = [], etapas = [] }) {
   const [formData, setFormData] = useState(CAMPOS_INICIAIS);
 
   useEffect(() => {
@@ -26,6 +28,8 @@ export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos =
   };
 
   if (!isOpen) return null;
+
+  const etapaAtual = acharEtapa(etapas, formData.status);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -49,16 +53,29 @@ export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos =
             <div className="form-group">
               <label>Status</label>
               <select className="form-control" name="status" value={formData.status} onChange={handleChange}>
-                <option value="nenhum">Nenhum</option>
-                <option value="lead-qualificado">Lead Qualificado</option>
-                <option value="ligacao-feita">Ligação Feita</option>
-                <option value="contato-decisor">Contato com decisor</option>
-                <option value="reuniao-marcada">Reunião Marcada</option>
-                <option value="contrato-realizado">Contrato Realizado</option>
-                <option value="venda">Venda</option>
-                <option value="perda">Perda</option>
-                <option value="concluido">Concluído</option>
+                {etapasAtivas(etapas).map(e => (
+                  <option key={e.id} value={e.id}>{e.label}</option>
+                ))}
               </select>
+            </div>
+
+            <div className="form-group">
+              <label>Valor do Negócio (R$)</label>
+              <input
+                className="form-control"
+                name="valor"
+                type="number"
+                min="0"
+                step="100"
+                value={formData.valor}
+                onChange={handleChange}
+                placeholder="Ex: 2500"
+              />
+              <span style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, display: 'block' }}>
+                {Number(formData.valor) > 0
+                  ? `Nesta etapa a chance é de ${etapaAtual.probabilidade}% — previsão de ${formatarBRL(Number(formData.valor) * etapaAtual.probabilidade / 100)}`
+                  : 'Sem valor, este lead não entra na previsão de receita.'}
+              </span>
             </div>
 
             {/* NICHO MUDOU PARA DROPDOWN */}

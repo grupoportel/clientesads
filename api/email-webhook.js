@@ -3,24 +3,7 @@
 // Este endpoint é chamado pelo script do Google quando um novo e-mail chega
 // na caixa do Gmail (timeportel@gmail.com).
 
-// ── Usa a API modular do firebase-admin (correta para ESM / Vercel) ──────────
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getDatabase }                   from 'firebase-admin/database';
-
-function getFirebaseDB() {
-  if (!getApps().length) {
-    initializeApp({
-      credential: cert({
-        projectId:   process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        // A chave privada vem com \n escapado do Vercel — o replace corrige
-        privateKey:  process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      }),
-      databaseURL: process.env.FIREBASE_DATABASE_URL,
-    });
-  }
-  return getDatabase();
-}
+import { obterBanco } from './_auth.js';
 
 export default async function handler(req, res) {
   // ── Health check (GET) — sempre retornar 200 ──────────────────────────────
@@ -51,7 +34,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const db   = getFirebaseDB();
+    const db   = obterBanco();
     const agora = dataRecebimento || new Date().toISOString();
 
     // ── Extrair nome e e-mail do remetente ────────────────────────────────
@@ -62,7 +45,7 @@ export default async function handler(req, res) {
     const emailRemetente = matchEmail ? matchEmail[1].trim() : de.trim();
 
     // ── Buscar thread existente com esse e-mail no Firebase ───────────────
-    const emailsRef = getDatabase().ref('crm_data/emails');
+    const emailsRef = db.ref('crm_data/emails');
     const snapshot  = await emailsRef
       .orderByChild('email')
       .equalTo(emailRemetente)
@@ -94,18 +77,21 @@ export default async function handler(req, res) {
       });
     } else {
       // ── Atualizar thread existente ─────────────────────────────────────
-      const threadRef      = getDatabase().ref(`crm_data/emails/${threadId}`);
+      const threadRef      = db.ref(`crm_data/emails/${threadId}`);
       const snap           = await threadRef.once('value');
       const naoLidasAtual  = snap.val()?.naoLidas || 0;
       await threadRef.update({
         ultimaMensagem: corpo.substring(0, 120),
         ultimaAt:       agora,
         naoLidas:       naoLidasAtual + 1,
+        // Marca que a conversa teve resposta do cliente. É isso que mantém a
+        // thread na aba "Recebidos" mesmo depois de lida.
+        temResposta:    true,
       });
     }
 
     // ── Salvar mensagem na sub-coleção ────────────────────────────────────
-    const msgRef = getDatabase().ref(`crm_data/emails/${threadId}/mensagens`).push();
+    const msgRef = db.ref(`crm_data/emails/${threadId}/mensagens`).push();
     await msgRef.set({
       texto:    corpo,
       assunto:  assunto || '(sem assunto)',

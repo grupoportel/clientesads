@@ -51,17 +51,6 @@ const AddInput = ({ value, onChange, onAdd, placeholder }) => (
    Static Data
 ───────────────────────────────────────────── */
 
-const pipelineStages = [
-  { name: 'Nenhum', color: '#5865f2', enabled: true },
-  { name: 'Lead Qualificado', color: '#3b82f6', enabled: true },
-  { name: 'Ligação Feita', color: '#eab308', enabled: true },
-  { name: 'Contato com Decisor', color: '#a855f7', enabled: true },
-  { name: 'Reunião Marcada', color: '#22c55e', enabled: true },
-  { name: 'Contrato Realizado', color: '#ec4899', enabled: true },
-  { name: 'Venda', color: '#14b8a6', enabled: true },
-  { name: 'Perda', color: '#ef4444', enabled: true },
-  { name: 'Concluído', color: '#8b5cf6', enabled: true },
-];
 
 
 const roleBadge = (role) => {
@@ -77,9 +66,18 @@ const roleBadge = (role) => {
    ConfigPage
 ───────────────────────────────────────────── */
 
-export default function ConfigPage() {
+export default function ConfigPage({ etapas = [], metas = {} }) {
   const [activeTab, setActiveTab] = useState('Pipeline');
-  const tabs = ['Pipeline', 'Equipe', 'Nichos', 'Regiões', 'Empresa', 'Usuários'];
+  const tabs = ['Pipeline', 'Metas', 'Equipe', 'Nichos', 'Regiões', 'Empresa', 'Usuários'];
+
+  // Rascunho local das etapas — só vai para o banco quando o usuário salvar
+  const [rascunhoEtapas, setRascunhoEtapas] = useState(etapas);
+  const [etapasSalvas, setEtapasSalvas] = useState(false);
+  useEffect(() => { setRascunhoEtapas(etapas); }, [etapas]);
+
+  const [rascunhoMetas, setRascunhoMetas] = useState(metas);
+  const [metasSalvas, setMetasSalvas] = useState(false);
+  useEffect(() => { setRascunhoMetas(metas); }, [metas]);
 
   // Firebase state
   const [nichos, setNichos] = useState([]);
@@ -156,70 +154,231 @@ export default function ConfigPage() {
   };
 
   /* ─────────────────────────────────────────────
-     Tab: Pipeline
+     Tab: Pipeline — agora grava de verdade
   ───────────────────────────────────────────── */
+  const alterarEtapa = (id, campo, valor) => {
+    setRascunhoEtapas(lista => lista.map(e => (e.id === id ? { ...e, [campo]: valor } : e)));
+  };
+
+  const moverEtapa = (indice, direcao) => {
+    const destino = indice + direcao;
+    if (destino < 0 || destino >= rascunhoEtapas.length) return;
+    setRascunhoEtapas(lista => {
+      const copia = [...lista];
+      [copia[indice], copia[destino]] = [copia[destino], copia[indice]];
+      return copia;
+    });
+  };
+
+  const salvarPipeline = () => {
+    const paraSalvar = rascunhoEtapas.map((e, i) => ({
+      id: e.id,
+      label: e.label,
+      cor: e.cor,
+      probabilidade: Math.max(0, Math.min(100, Number(e.probabilidade) || 0)),
+      ganho: !!e.ganho,
+      perdido: !!e.perdido,
+      ativo: e.ativo !== false,
+      ordem: i,
+    }));
+    set(ref(database, 'crm_data/config/pipeline'), paraSalvar);
+    setEtapasSalvas(true);
+    setTimeout(() => setEtapasSalvas(false), 2500);
+  };
+
   const renderPipeline = () => (
-    <div className="crm-card" style={{ maxWidth: 720 }}>
+    <div className="crm-card" style={{ maxWidth: 860 }}>
       <div className="crm-card-header">
         <div>
           <div className="crm-card-title">Etapas do Pipeline</div>
-          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>
-            Gerencie as etapas de negociação do seu funil de vendas
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4, maxWidth: 560, lineHeight: 1.5 }}>
+            A <strong>chance de fechar</strong> de cada etapa é o que gera a previsão ponderada
+            no Dashboard: um lead de R$ 10.000 em uma etapa de 40% entra na previsão como R$ 4.000.
           </div>
         </div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {pipelineStages.map((stage, idx) => (
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {/* Cabeçalho da grade */}
+        <div style={{
+          display: 'grid', gridTemplateColumns: '54px 1fr 92px 96px 72px',
+          gap: 10, padding: '0 14px 4px', fontSize: 10, fontWeight: 700,
+          textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text3)',
+        }}>
+          <span>Ordem</span><span>Nome da etapa</span><span>Chance</span><span>Resultado</span><span>Ativa</span>
+        </div>
+
+        {rascunhoEtapas.map((etapa, idx) => (
           <div
-            key={idx}
-            className="config-item"
+            key={etapa.id}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              padding: '12px 16px',
-              borderRadius: 10,
-              background: 'var(--surface2)',
-              border: '1px solid var(--border)',
-              userSelect: 'none',
+              display: 'grid', gridTemplateColumns: '54px 1fr 92px 96px 72px',
+              gap: 10, alignItems: 'center', padding: '10px 14px', borderRadius: 10,
+              background: 'var(--surface2)', border: '1px solid var(--border)',
+              opacity: etapa.ativo === false ? 0.5 : 1,
             }}
           >
-            <span style={{ color: 'var(--text3)', fontSize: 18, cursor: 'grab' }}>⠿</span>
-            <div
-              style={{
-                width: 12,
-                height: 12,
-                borderRadius: '50%',
-                background: stage.color,
-                flexShrink: 0,
+            {/* Reordenar */}
+            <div style={{ display: 'flex', gap: 2 }}>
+              <button
+                onClick={() => moverEtapa(idx, -1)}
+                disabled={idx === 0}
+                title="Mover para cima"
+                style={{
+                  background: 'transparent', border: '1px solid var(--border)', borderRadius: 6,
+                  color: 'var(--text3)', cursor: idx === 0 ? 'not-allowed' : 'pointer',
+                  padding: '2px 6px', fontSize: 11, opacity: idx === 0 ? 0.35 : 1,
+                }}
+              >▲</button>
+              <button
+                onClick={() => moverEtapa(idx, 1)}
+                disabled={idx === rascunhoEtapas.length - 1}
+                title="Mover para baixo"
+                style={{
+                  background: 'transparent', border: '1px solid var(--border)', borderRadius: 6,
+                  color: 'var(--text3)', cursor: idx === rascunhoEtapas.length - 1 ? 'not-allowed' : 'pointer',
+                  padding: '2px 6px', fontSize: 11, opacity: idx === rascunhoEtapas.length - 1 ? 0.35 : 1,
+                }}
+              >▼</button>
+            </div>
+
+            {/* Nome + cor */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+              <input
+                type="color"
+                value={etapa.cor}
+                onChange={e => alterarEtapa(etapa.id, 'cor', e.target.value)}
+                title="Cor da etapa"
+                style={{
+                  width: 26, height: 26, padding: 0, border: '1px solid var(--border)',
+                  borderRadius: 6, background: 'transparent', cursor: 'pointer', flexShrink: 0,
+                }}
+              />
+              <input
+                className="form-control"
+                value={etapa.label}
+                onChange={e => alterarEtapa(etapa.id, 'label', e.target.value)}
+                style={{ fontSize: 13, padding: '5px 10px' }}
+              />
+            </div>
+
+            {/* Probabilidade */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input
+                className="form-control"
+                type="number"
+                min="0"
+                max="100"
+                value={etapa.probabilidade}
+                onChange={e => alterarEtapa(etapa.id, 'probabilidade', e.target.value)}
+                style={{ fontSize: 13, padding: '5px 8px', width: 62, textAlign: 'right' }}
+              />
+              <span style={{ fontSize: 12, color: 'var(--text3)' }}>%</span>
+            </div>
+
+            {/* Resultado */}
+            <select
+              className="form-control"
+              style={{ fontSize: 12, padding: '5px 8px' }}
+              value={etapa.ganho ? 'ganho' : etapa.perdido ? 'perda' : 'aberto'}
+              onChange={e => {
+                const v = e.target.value;
+                setRascunhoEtapas(lista => lista.map(x => x.id === etapa.id
+                  ? { ...x, ganho: v === 'ganho', perdido: v === 'perda' }
+                  : x));
               }}
-            />
-            <span style={{ flex: 1, fontSize: 14, color: 'var(--text)' }}>{stage.name}</span>
-            <div
-              className={`toggle-switch ${stage.enabled ? 'active' : ''}`}
-              style={{ cursor: 'pointer' }}
-            />
+              title="Define o que o sistema conta como fechamento, perda ou negócio em aberto"
+            >
+              <option value="aberto">Em aberto</option>
+              <option value="ganho">Ganho</option>
+              <option value="perda">Perda</option>
+            </select>
+
+            {/* Ativa */}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text3)', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={etapa.ativo !== false}
+                onChange={e => alterarEtapa(etapa.id, 'ativo', e.target.checked)}
+                style={{ cursor: 'pointer' }}
+              />
+              {etapa.ativo !== false ? 'Sim' : 'Não'}
+            </label>
           </div>
         ))}
       </div>
-      <button
-        style={{
-          marginTop: 16,
-          width: '100%',
-          padding: '12px',
-          borderRadius: 10,
-          border: '2px dashed var(--border2)',
-          background: 'transparent',
-          color: 'var(--text3)',
-          fontSize: 14,
-          cursor: 'pointer',
-          transition: 'all 0.2s',
-        }}
-        onMouseEnter={(e) => (e.target.style.borderColor = 'var(--accent)')}
-        onMouseLeave={(e) => (e.target.style.borderColor = 'var(--border2)')}
-      >
-        + Adicionar Etapa
-      </button>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 20 }}>
+        <button className="btn btn-primary" onClick={salvarPipeline}>💾 Salvar Pipeline</button>
+        <button className="btn btn-ghost" onClick={() => setRascunhoEtapas(etapas)}>Descartar alterações</button>
+        {etapasSalvas && (
+          <span style={{ fontSize: 13, color: 'var(--green)' }}>✅ Pipeline salvo!</span>
+        )}
+      </div>
+
+      <div style={{
+        marginTop: 16, padding: '10px 14px', borderRadius: 8,
+        background: 'var(--surface2)', border: '1px solid var(--border)',
+        fontSize: 12, color: 'var(--text3)', lineHeight: 1.55,
+      }}>
+        Desativar uma etapa a esconde do Kanban e dos formulários, mas <strong>não apaga</strong> os
+        leads que já estão nela — eles continuam contando nos relatórios.
+      </div>
+    </div>
+  );
+
+  /* ─────────────────────────────────────────────
+     Tab: Metas
+  ───────────────────────────────────────────── */
+  const salvarMetas = () => {
+    set(ref(database, 'crm_data/config/metas'), {
+      receitaMensal: Number(rascunhoMetas.receitaMensal) || 0,
+      novosLeadsMes: Number(rascunhoMetas.novosLeadsMes) || 0,
+      reunioesMes:   Number(rascunhoMetas.reunioesMes) || 0,
+    });
+    setMetasSalvas(true);
+    setTimeout(() => setMetasSalvas(false), 2500);
+  };
+
+  const campoMeta = (chave, rotulo, dica, prefixo = '') => (
+    <div className="form-group">
+      <label className="form-label">{rotulo}</label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {prefixo && <span style={{ color: 'var(--text3)', fontSize: 14 }}>{prefixo}</span>}
+        <input
+          className="form-control"
+          type="number"
+          min="0"
+          value={rascunhoMetas[chave] ?? ''}
+          onChange={e => setRascunhoMetas(m => ({ ...m, [chave]: e.target.value }))}
+          placeholder="0"
+        />
+      </div>
+      <span style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, display: 'block' }}>{dica}</span>
+    </div>
+  );
+
+  const renderMetas = () => (
+    <div className="crm-card" style={{ maxWidth: 620 }}>
+      <div className="crm-card-header">
+        <div>
+          <div className="crm-card-title">🎯 Metas do Mês</div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>
+            Antes essas metas estavam fixas no código e mudá-las exigia um novo deploy.
+          </div>
+        </div>
+      </div>
+
+      <div className="form-grid">
+        {campoMeta('receitaMensal', 'Meta de receita mensal', 'Usada no anel de progresso do Financeiro e no card do Dashboard.', 'R$')}
+        {campoMeta('novosLeadsMes', 'Meta de novos leads no mês', 'Quantos leads novos a equipe deve trazer por mês.')}
+        {campoMeta('reunioesMes', 'Meta de reuniões no mês', 'Quantas reuniões devem ser marcadas por mês.')}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 20 }}>
+        <button className="btn btn-primary" onClick={salvarMetas}>💾 Salvar Metas</button>
+        {metasSalvas && <span style={{ fontSize: 13, color: 'var(--green)' }}>✅ Metas salvas!</span>}
+      </div>
     </div>
   );
 
@@ -365,23 +524,6 @@ export default function ConfigPage() {
       <div className="crm-card">
         <div className="crm-card-header">
           <div className="crm-card-title">🏢 Dados da Empresa</div>
-        </div>
-
-        {/* Logo upload area (visual only) */}
-        <div
-          style={{
-            border: '2px dashed var(--border2)',
-            borderRadius: 12,
-            padding: '24px',
-            textAlign: 'center',
-            marginBottom: 24,
-            color: 'var(--text3)',
-            fontSize: 13,
-          }}
-        >
-          <div style={{ fontSize: 32, marginBottom: 8 }}>📷</div>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>Upload de logo em breve</div>
-          <div style={{ fontSize: 11 }}>PNG, JPG ou SVG até 2MB</div>
         </div>
 
         <div className="form-grid">
@@ -586,6 +728,7 @@ export default function ConfigPage() {
 
         {/* Tab content */}
         {activeTab === 'Pipeline' && renderPipeline()}
+        {activeTab === 'Metas' && renderMetas()}
         {activeTab === 'Equipe' && renderEquipe()}
         {activeTab === 'Nichos' && renderNichos()}
         {activeTab === 'Regiões' && renderRegioes()}

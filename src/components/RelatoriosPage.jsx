@@ -1,4 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { acharEtapa, etapasDoFunil, ehGanho, formatarBRL, formatarBRLCurto } from '../pipeline';
+import { escutarAtividadesRecentes, tempoRelativo, TIPOS } from '../atividades';
 
 const getTaxaColor = (taxa) => {
   if (taxa > 60) return 'var(--green)';
@@ -6,7 +8,7 @@ const getTaxaColor = (taxa) => {
   return 'var(--red)';
 };
 
-export default function RelatoriosPage({ leads = [] }) {
+export default function RelatoriosPage({ leads = [], etapas = [] }) {
   const [activePeriod, setActivePeriod] = useState('30 dias');
   const periods = ['7 dias', '30 dias', '90 dias', 'Todos'];
 
@@ -19,29 +21,35 @@ export default function RelatoriosPage({ leads = [] }) {
   }, [leads, activePeriod]);
 
   /* ─── Funnel ──────────────────────────────────────────────────────── */
-  const statusOrder  = ['lead-qualificado', 'ligacao-feita', 'contato-decisor', 'reuniao-marcada', 'contrato-realizado', 'venda'];
-  const statusLabels = { 'lead-qualificado': 'Lead Qualificado', 'ligacao-feita': 'Ligação Feita', 'contato-decisor': 'Contato Decisor', 'reuniao-marcada': 'Reunião Marcada', 'contrato-realizado': 'Contrato Realizado', 'venda': 'Venda' };
-  const statusColors = { 'lead-qualificado': 'var(--accent)', 'ligacao-feita': 'var(--yellow)', 'contato-decisor': 'var(--purple)', 'reuniao-marcada': 'var(--green)', 'contrato-realizado': 'var(--pink)', 'venda': 'var(--s-venda)' };
-
   const funilData = useMemo(() => {
-    return statusOrder.map((s, i) => {
-      const count = leadsFiltrados.filter(l => l.status === s).length;
-      const prev  = i > 0 ? leadsFiltrados.filter(l => l.status === statusOrder[i - 1]).length : count;
-      const pct   = leadsFiltrados.length > 0 ? Math.round(count / leadsFiltrados.length * 100) : 0;
+    const doFunil = etapasDoFunil(etapas);
+    return doFunil.map((etapa, i) => {
+      const daEtapa = leadsFiltrados.filter(l => l.status === etapa.id);
+      const count   = daEtapa.length;
+      const valor   = daEtapa.reduce((s, l) => s + (Number(l.valor) || 0), 0);
+      const prev    = i > 0 ? leadsFiltrados.filter(l => l.status === doFunil[i - 1].id).length : count;
+      const pct     = leadsFiltrados.length > 0 ? Math.round(count / leadsFiltrados.length * 100) : 0;
       const convRate = prev > 0 && i > 0 ? Math.round(count / prev * 100) : null;
-      return { key: s, name: statusLabels[s], count, pct, convRate: convRate !== null ? `${convRate}%` : null, color: statusColors[s] };
+      return {
+        key: etapa.id, name: etapa.label, count, valor, pct,
+        convRate: convRate !== null ? `${convRate}%` : null,
+        color: etapa.cor,
+      };
     });
-  }, [leadsFiltrados]);
+  }, [leadsFiltrados, etapas]);
 
   /* ─── Performance por responsável ─────────────────────────────────── */
   const perfResponsavel = useMemo(() => {
     const map = {};
     leadsFiltrados.forEach(l => {
       const r = l.responsavel || 'Sem responsável';
-      if (!map[r]) map[r] = { name: r, leads: 0, reunioes: 0, conversoes: 0 };
+      if (!map[r]) map[r] = { name: r, leads: 0, reunioes: 0, conversoes: 0, valor: 0 };
       map[r].leads++;
       if (l.reuniao) map[r].reunioes++;
-      if (l.status === 'venda' || l.status === 'contrato-realizado') map[r].conversoes++;
+      if (ehGanho(etapas, l.status)) {
+        map[r].conversoes++;
+        map[r].valor += Number(l.valor) || 0;
+      }
     });
     return Object.values(map)
       .map(r => ({
@@ -49,9 +57,9 @@ export default function RelatoriosPage({ leads = [] }) {
         taxa: r.leads > 0 ? Math.round(r.conversoes / r.leads * 100) : 0,
         initials: r.name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase().slice(0, 2),
       }))
-      .sort((a, b) => b.leads - a.leads)
+      .sort((a, b) => b.valor - a.valor || b.leads - a.leads)
       .slice(0, 5);
-  }, [leadsFiltrados]);
+  }, [leadsFiltrados, etapas]);
 
   /* ─── Leads por origem ────────────────────────────────────────────── */
   const porOrigem = useMemo(() => {
@@ -81,30 +89,23 @@ export default function RelatoriosPage({ leads = [] }) {
   const nichoMax = Math.max(...porNicho.map(n => n.count), 1);
 
   /* ─── Atividade recente ───────────────────────────────────────────── */
-  const atividades = useMemo(() => {
-    const STATUS_LABELS = {
-      'lead-qualificado': 'Lead Qualificado', 'ligacao-feita': 'Ligação Feita',
-      'contato-decisor': 'Contato com decisor', 'reuniao-marcada': 'Reunião Marcada',
-      'contrato-realizado': 'Contrato Realizado', 'venda': 'Venda',
-      'perda': 'Perda', 'concluido': 'Concluído', 'nenhum': 'Nenhum',
-    };
-    return [...leads]
-      .filter(l => l.updatedAt)
-      .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
-      .slice(0, 8)
-      .map(l => {
-        const diff = Date.now() - new Date(l.updatedAt).getTime();
-        const h    = Math.floor(diff / 3600000);
-        const d    = Math.floor(diff / 86400000);
-        const timeStr = h < 1 ? 'Agora' : h < 24 ? `${h}h atrás` : `${d}d atrás`;
-        return {
-          time: timeStr,
-          icon: '📋',
-          desc: `${l.responsavel || 'Sistema'} atualizou ${l.nome} → ${STATUS_LABELS[l.status] || l.status}`,
-          id:   l.id,
-        };
-      });
-  }, [leads]);
+  // Agora vem da linha do tempo real: quem fez, o que mudou e quando.
+  // Antes era uma reconstrução do updatedAt do lead, que não sabia o que mudou.
+  const [atividadesBrutas, setAtividadesBrutas] = useState([]);
+
+  useEffect(() => {
+    const cancelar = escutarAtividadesRecentes(40, setAtividadesBrutas);
+    return () => cancelar();
+  }, []);
+
+  const atividades = useMemo(() => atividadesBrutas.slice(0, 10).map(a => ({
+    id:   a.id,
+    time: tempoRelativo(a.criadoEm),
+    icon: (TIPOS[a.tipo] || TIPOS.nota).icone,
+    cor:  (TIPOS[a.tipo] || TIPOS.nota).cor,
+    desc: a.descricao,
+    autor: a.autorNome,
+  })), [atividadesBrutas]);
 
   /* ─── Helpers ─────────────────────────────────────────────────────── */
   const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
@@ -310,7 +311,7 @@ export default function RelatoriosPage({ leads = [] }) {
           {/* Atividade Recente */}
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '24px' }}>
             <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: '1rem', marginBottom: 20 }}>🕐 Atividade Recente</div>
-            {atividades.length === 0 ? emptyMsg('Nenhuma atividade recente') : (
+            {atividades.length === 0 ? emptyMsg('Nada registrado ainda. As ações a partir de agora aparecem aqui.') : (
               <div style={{ position: 'relative' }}>
                 {/* Timeline line */}
                 <div style={{ position: 'absolute', left: 15, top: 8, bottom: 8, width: 2, background: 'var(--border)' }} />
@@ -321,7 +322,7 @@ export default function RelatoriosPage({ leads = [] }) {
                       <div style={{
                         position: 'absolute', left: 10, top: 16,
                         width: 12, height: 12, borderRadius: '50%',
-                        background: 'var(--surface)', border: '2px solid var(--accent)',
+                        background: 'var(--surface)', border: `2px solid ${a.cor}`,
                         zIndex: 1,
                       }} />
                       <div style={{ flex: 1 }}>
@@ -329,7 +330,9 @@ export default function RelatoriosPage({ leads = [] }) {
                           <span style={{ marginRight: 6, fontSize: '0.95rem' }}>{a.icon}</span>
                           {a.desc}
                         </div>
-                        <div style={{ fontSize: '0.73rem', color: 'var(--text3)', marginTop: 3 }}>{a.time}</div>
+                        <div style={{ fontSize: '0.73rem', color: 'var(--text3)', marginTop: 3 }}>
+                          {a.autor} · {a.time}
+                        </div>
                       </div>
                     </div>
                   ))}

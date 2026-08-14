@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ref, onValue, set, remove, push } from 'firebase/database';
+import { ref, onValue, set, update, remove, push } from 'firebase/database';
 import { database } from '../firebase';
 import ClienteModal from './ClienteModal';
 
@@ -118,14 +118,13 @@ export default function ClientesPage({ nichos = [], responsaveis = [] }) {
   // ── CRUD ───────────────────────────────────────────────────────────────────
   const salvarCliente = (dados) => {
     const agora = new Date().toISOString();
-    const dadosSalvar = { ...dados, updatedAt: agora };
     if (!clienteEmEdicao) {
-      dadosSalvar.createdAt = agora;
       const novaRef = push(ref(database, 'crm_data/clientes'));
-      dadosSalvar.id = novaRef.key;
-      set(novaRef, dadosSalvar);
+      set(novaRef, { ...dados, id: novaRef.key, createdAt: agora, updatedAt: agora });
     } else {
-      set(ref(database, 'crm_data/clientes/' + dadosSalvar.id), dadosSalvar);
+      // Grava só os campos do formulário, preservando o que outro usuário mudou
+      const { id, createdAt, ...camposEditaveis } = dados;
+      update(ref(database, 'crm_data/clientes/' + (id || clienteEmEdicao.id)), { ...camposEditaveis, updatedAt: agora });
     }
     setModalAberto(false);
     setClienteEmEdicao(null);

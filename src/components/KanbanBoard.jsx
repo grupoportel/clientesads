@@ -1,21 +1,11 @@
 import React, { useState } from 'react';
-
-const STATUS_CONFIG = {
-  'nenhum':                { label: 'Nenhum',               cls: 's-nenhum' },
-  'lead-qualificado':      { label: 'Lead Qualificado',     cls: 's-lead-qualificado' },
-  'ligacao-feita':         { label: 'Ligação Feita',        cls: 's-ligacao-feita' },
-  'contato-decisor':       { label: 'Contato com decisor',  cls: 's-contato-decisor' },
-  'reuniao-marcada':       { label: 'Reunião Marcada',      cls: 's-reuniao-marcada'},
-  'contrato-realizado':    { label: 'Contrato Realizado',   cls: 's-contrato-realizado' },
-  'venda':                 { label: 'Venda',                cls: 's-venda' },
-  'perda':                 { label: 'Perda',                cls: 's-perda' },
-  'concluido':             { label: 'Concluído',            cls: 's-concluido' }
-};
+import { etapasAtivas, valorDoLead, formatarBRL, formatarBRLCurto } from '../pipeline';
 
 const formataData = (d) => d ? d.split('-').reverse().join('/') : '';
 
-export default function KanbanBoard({ leads, onLeadDrop, onEdit }) {
+export default function KanbanBoard({ leads, onLeadDrop, onEdit, etapas = [] }) {
   const [draggedId, setDraggedId] = useState(null);
+  const colunas = etapasAtivas(etapas);
 
   // 1. Inicia o arraste
   const handleDragStart = (e, leadId) => {
@@ -60,24 +50,34 @@ export default function KanbanBoard({ leads, onLeadDrop, onEdit }) {
   return (
     <div className="kanban-outer">
       <div className="kanban-view">
-        {Object.entries(STATUS_CONFIG).map(([statusKey, config]) => {
+        {colunas.map((etapa) => {
+          const statusKey = etapa.id;
           const leadsDaColuna = leads.filter(l => (l.status || 'nenhum') === statusKey);
+          const totalColuna = leadsDaColuna.reduce((s, l) => s + valorDoLead(l), 0);
 
           return (
-            <div 
-              key={statusKey} 
+            <div
+              key={statusKey}
               className="kanban-col"
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={(e) => handleDrop(e, statusKey)}
             >
               <div className="kanban-col-header">
-                <span className={`status-badge ${config.cls}`} style={{ pointerEvents: 'none' }}>
-                  {config.label}
+                <span className={`status-badge ${etapa.cls}`} style={{ pointerEvents: 'none' }}>
+                  {etapa.label}
                 </span>
                 <span className="kanban-col-count">{leadsDaColuna.length}</span>
               </div>
-              
+              {totalColuna > 0 && (
+                <div style={{
+                  fontSize: '11px', color: 'var(--green)', fontFamily: "'DM Mono', monospace",
+                  fontWeight: 600, padding: '0 4px 6px', letterSpacing: '-0.2px',
+                }} title={`Total desta coluna: ${formatarBRL(totalColuna)}`}>
+                  {formatarBRLCurto(totalColuna)}
+                </div>
+              )}
+
               <div className="kanban-cards">
                 {leadsDaColuna.length > 0 ? leadsDaColuna.map(lead => (
                   <div 
@@ -91,6 +91,14 @@ export default function KanbanBoard({ leads, onLeadDrop, onEdit }) {
                   >
                     <div className="kanban-card-name">{lead.nome}</div>
                     <div className="kanban-card-sub">{lead.nicho || 'Sem nicho'}</div>
+                    {valorDoLead(lead) > 0 && (
+                      <div style={{
+                        fontSize: '12px', fontWeight: 700, color: 'var(--green)',
+                        fontFamily: "'DM Mono', monospace", marginTop: '4px',
+                      }}>
+                        {formatarBRL(lead.valor)}
+                      </div>
+                    )}
                     <div className="kanban-card-footer">
                       <span className="kanban-card-phone">{lead.telefone || '—'}</span>
                       <div className="kanban-card-links">

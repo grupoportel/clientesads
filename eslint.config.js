@@ -6,8 +6,10 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
   globalIgnores(['dist']),
+
+  // ── Frontend (navegador) ──
   {
-    files: ['**/*.{js,jsx}'],
+    files: ['src/**/*.{js,jsx}'],
     extends: [
       js.configs.recommended,
       reactHooks.configs.flat.recommended,
@@ -16,6 +18,24 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
       parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+    rules: {
+      // Permite descartar campos com rest-destructuring:
+      // const { id, createdAt, ...resto } = dados
+      'no-unused-vars': ['error', { ignoreRestSiblings: true, varsIgnorePattern: '^React$' }],
+    },
+  },
+
+  // ── Funções serverless (Node) ──
+  {
+    files: ['api/**/*.js'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      globals: globals.node,
+      sourceType: 'module',
+    },
+    rules: {
+      'no-unused-vars': ['error', { ignoreRestSiblings: true }],
     },
   },
 ])
