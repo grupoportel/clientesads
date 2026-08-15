@@ -311,8 +311,14 @@ function App() {
     setFiltroDataInicio(''); setFiltroDataFim('');
   };
 
-  // Exporta exatamente o que está visível na tela, com os filtros aplicados
-  const exportarLeads = (lista = leadsFiltrados, nomeBase = 'leads') => {
+  // Exporta exatamente o que está visível na tela, com os filtros aplicados.
+  //
+  // A checagem de Array não é paranoia: ligada direto a um onClick, esta função
+  // recebia o evento do clique como `lista`. O valor padrão não protege, porque
+  // só vale para undefined — e um evento não é undefined. O resultado era um
+  // erro dentro do gerarCSV e nenhum arquivo baixado.
+  const exportarLeads = (entrada, nomeBase = 'leads') => {
+    const lista = Array.isArray(entrada) ? entrada : leadsFiltrados;
     const colunas = [
       { titulo: 'Nome / Empresa', campo: 'nome' },
       { titulo: 'Status', valor: l => acharEtapa(etapas, l.status).label },
@@ -939,7 +945,7 @@ function App() {
                   <button
                     className="btn btn-ghost"
                     style={{ fontSize: 12, padding: '5px 12px' }}
-                    onClick={exportarLeads}
+                    onClick={() => exportarLeads()}
                     disabled={leadsFiltrados.length === 0}
                     title={`Exportar ${leadsFiltrados.length} lead(s) desta visão`}
                   >
