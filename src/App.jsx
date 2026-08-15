@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import { auth, database } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTelaMedia } from './useTelaEstreita';
 import { papelDoUsuario, podeEditar, podeAdministrar, motivoBloqueio } from './papeis';
-import { ref, onValue, set, update, remove, push } from 'firebase/database';
+import { ref, onValue, set, update, push } from 'firebase/database';
 import Login from './Login';
 
 // Componentes existentes (Leads)
@@ -36,10 +36,12 @@ import './index.css';
 
 import { MAPA_STATUS_ANTIGOS, mesclarEtapas, acharEtapa, ehGanho, ehPerdido } from './pipeline';
 import { registrarAtividade, registrarAtividadesEmLote, descreverEdicao } from './atividades';
+import { paraLixeira, deLixeira, planoDeDesfazer } from './lixeira';
 import BarraEmMassa from './components/BarraEmMassa';
 import { gerarCSV, baixarCSV } from './csv';
 const ImportarLeadsModal = lazy(() => import('./components/ImportarLeadsModal'));
 const BuscaGlobal = lazy(() => import('./components/BuscaGlobal'));
+const LixeiraModal = lazy(() => import('./components/LixeiraModal'));
 import { rodarAutomacoes } from './automacoesRunner';
 
 // No topo do módulo em vez de dentro do filtro: recriada a cada lead, ela
@@ -111,6 +113,7 @@ function App() {
   const [modelos, setModelos] = useState([]);
   const [automacoes, setAutomacoes] = useState([]);
   const [usuariosCrm, setUsuariosCrm] = useState([]);
+  const [lixeira, setLixeira] = useState([]);
 
   // Etapas do funil: padrão do código sobreposto pelo que estiver configurado
   const etapas = useMemo(() => mesclarEtapas(configPipeline), [configPipeline]);
@@ -135,6 +138,7 @@ function App() {
   const [modalAberto, setModalAberto] = useState(false);
   const [modalImportar, setModalImportar] = useState(false);
   const [buscaGlobalAberta, setBuscaGlobalAberta] = useState(false);
+  const [lixeiraAberta, setLixeiraAberta] = useState(false);
   const [menuAberto, setMenuAberto] = useState(false);
   const [leadEmEdicao, setLeadEmEdicao] = useState(null);
   const [selectedLeads, setSelectedLeads] = useState([]);
@@ -206,14 +210,24 @@ function App() {
   const leadDetalhe = leadIdNaUrl ? (leads.find(l => l.id === leadIdNaUrl) || null) : null;
   const setLeadDetalhe = (lead) => navegar(lead ? `/leads/${lead.id}` : '/leads');
 
-  const showToast = (msg, type = 'success') => {
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, msg, type }]);
-    // Remove o toast automaticamente após 3 segundos
+  // Contador em vez de Date.now(): dois toasts disparados no mesmo
+  // milissegundo receberiam a mesma chave e o React trataria os dois como um.
+  const proximoToast = useRef(0);
+
+  /**
+   * `acao` transforma o toast em um desfazer: { rotulo, aoClicar }.
+   * Quando existe, o toast fica mais tempo na tela — 3 segundos não dão
+   * para ler a mensagem e ainda decidir clicar.
+   */
+  const showToast = (msg, type = 'success', acao = null) => {
+    const id = ++proximoToast.current;
+    setToasts(prev => [...prev, { id, msg, type, acao }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
-    }, 3000);
+    }, acao ? 9000 : 3000);
   };
+
+  const fecharToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
 
   useEffect(() => {
     // Guarda os cancelamentos de cada onValue para desligá-los no logout.
@@ -243,6 +257,7 @@ function App() {
       if (!user) {
         setLeads([]); setTarefasGlobais([]); setConversasGlobais([]); setEmailsGlobais([]);
         setClientesGlobais([]); setPropostasGlobais([]); setModelos([]); setAutomacoes([]); setUsuariosCrm([]);
+        setLixeira([]);
         return;
       }
 
@@ -269,6 +284,7 @@ function App() {
       escutar('crm_data/modelos',    (snap) => setModelos(listaDe(snap)));
       escutar('crm_data/automacoes', (snap) => setAutomacoes(listaDe(snap)));
       escutar('crm_data/usuarios',   (snap) => setUsuariosCrm(listaDe(snap)));
+      escutar('crm_data/lixeira',    (snap) => setLixeira(listaDe(snap)));
     });
 
     return () => {
@@ -454,11 +470,34 @@ function App() {
           : `${lead.nome}: ${rotulo} definido como "${novoValor || '—'}" (edição em massa)`,
       })));
 
-      showToast(`${alvos.length} lead(s) atualizado(s).`, 'success');
+      // Sobrescrever um campo em centenas de leads é tão destrutivo quanto
+      // apagá-los — só que silencioso, porque os leads continuam na lista.
+      // Os valores antigos já estão aqui na memória; guardá-los custa nada.
+      const anteriores = {};
+      alvos.forEach(lead => { anteriores[lead.id] = lead[campo]; });
+
+      showToast(`${alvos.length} lead(s) atualizado(s).`, 'success', {
+        rotulo: 'Desfazer',
+        aoClicar: () => desfazerEmMassa(anteriores, campo, rotulo),
+      });
     } catch (e) {
       showToast('Erro ao aplicar em massa: ' + e.message, 'error');
     } finally {
       setAplicandoEmMassa(false);
+    }
+  };
+
+  const desfazerEmMassa = async (anteriores, campo, rotulo) => {
+    if (!exigirEdicao('desfazer a edição')) return;
+    const gravacoes = planoDeDesfazer(anteriores, campo);
+    const agora = new Date().toISOString();
+    Object.keys(anteriores).forEach(id => { gravacoes[`${id}/updatedAt`] = agora; });
+
+    try {
+      await update(ref(database, 'crm_data/leads'), gravacoes);
+      showToast(`${rotulo} devolvido ao valor anterior em ${Object.keys(anteriores).length} lead(s).`, 'success');
+    } catch (e) {
+      showToast('Erro ao desfazer: ' + e.message, 'error');
     }
   };
 
@@ -470,23 +509,123 @@ function App() {
   const abrirModalNovo = () => { setLeadEmEdicao(null); setModalAberto(true); };
   const abrirModalEdicao = (lead) => { setLeadEmEdicao(lead); setModalAberto(true); };
 
-  const deletarLead = (id) => {
-    if (!exigirEdicao('excluir leads')) return;
-    if (window.confirm("Tem certeza que deseja excluir este lead?")) {
-      remove(ref(database, 'crm_data/leads/' + id))
-        .then(() => showToast('Lead excluído.', 'success'))
-        .catch(e => showToast("Erro: " + e.message, 'error'));
-      if (leadIdNaUrl === id) navegar('/leads');
+  // Excluir deixou de apagar: o lead sai de crm_data/leads e cai inteiro em
+  // crm_data/lixeira. Uma gravação multi-caminho só, para que tirar de um lugar
+  // e pôr no outro não possa acontecer pela metade.
+  const moverParaLixeira = async (alvos, aviso) => {
+    const quem = usuario?.displayName || usuario?.email || '';
+    const agora = new Date().toISOString();
+    const gravacoes = {};
+
+    alvos.forEach(lead => {
+      gravacoes[`lixeira/${lead.id}`] = paraLixeira(lead, quem, agora);
+      gravacoes[`leads/${lead.id}`] = null;
+    });
+
+    await update(ref(database, 'crm_data'), gravacoes);
+
+    await registrarAtividadesEmLote(alvos.map(lead => ({
+      leadId: lead.id,
+      leadNome: lead.nome,
+      tipo: 'editado',
+      descricao: `${lead.nome} foi movido para a lixeira`,
+    })));
+
+    showToast(aviso, 'success', {
+      rotulo: 'Desfazer',
+      aoClicar: () => restaurarDaLixeira(alvos.map(l => paraLixeira(l, quem, agora)), true),
+    });
+  };
+
+  /**
+   * Traz itens da lixeira de volta para leads.
+   * `silencioso` evita encadear um toast de desfazer no próprio desfazer.
+   */
+  const restaurarDaLixeira = async (itens, silencioso = false) => {
+    if (!exigirEdicao('restaurar leads')) return;
+
+    const gravacoes = {};
+    let ignorados = 0;
+
+    itens.forEach(item => {
+      const volta = deLixeira(item);
+      if (!volta) { ignorados++; return; }
+      gravacoes[`leads/${volta.id}`] = volta.dados;
+      gravacoes[`lixeira/${volta.id}`] = null;
+    });
+
+    const restaurados = itens.length - ignorados;
+    if (restaurados === 0) {
+      showToast('Nenhum item pôde ser restaurado.', 'error');
+      return;
+    }
+
+    try {
+      await update(ref(database, 'crm_data'), gravacoes);
+      showToast(
+        silencioso
+          ? 'Exclusão desfeita.'
+          : `${restaurados} lead(s) restaurado(s).${ignorados ? ` ${ignorados} sem dados para restaurar.` : ''}`,
+        'success'
+      );
+    } catch (e) {
+      showToast('Erro ao restaurar: ' + e.message, 'error');
     }
   };
 
-  const deletarLeadsSelecionados = () => {
+  /** Apaga de verdade, sem volta. Só Admin, e com aviso à altura. */
+  const esvaziarLixeira = async (itens) => {
+    if (!administravel) {
+      showToast('Só um administrador pode apagar em definitivo.', 'error');
+      return;
+    }
+    if (!window.confirm(
+      `Apagar em definitivo ${itens.length} item(ns)?\n\n` +
+      'Isto não vai para lugar nenhum: os dados somem do banco e não há como trazê-los de volta.'
+    )) return;
+
+    const gravacoes = {};
+    itens.forEach(i => { gravacoes[`crm_data/lixeira/${i.id}`] = null; });
+    try {
+      await update(ref(database), gravacoes);
+      showToast(`${itens.length} item(ns) apagado(s) em definitivo.`, 'success');
+    } catch (e) {
+      showToast('Erro ao esvaziar: ' + e.message, 'error');
+    }
+  };
+
+  const deletarLead = async (id) => {
     if (!exigirEdicao('excluir leads')) return;
-    if (window.confirm(`Tem certeza que deseja excluir ${selectedLeads.length} lead(s)? Não há como desfazer.`)) {
-      selectedLeads.forEach(id => remove(ref(database, 'crm_data/leads/' + id)));
+    const lead = leads.find(l => l.id === id);
+    if (!lead) return;
+    if (!window.confirm(`Mover "${lead.nome}" para a lixeira?`)) return;
+
+    if (leadIdNaUrl === id) navegar('/leads');
+    try {
+      await moverParaLixeira([lead], 'Lead movido para a lixeira.');
+    } catch (e) {
+      showToast('Erro ao excluir: ' + e.message, 'error');
+    }
+  };
+
+  const deletarLeadsSelecionados = async () => {
+    if (!exigirEdicao('excluir leads')) return;
+    const alvos = leads.filter(l => selectedLeads.includes(l.id));
+    if (alvos.length === 0) return;
+
+    if (!window.confirm(
+      `Mover ${alvos.length} lead(s) para a lixeira?\n\n` +
+      'Eles saem da lista mas continuam guardados, e dá para restaurar depois.'
+    )) return;
+
+    if (leadIdNaUrl && selectedLeads.includes(leadIdNaUrl)) navegar('/leads');
+    try {
+      // O toast só aparece depois da gravação: antes ele dizia "excluído" no
+      // mesmo instante em que o banco podia estar recusando a escrita.
+      await moverParaLixeira(alvos, `${alvos.length} lead(s) movido(s) para a lixeira.`);
       setSelectedLeads([]);
-      if (leadIdNaUrl && selectedLeads.includes(leadIdNaUrl)) navegar('/leads');
-      showToast(`${selectedLeads.length} lead(s) excluído(s).`, 'success');
+    } catch (e) {
+      showToast('Erro ao excluir: ' + e.message, 'error');
     }
   };
 
@@ -781,6 +920,17 @@ function App() {
                 )}
 
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                  {/* Só aparece quando há algo lá dentro: um botão de lixeira
+                      sempre visível e sempre vazio vira ruído no cabeçalho. */}
+                  {editavel && lixeira.length > 0 && (
+                    <button
+                      className="btn btn-ghost" style={{ fontSize: 12, padding: '5px 12px' }}
+                      onClick={() => setLixeiraAberta(true)}
+                      title="Leads excluídos, com opção de restaurar"
+                    >
+                      🗑 Lixeira ({lixeira.length})
+                    </button>
+                  )}
                   {editavel && (
                     <button className="btn btn-ghost" style={{ fontSize: 12, padding: '5px 12px' }} onClick={() => setModalImportar(true)}>
                       📥 Importar
@@ -1055,6 +1205,15 @@ function App() {
 
       {/* ══════ IMPORTAÇÃO DE LEADS ══════ */}
       <Suspense fallback={null}>
+      <LixeiraModal
+        aberto={lixeiraAberta}
+        aoFechar={() => setLixeiraAberta(false)}
+        itens={lixeira}
+        aoRestaurar={restaurarDaLixeira}
+        aoApagar={esvaziarLixeira}
+        podeApagar={administravel}
+      />
+
       <ImportarLeadsModal
         isOpen={modalImportar}
         onClose={() => setModalImportar(false)}
@@ -1087,7 +1246,17 @@ function App() {
       <div className="toast-container">
         {toasts.map(t => (
           <div key={t.id} className={`toast ${t.type}`} style={{ opacity: 1, transform: 'none', transition: 'all 0.3s' }}>
-            {t.type === 'success' ? '✅' : t.type === 'error' ? '❌' : 'ℹ️'} {t.msg}
+            <span style={{ flex: 1 }}>
+              {t.type === 'success' ? '✅' : t.type === 'error' ? '❌' : 'ℹ️'} {t.msg}
+            </span>
+            {t.acao && (
+              <button
+                className="toast-acao"
+                onClick={() => { t.acao.aoClicar(); fecharToast(t.id); }}
+              >
+                {t.acao.rotulo}
+              </button>
+            )}
           </div>
         ))}
       </div>

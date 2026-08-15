@@ -46,6 +46,14 @@
         }
       },
 
+      "lixeira": {
+        ".read": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).exists())",
+        ".indexOn": ["excluidoEm"],
+        "$itemId": {
+          ".write": "auth != null && (!root.child('crm_data/usuarios').exists() || (root.child('crm_data/usuarios').child(auth.uid).exists() && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'))"
+        }
+      },
+
       "clientes": {
         ".read": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).exists())",
         ".indexOn": ["statusCliente", "responsavel"],

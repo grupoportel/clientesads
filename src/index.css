@@ -306,6 +306,11 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
 .toast.success{border-left:3px solid var(--green)}
 .toast.error{border-left:3px solid var(--red)}
 .toast.info{border-left:3px solid var(--accent)}
+/* Toast com desfazer: precisa ser clicável e caber sem espremer a mensagem */
+.toast:has(.toast-acao){max-width:380px}
+.toast-acao{flex-shrink:0;background:transparent;border:1px solid var(--border2);color:var(--accent);
+  font-size:12px;font-weight:600;padding:4px 11px;border-radius:7px;cursor:pointer;transition:all .15s}
+.toast-acao:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
 
 /* ── MISC UI ── */
 .badge-pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;letter-spacing:.3px;background:var(--surface3);color:var(--text2);}

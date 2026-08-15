@@ -6,6 +6,7 @@ import { regrasQueDisparam, regraValida, calcularPrazo, planejarAcoes } from '..
 import { saudeCliente, saudeMediaDaCarteira, receitaRecorrente, clienteAPartirDoLead, ganhosSemCliente } from '../clientes.js';
 import { normalizarMeta, achatar, extrairCampos, extrairUtm, acharDuplicado, camposParaCompletar } from '../../api/_leadIn.js';
 import { papelDoUsuario, podeEditar, podeAdministrar, podeVer, motivoBloqueio } from '../papeis.js';
+import { paraLixeira, deLixeira, diasNaLixeira, vencidos, planoDeDesfazer, textoTempoNaLixeira, PRAZO_DIAS } from '../lixeira.js';
 
 let ok = 0, fail = 0;
 const t = (nome, cond) => { if (cond) { ok++; } else { fail++; console.log('FALHOU:', nome); } };
@@ -370,6 +371,64 @@ t('sem papel não vê', !podeVer(null));
 t('sem papel explica que falta liberar', motivoBloqueio(null).includes('não foi liberado'));
 t('viewer explica somente leitura', motivoBloqueio('Viewer', 'excluir').includes('excluir'));
 t('editor explica que é coisa de admin', motivoBloqueio('Editor').includes('administrador'));
+
+
+// ── Lixeira ──
+const AGORA_LX = new Date('2026-08-15T12:00:00').getTime();
+const diasAtrasIso = (d) => new Date(AGORA_LX - d * 86400000).toISOString();
+const leadPraApagar = { id: 'L1', nome: 'Clínica Sorriso', status: 'venda', valor: 4500, tipo: 'quente' };
+
+const itemLx = paraLixeira(leadPraApagar, 'gui@portel.com', '2026-08-15T12:00:00.000Z');
+t('lixeira guarda o lead inteiro', itemLx.dados.valor === 4500 && itemLx.dados.status === 'venda');
+t('lixeira guarda quem apagou', itemLx.excluidoPor === 'gui@portel.com');
+t('lixeira guarda o id original', itemLx.idOriginal === 'L1');
+
+// O lead tem um campo `tipo` próprio; o `tipo` da lixeira não pode engoli-lo
+t('campo do lead nao colide com o da lixeira', itemLx.tipo === 'lead' && itemLx.dados.tipo === 'quente');
+
+t('lead sem nome ainda tem rotulo', paraLixeira({ id: 'L2' }).rotulo === '(sem nome)');
+t('sem quem apagou nao fica vazio', paraLixeira({ id: 'L2' }).excluidoPor === 'desconhecido');
+
+// Ida e volta tem que devolver o mesmo lead
+const restaurado = deLixeira(itemLx);
+t('restaura no id certo', restaurado.id === 'L1');
+t('restaura o lead igual', JSON.stringify(restaurado.dados) === JSON.stringify(leadPraApagar));
+
+t('item sem dados nao restaura', deLixeira({ idOriginal: 'L1' }) === null);
+t('item sem id nao restaura', deLixeira({ dados: { nome: 'X' } }) === null);
+t('item nulo nao quebra', deLixeira(null) === null);
+
+// Idade
+t('apagado hoje tem 0 dias', diasNaLixeira({ excluidoEm: diasAtrasIso(0) }, AGORA_LX) === 0);
+t('apagado ha 5 dias', diasNaLixeira({ excluidoEm: diasAtrasIso(5) }, AGORA_LX) === 5);
+t('sem data nao vira negativo', diasNaLixeira({}, AGORA_LX) === 0);
+t('data invalida nao vira NaN', diasNaLixeira({ excluidoEm: 'ontem' }, AGORA_LX) === 0);
+
+const naLixeira = [
+  { excluidoEm: diasAtrasIso(2) },
+  { excluidoEm: diasAtrasIso(45) },
+  { excluidoEm: diasAtrasIso(PRAZO_DIAS) },
+];
+t('vencidos conta a partir do prazo', vencidos(naLixeira, AGORA_LX).length === 2);
+t('lixeira vazia nao tem vencidos', vencidos([], AGORA_LX).length === 0);
+
+t('texto hoje', textoTempoNaLixeira({ excluidoEm: diasAtrasIso(0) }, AGORA_LX) === 'hoje');
+t('texto ontem', textoTempoNaLixeira({ excluidoEm: diasAtrasIso(1) }, AGORA_LX) === 'ontem');
+t('texto dias', textoTempoNaLixeira({ excluidoEm: diasAtrasIso(9) }, AGORA_LX) === 'há 9 dias');
+t('texto mes no singular', textoTempoNaLixeira({ excluidoEm: diasAtrasIso(31) }, AGORA_LX) === 'há 1 mês');
+t('texto meses no plural', textoTempoNaLixeira({ excluidoEm: diasAtrasIso(70) }, AGORA_LX) === 'há 2 meses');
+
+// ── Desfazer edição em massa ──
+const planoUndo = planoDeDesfazer({ L1: 'Ana', L2: 'Bruno' }, 'responsavel');
+t('desfazer devolve cada valor', planoUndo['L1/responsavel'] === 'Ana' && planoUndo['L2/responsavel'] === 'Bruno');
+
+// Quem não tinha o campo precisa voltar a não ter: gravar undefined faria o
+// Firebase ignorar a chave e o valor novo continuaria lá.
+const planoVazio = planoDeDesfazer({ L1: undefined, L2: '', L3: 0 }, 'valor');
+t('campo que nao existia volta a null', planoVazio['L1/valor'] === null);
+t('string vazia vira null', planoVazio['L2/valor'] === null);
+t('zero nao e confundido com vazio', planoVazio['L3/valor'] === 0);
+t('nada selecionado gera plano vazio', Object.keys(planoDeDesfazer({}, 'status')).length === 0);
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);
