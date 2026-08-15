@@ -35,6 +35,44 @@ export function obterBanco() {
   return getDatabase();
 }
 
+/**
+ * Impõe um prazo a uma promessa do Firebase.
+ *
+ * O cliente do Realtime Database não rejeita quando a credencial é inválida:
+ * ele fica retentando a conexão para sempre. Na prática a função serverless
+ * ficava pendurada até morrer aos 300s, e quem estava na tela via só um botão
+ * travado em "Criando…" — sem erro no console, sem resposta, sem pista.
+ *
+ * Com prazo, a mesma falha vira uma mensagem que diz o que fazer.
+ */
+export function comPrazo(promessa, ms = 8000, oQue = 'o banco de dados') {
+  return Promise.race([
+    promessa,
+    new Promise((_, rejeitar) =>
+      setTimeout(
+        () => rejeitar(new Error(`Sem resposta ${oQue === 'o banco de dados' ? 'do banco de dados' : `de ${oQue}`} em ${ms / 1000}s.`)),
+        ms
+      )
+    ),
+  ]);
+}
+
+/**
+ * Traduz falhas de credencial do servidor para quem está na tela.
+ *
+ * "invalid_grant: account not found" não diz nada a quem usa o CRM, e o
+ * problema não está no que a pessoa fez — está na chave do servidor.
+ */
+export function explicarErroDeCredencial(erro) {
+  const texto = `${erro?.code || ''} ${erro?.message || ''}`;
+  if (texto.includes('invalid-credential') || texto.includes('invalid_grant') || texto.includes('Sem resposta')) {
+    return 'A chave de acesso do servidor ao Firebase está inválida ou foi revogada. '
+      + 'Gere uma nova chave privada em Configurações do projeto → Contas de serviço '
+      + 'e atualize FIREBASE_CLIENT_EMAIL e FIREBASE_PRIVATE_KEY na Vercel.';
+  }
+  return null;
+}
+
 // ── Porteiro ────────────────────────────────────────────────────────────────
 // Valida o token de sessão do Firebase enviado pelo front no cabeçalho
 // Authorization. Devolve o usuário autenticado, ou null se já respondeu o erro.
