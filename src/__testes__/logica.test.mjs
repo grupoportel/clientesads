@@ -5,6 +5,7 @@ import { aplicarModelo, montarContexto, variaveisUsadas, variaveisVazias, variav
 import { regrasQueDisparam, regraValida, calcularPrazo, planejarAcoes } from '../automacoes.js';
 import { saudeCliente, saudeMediaDaCarteira, receitaRecorrente, clienteAPartirDoLead, ganhosSemCliente } from '../clientes.js';
 import { normalizarMeta, achatar, extrairCampos, extrairUtm, acharDuplicado, camposParaCompletar } from '../../api/_leadIn.js';
+import { papelDoUsuario, podeEditar, podeAdministrar, podeVer, motivoBloqueio } from '../papeis.js';
 
 let ok = 0, fail = 0;
 const t = (nome, cond) => { if (cond) { ok++; } else { fail++; console.log('FALHOU:', nome); } };
@@ -331,6 +332,44 @@ t('lead novo não é duplicado',
 t('completa buraco sem sobrescrever',
   JSON.stringify(camposParaCompletar({ nome: 'Antigo', email: 'a@x.com' }, { nome: 'Novo', cidade: 'Sinop' }))
     === '{"cidade":"Sinop"}');
+
+// ── Papéis ──
+// Sem usuário nenhum, quem entra é Admin: é o único jeito de o primeiro
+// cadastro acontecer. As regras do banco fazem a mesma concessão.
+const semNinguem = papelDoUsuario('U1', []);
+t('primeira configuração dá Admin', semNinguem.papel === 'Admin');
+t('marca que é primeira configuração', semNinguem.primeiraConfiguracao === true);
+
+// A partir do primeiro registro, o portão fecha
+const equipe = [
+  { uid: 'U1', role: 'Admin' },
+  { uid: 'U2', role: 'Editor' },
+  { uid: 'U3', role: 'Viewer' },
+];
+t('acha o papel do admin', papelDoUsuario('U1', equipe).papel === 'Admin');
+t('acha o papel do editor', papelDoUsuario('U2', equipe).papel === 'Editor');
+t('quem não tem registro não é ninguém', papelDoUsuario('U9', equipe).papel === null);
+t('e não é primeira configuração', papelDoUsuario('U9', equipe).primeiraConfiguracao === false);
+t('registro sem role vira Viewer', papelDoUsuario('U4', [{ uid: 'U4' }]).papel === 'Viewer');
+t('aceita id no lugar de uid', papelDoUsuario('U5', [{ id: 'U5', role: 'Admin' }]).papel === 'Admin');
+
+// Permissões
+t('admin edita', podeEditar('Admin'));
+t('editor edita', podeEditar('Editor'));
+t('viewer não edita', !podeEditar('Viewer'));
+t('sem papel não edita', !podeEditar(null));
+
+t('só admin administra', podeAdministrar('Admin'));
+t('editor não administra', !podeAdministrar('Editor'));
+t('viewer não administra', !podeAdministrar('Viewer'));
+
+t('viewer vê', podeVer('Viewer'));
+t('sem papel não vê', !podeVer(null));
+
+// Mensagens de bloqueio precisam dizer o que houve
+t('sem papel explica que falta liberar', motivoBloqueio(null).includes('não foi liberado'));
+t('viewer explica somente leitura', motivoBloqueio('Viewer', 'excluir').includes('excluir'));
+t('editor explica que é coisa de admin', motivoBloqueio('Editor').includes('administrador'));
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);

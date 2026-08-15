@@ -1,4 +1,5 @@
 import React from 'react';
+import { rotuloPapel, corPapel } from '../papeis';
 
 const NAV_ITEMS = [
   { id: 'dashboard',     icon: '📊', label: 'Dashboard' },
@@ -18,6 +19,7 @@ export default function Sidebar({
   tarefasPendentes = 0, conversasNaoLidas = 0, emailsNaoLidos = 0,
   nomeEmpresa = 'Grupo Portel', nomeUsuario = 'Usuário', emailUsuario = '',
   iniciaisUsuario = '?', onLogout, aberta = false, onFechar = () => {},
+  papel = null, mostrarConfiguracoes = true,
 }) {
   const isActive = (id) => paginaAtiva === id;
 
@@ -140,9 +142,12 @@ export default function Sidebar({
         })}
 
         {/* Divider */}
+        {mostrarConfiguracoes && (
         <div style={{ height: '1px', background: 'var(--border)', margin: '8px 12px' }} />
+        )}
 
-        {/* Configurações */}
+        {/* Configurações — só para quem administra */}
+        {mostrarConfiguracoes && (
         <div
           style={navItemStyle('configuracoes')}
           onClick={() => setPaginaAtiva('configuracoes')}
@@ -164,6 +169,7 @@ export default function Sidebar({
           <span style={{ fontSize: '15px', lineHeight: 1 }}>⚙️</span>
           <span>Configurações</span>
         </div>
+        )}
       </div>
 
       {/* ── USER SECTION (pushed to bottom) ── */}
@@ -195,6 +201,11 @@ export default function Sidebar({
             }} title={emailUsuario}>
               {emailUsuario}
             </div>
+            {papel && (
+              <div style={{ fontSize: '10px', color: corPapel(papel), marginTop: 2, fontWeight: 600 }}>
+                {rotuloPapel(papel)}
+              </div>
+            )}
           </div>
         </div>
 

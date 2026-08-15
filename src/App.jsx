@@ -3,6 +3,7 @@ import { auth, database } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTelaMedia } from './useTelaEstreita';
+import { papelDoUsuario, podeEditar, podeAdministrar, motivoBloqueio } from './papeis';
 import { ref, onValue, set, update, remove, push } from 'firebase/database';
 import Login from './Login';
 
@@ -109,6 +110,7 @@ function App() {
   const [metas, setMetas] = useState({});
   const [modelos, setModelos] = useState([]);
   const [automacoes, setAutomacoes] = useState([]);
+  const [usuariosCrm, setUsuariosCrm] = useState([]);
 
   // Etapas do funil: padrão do código sobreposto pelo que estiver configurado
   const etapas = useMemo(() => mesclarEtapas(configPipeline), [configPipeline]);
@@ -181,6 +183,25 @@ function App() {
     return () => window.removeEventListener('keydown', aoTeclar);
   }, []);
 
+  // ── Papel de quem está usando ──
+  // Enquanto ninguém estiver cadastrado, quem entra é Admin: é o único jeito
+  // de o primeiro cadastro acontecer, e as regras do banco concedem o mesmo.
+  const { papel, primeiraConfiguracao } = useMemo(
+    () => papelDoUsuario(usuario?.uid, usuariosCrm),
+    [usuario, usuariosCrm]
+  );
+  const editavel = podeEditar(papel);
+  const administravel = podeAdministrar(papel);
+
+  // Barra qualquer ação de escrita para quem é somente leitura, com o motivo.
+  // As regras do banco já recusariam, mas um erro cru do Firebase não explica
+  // nada a quem está usando.
+  const exigirEdicao = (acao = 'fazer isso') => {
+    if (editavel) return true;
+    showToast(motivoBloqueio(papel, acao), 'error');
+    return false;
+  };
+
   // Derivado, não guardado: a URL já diz qual lead está aberto
   const leadDetalhe = leadIdNaUrl ? (leads.find(l => l.id === leadIdNaUrl) || null) : null;
   const setLeadDetalhe = (lead) => navegar(lead ? `/leads/${lead.id}` : '/leads');
@@ -221,7 +242,7 @@ function App() {
 
       if (!user) {
         setLeads([]); setTarefasGlobais([]); setConversasGlobais([]); setEmailsGlobais([]);
-        setClientesGlobais([]); setPropostasGlobais([]); setModelos([]); setAutomacoes([]);
+        setClientesGlobais([]); setPropostasGlobais([]); setModelos([]); setAutomacoes([]); setUsuariosCrm([]);
         return;
       }
 
@@ -247,6 +268,7 @@ function App() {
       escutar('crm_data/config/metas',    (snap) => setMetas(snap.val() || {}));
       escutar('crm_data/modelos',    (snap) => setModelos(listaDe(snap)));
       escutar('crm_data/automacoes', (snap) => setAutomacoes(listaDe(snap)));
+      escutar('crm_data/usuarios',   (snap) => setUsuariosCrm(listaDe(snap)));
     });
 
     return () => {
@@ -351,6 +373,7 @@ function App() {
   // Salvar tarefa vive aqui para que Tarefas e Agenda gravem do mesmo jeito,
   // com o mesmo registro na linha do tempo do lead.
   const salvarTarefa = (dados, tarefaExistente = null) => {
+    if (!exigirEdicao('salvar tarefas')) return Promise.resolve();
     const agora = new Date().toISOString();
 
     if (!tarefaExistente) {
@@ -373,6 +396,7 @@ function App() {
   };
 
   const alternarTarefa = (tarefa) => {
+    if (!exigirEdicao('concluir tarefas')) return;
     const concluindo = !tarefa.concluida;
     update(ref(database, 'crm_data/tarefas/' + tarefa.id), {
       concluida: concluindo,
@@ -396,6 +420,7 @@ function App() {
   const [aplicandoEmMassa, setAplicandoEmMassa] = useState(false);
 
   const aplicarEmMassa = async (campo, novoValor) => {
+    if (!exigirEdicao('editar em massa')) return;
     const alvos = leads.filter(l => selectedLeads.includes(l.id) && String(l[campo] ?? '') !== String(novoValor ?? ''));
     if (alvos.length === 0) {
       showToast('Os leads selecionados já estão com esse valor.', 'info');
@@ -446,6 +471,7 @@ function App() {
   const abrirModalEdicao = (lead) => { setLeadEmEdicao(lead); setModalAberto(true); };
 
   const deletarLead = (id) => {
+    if (!exigirEdicao('excluir leads')) return;
     if (window.confirm("Tem certeza que deseja excluir este lead?")) {
       remove(ref(database, 'crm_data/leads/' + id))
         .then(() => showToast('Lead excluído.', 'success'))
@@ -455,6 +481,7 @@ function App() {
   };
 
   const deletarLeadsSelecionados = () => {
+    if (!exigirEdicao('excluir leads')) return;
     if (window.confirm(`Tem certeza que deseja excluir ${selectedLeads.length} lead(s)? Não há como desfazer.`)) {
       selectedLeads.forEach(id => remove(ref(database, 'crm_data/leads/' + id)));
       setSelectedLeads([]);
@@ -510,6 +537,7 @@ function App() {
   };
 
   const salvarLead = (dados) => {
+    if (!exigirEdicao('salvar leads')) return;
     if (!dados.nome) return showToast("O nome é obrigatório!", 'error');
     const agora = new Date().toISOString();
 
@@ -564,6 +592,7 @@ function App() {
   };
 
   const atualizarLeadInline = (leadId, campo, novoValor) => {
+    if (!exigirEdicao('editar leads')) return;
     const agora = new Date().toISOString();
     const rotulo = ROTULOS_CAMPOS[campo] || campo;
 
@@ -600,6 +629,7 @@ function App() {
   };
 
   const atualizarStatusDragAndDrop = (leadId, novoStatus) => {
+    if (!exigirEdicao('mover leads')) return;
     const lead = leads.find(l => String(l.id) === String(leadId));
     if (lead && lead.status !== novoStatus) {
       const agora = new Date().toISOString();
@@ -676,11 +706,11 @@ function App() {
                     <button className={`view-btn ${visaoAtual === 'table' ? 'active' : ''}`} onClick={() => setVisaoAtual('table')}>☰ Tabela</button>
                     <button className={`view-btn ${visaoAtual === 'kanban' ? 'active' : ''}`} onClick={() => setVisaoAtual('kanban')}>⊞ Kanban</button>
                   </div>
-                  <button className="btn btn-primary" onClick={abrirModalNovo}>+ Novo Lead</button>
+                  {editavel && <button className="btn btn-primary" onClick={abrirModalNovo}>+ Novo Lead</button>}
                 </div>
               </div>
 
-              {selectedLeads.length > 0 && (
+              {editavel && selectedLeads.length > 0 && (
                 <BarraEmMassa
                   quantidade={selectedLeads.length}
                   etapas={etapas}
@@ -751,9 +781,11 @@ function App() {
                 )}
 
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-                  <button className="btn btn-ghost" style={{ fontSize: 12, padding: '5px 12px' }} onClick={() => setModalImportar(true)}>
-                    📥 Importar
-                  </button>
+                  {editavel && (
+                    <button className="btn btn-ghost" style={{ fontSize: 12, padding: '5px 12px' }} onClick={() => setModalImportar(true)}>
+                      📥 Importar
+                    </button>
+                  )}
                   <button
                     className="btn btn-ghost"
                     style={{ fontSize: 12, padding: '5px 12px' }}
@@ -834,7 +866,28 @@ function App() {
       case 'relatorios':
         return <RelatoriosPage leads={leads} etapas={etapas} />;
       case 'configuracoes':
-        return <ConfigPage etapas={etapas} metas={metas} leads={leads} modelos={modelos} automacoes={automacoes} />;
+        if (!administravel) {
+          return (
+            <div style={{
+              flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+              justifyContent: 'center', gap: 12, color: 'var(--text3)', padding: 40, textAlign: 'center',
+            }}>
+              <span style={{ fontSize: 40 }}>🔒</span>
+              <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text2)' }}>Configurações</div>
+              <div style={{ fontSize: 13, maxWidth: 380, lineHeight: 1.6 }}>
+                {motivoBloqueio(papel, 'abrir as configurações')}
+              </div>
+            </div>
+          );
+        }
+        return (
+          <ConfigPage
+            etapas={etapas} metas={metas} leads={leads}
+            modelos={modelos} automacoes={automacoes}
+            usuarios={usuariosCrm} uidAtual={usuario?.uid}
+            primeiraConfiguracao={primeiraConfiguracao}
+          />
+        );
       default:
         return <Dashboard
           leads={leads}
@@ -972,6 +1025,8 @@ function App() {
           emailUsuario={emailUsuario}
           iniciaisUsuario={iniciaisUsuario}
           onLogout={fazerLogout}
+          papel={papel}
+          mostrarConfiguracoes={administravel}
         />
         
         {/* Área de conteúdo principal */}

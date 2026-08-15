@@ -7,7 +7,7 @@
       "usuarios": {
         ".read": "auth != null",
         "$uid": {
-          ".write": "auth != null && (!root.child('crm_data/usuarios').child(auth.uid).exists() || root.child('crm_data/usuarios').child(auth.uid).child('role').val() === 'Admin')",
+          ".write": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).child('role').val() === 'Admin')",
           "role": {
             ".validate": "newData.val() === 'Admin' || newData.val() === 'Editor' || newData.val() === 'Viewer'"
           }
@@ -15,99 +15,102 @@
       },
 
       "config": {
-        ".read": "auth != null",
-        ".write": "auth != null && (!root.child('crm_data/usuarios').child(auth.uid).exists() || root.child('crm_data/usuarios').child(auth.uid).child('role').val() === 'Admin')"
-      },
-
-      "modelos": {
-        ".read": "auth != null",
-        ".write": "auth != null && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'",
-        ".indexOn": ["canal"]
+        ".read": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).exists())",
+        ".write": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).child('role').val() === 'Admin')"
       },
 
       "automacoes": {
-        ".read": "auth != null",
-        ".write": "auth != null && (!root.child('crm_data/usuarios').child(auth.uid).exists() || root.child('crm_data/usuarios').child(auth.uid).child('role').val() === 'Admin')"
+        ".read": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).exists())",
+        ".write": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).child('role').val() === 'Admin')"
+      },
+
+      "automacoes_log": {
+        ".read": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).exists())",
+        "$chave": {
+          ".write": "auth != null && (!root.child('crm_data/usuarios').exists() || (root.child('crm_data/usuarios').child(auth.uid).exists() && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'))"
+        }
+      },
+
+      "modelos": {
+        ".read": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).exists())",
+        ".write": "auth != null && (!root.child('crm_data/usuarios').exists() || (root.child('crm_data/usuarios').child(auth.uid).exists() && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'))",
+        ".indexOn": ["canal"]
       },
 
       "leads": {
-        ".read": "auth != null",
+        ".read": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).exists())",
         ".indexOn": ["responsavel", "status", "createdAt"],
         "$leadId": {
-          ".write": "auth != null && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'",
+          ".write": "auth != null && (!root.child('crm_data/usuarios').exists() || (root.child('crm_data/usuarios').child(auth.uid).exists() && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'))",
           ".validate": "!newData.exists() || newData.hasChild('nome')"
         }
       },
 
       "clientes": {
-        ".read": "auth != null",
+        ".read": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).exists())",
         ".indexOn": ["statusCliente", "responsavel"],
         "$clienteId": {
-          ".write": "auth != null && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'"
+          ".write": "auth != null && (!root.child('crm_data/usuarios').exists() || (root.child('crm_data/usuarios').child(auth.uid).exists() && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'))"
         }
       },
 
       "propostas": {
-        ".read": "auth != null",
+        ".read": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).exists())",
         ".indexOn": ["leadId", "status", "data"],
         "$propostaId": {
-          ".write": "auth != null && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'"
+          ".write": "auth != null && (!root.child('crm_data/usuarios').exists() || (root.child('crm_data/usuarios').child(auth.uid).exists() && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'))"
         }
       },
 
       "tarefas": {
-        ".read": "auth != null",
+        ".read": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).exists())",
         ".indexOn": ["data", "leadId", "responsavel"],
         "$tarefaId": {
-          ".write": "auth != null && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'"
+          ".write": "auth != null && (!root.child('crm_data/usuarios').exists() || (root.child('crm_data/usuarios').child(auth.uid).exists() && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'))"
         }
       },
 
       "atividades": {
-        ".read": "auth != null",
+        ".read": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).exists())",
         ".indexOn": ["leadId", "criadoEm"],
         "$atividadeId": {
-          ".write": "auth != null && !data.exists() && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'"
+          ".write": "auth != null && !data.exists() && (!root.child('crm_data/usuarios').exists() || (root.child('crm_data/usuarios').child(auth.uid).exists() && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'))"
         }
       },
 
       "conversas": {
-        ".read": "auth != null",
+        ".read": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).exists())",
         ".indexOn": ["telefone", "leadId", "ultimaAt"],
         "$conversaId": {
-          ".write": "auth != null && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'",
-          "mensagens": {
-            ".indexOn": ["criadoEm"]
-          }
+          ".write": "auth != null && (!root.child('crm_data/usuarios').exists() || (root.child('crm_data/usuarios').child(auth.uid).exists() && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'))",
+          "mensagens": { ".indexOn": ["criadoEm"] }
         }
       },
 
       "emails": {
-        ".read": "auth != null",
+        ".read": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).exists())",
         ".indexOn": ["email", "ultimaAt"],
         "$threadId": {
-          ".write": "auth != null && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'",
-          "mensagens": {
-            ".indexOn": ["criadoEm"]
-          }
+          ".write": "auth != null && (!root.child('crm_data/usuarios').exists() || (root.child('crm_data/usuarios').child(auth.uid).exists() && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'))",
+          "mensagens": { ".indexOn": ["criadoEm"] }
         }
       },
 
       "nichos": {
-        ".read": "auth != null",
-        ".write": "auth != null && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'"
+        ".read": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).exists())",
+        ".write": "auth != null && (!root.child('crm_data/usuarios').exists() || (root.child('crm_data/usuarios').child(auth.uid).exists() && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'))"
       },
       "responsaveis": {
-        ".read": "auth != null",
-        ".write": "auth != null && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'"
+        ".read": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).exists())",
+        ".write": "auth != null && (!root.child('crm_data/usuarios').exists() || (root.child('crm_data/usuarios').child(auth.uid).exists() && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'))"
       },
       "estados": {
-        ".read": "auth != null",
-        ".write": "auth != null && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'"
+        ".read": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).exists())",
+        ".write": "auth != null && (!root.child('crm_data/usuarios').exists() || (root.child('crm_data/usuarios').child(auth.uid).exists() && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'))"
       },
       "cidades": {
-        ".read": "auth != null",
-        ".write": "auth != null && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'"
+        ".read": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).exists())",
+        ".write": "auth != null && (!root.child('crm_data/usuarios').exists() || (root.child('crm_data/usuarios').child(auth.uid).exists() && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'))"
       }
     }
   }

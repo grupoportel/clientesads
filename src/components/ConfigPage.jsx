@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ref, onValue, set, push } from 'firebase/database';
+import { ref, onValue, set } from 'firebase/database';
 import { database } from '../firebase';
 import ConfigModelos from './ConfigModelos';
 import ConfigAutomacoes from './ConfigAutomacoes';
+import ConfigUsuarios from './ConfigUsuarios';
 
 /* ─────────────────────────────────────────────
    Inline Reusable Components
@@ -55,20 +56,14 @@ const AddInput = ({ value, onChange, onAdd, placeholder }) => (
 
 
 
-const roleBadge = (role) => {
-  const map = {
-    Admin: { bg: 'rgba(168,85,247,0.15)', color: 'var(--purple)', label: 'Admin' },
-    Editor: { bg: 'rgba(59,130,246,0.15)', color: '#3b82f6', label: 'Editor' },
-    Viewer: { bg: 'rgba(148,168,208,0.15)', color: 'var(--text3)', label: 'Viewer' },
-  };
-  return map[role] || map.Viewer;
-};
-
 /* ─────────────────────────────────────────────
    ConfigPage
 ───────────────────────────────────────────── */
 
-export default function ConfigPage({ etapas = [], metas = {}, leads = [], modelos = [], automacoes = [] }) {
+export default function ConfigPage({
+  etapas = [], metas = {}, leads = [], modelos = [], automacoes = [],
+  usuarios = [], uidAtual, primeiraConfiguracao = false,
+}) {
   const [activeTab, setActiveTab] = useState('Pipeline');
   const tabs = ['Pipeline', 'Automações', 'Modelos', 'Metas', 'Equipe', 'Nichos', 'Regiões', 'Empresa', 'Usuários'];
 
@@ -105,7 +100,6 @@ export default function ConfigPage({ etapas = [], metas = {}, leads = [], modelo
     endereco: '',
   });
   const [empresaSalva, setEmpresaSalva] = useState(false);
-  const [usuarios, setUsuarios] = useState([]);
 
   // New item inputs
   const [novoNicho, setNovoNicho] = useState('');
@@ -130,17 +124,12 @@ export default function ConfigPage({ etapas = [], metas = {}, leads = [], modelo
     const unsubEmpresa = onValue(ref(database, 'crm_data/config/empresa'), (snap) => {
       if (snap.val()) setEmpresa(snap.val());
     });
-    const unsubUsuarios = onValue(ref(database, 'crm_data/usuarios'), (snap) => {
-      const data = snap.val();
-      setUsuarios(data ? Object.entries(data).map(([id, u]) => ({ ...u, id })) : []);
-    });
     return () => {
       unsubNichos();
       unsubResp();
       unsubEstados();
       unsubCidades();
       unsubEmpresa();
-      unsubUsuarios();
     };
   }, []);
 
@@ -629,100 +618,6 @@ export default function ConfigPage({ etapas = [], metas = {}, leads = [], modelo
   /* ─────────────────────────────────────────────
      Tab: Usuários
   ───────────────────────────────────────────── */
-  const convidarUsuario = () => {
-    const email = window.prompt('E-mail do novo usuário:');
-    if (!email) return;
-    const nome = window.prompt('Nome do novo usuário:') || 'Novo Usuário';
-    const novoUsuarioRef = push(ref(database, 'crm_data/usuarios'));
-    set(novoUsuarioRef, {
-      id: novoUsuarioRef.key,
-      nome,
-      email,
-      role: 'Viewer',
-      avatar: '👤'
-    });
-  };
-
-  const renderUsuarios = () => (
-    <div className="crm-card" style={{ maxWidth: 860 }}>
-      <div
-        className="crm-card-header"
-        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-      >
-        <div className="crm-card-title">👥 Usuários do Sistema</div>
-        <button className="btn btn-primary" style={{ fontSize: 13 }} onClick={convidarUsuario}>
-          + Convidar Usuário
-        </button>
-      </div>
-      <div style={{ overflowX: 'auto' }}>
-        <table className="finance-table" style={{ width: '100%' }}>
-          <thead>
-            <tr>
-              <th>Usuário</th>
-              <th>E-mail</th>
-              <th>Permissão</th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {usuarios.length === 0 ? (
-              <tr>
-                <td colSpan="4" style={{ textAlign: 'center', padding: 20, color: 'var(--text3)' }}>
-                  Nenhum usuário cadastrado.
-                </td>
-              </tr>
-            ) : usuarios.map((u) => {
-              const badge = roleBadge(u.role);
-              return (
-                <tr key={u.id}>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div
-                        style={{
-                          width: 34,
-                          height: 34,
-                          borderRadius: '50%',
-                          background: 'var(--surface2)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: 16,
-                          border: '1px solid var(--border)',
-                          flexShrink: 0,
-                        }}
-                      >
-                        {u.avatar || '👤'}
-                      </div>
-                      <span style={{ fontWeight: 600, color: 'var(--text)' }}>{u.nome}</span>
-                    </div>
-                  </td>
-                  <td style={{ color: 'var(--text3)', fontSize: 13 }}>{u.email}</td>
-                  <td>
-                    <span
-                      className="finance-badge"
-                      style={{
-                        background: badge.bg,
-                        color: badge.color,
-                        border: `1px solid ${badge.color}33`,
-                      }}
-                    >
-                      {badge.label}
-                    </span>
-                  </td>
-                  <td>
-                    <button className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 10px' }}>
-                      Editar
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-
   /* ─────────────────────────────────────────────
      Render
   ───────────────────────────────────────────── */
@@ -765,7 +660,13 @@ export default function ConfigPage({ etapas = [], metas = {}, leads = [], modelo
         {activeTab === 'Nichos' && renderNichos()}
         {activeTab === 'Regiões' && renderRegioes()}
         {activeTab === 'Empresa' && renderEmpresa()}
-        {activeTab === 'Usuários' && renderUsuarios()}
+        {activeTab === 'Usuários' && (
+          <ConfigUsuarios
+            usuarios={usuarios}
+            uidAtual={uidAtual}
+            primeiraConfiguracao={primeiraConfiguracao}
+          />
+        )}
       </div>
     </div>
   );
