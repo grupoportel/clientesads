@@ -112,3 +112,33 @@ para comparar, porque não identifica ninguém com segurança.
 - `400` — não achou nome, e-mail nem telefone no payload (a resposta lista as
   chaves recebidas, para ajudar a mapear)
 - `403` — segredo errado
+
+---
+
+## Trava de versão do `jose`
+
+O `package.json` tem um `overrides` fixando `jose` na faixa `^5.10.0`. **Não
+remova sem testar em produção.**
+
+O `firebase-admin` puxa `jwks-rsa`, que é CommonJS e faz `require('jose')`, mas
+declara `jose ^6.1.3` — e o jose 6 passou a ser ESM puro. O Node 22.12+ aceita
+`require()` de módulo ESM, o carregador da Vercel não. O resultado é que o
+build passa, os testes passam, o `npm run dev` funciona, e só em produção os
+três endpoints que validam token respondem `500 FUNCTION_INVOCATION_FAILED`:
+
+```
+ERR_REQUIRE_ESM: require() of ES Module .../jose/dist/webapi/index.js
+from .../jwks-rsa/src/utils.js not supported
+```
+
+O `jwks-rsa` usa exatamente duas funções do jose, `exportSPKI` e `importJWK`,
+e as duas existem no 5.x, que ainda publica CommonJS.
+
+Para conferir que a trava está valendo:
+
+```bash
+node -e "console.log(require.resolve('jose',{paths:['./node_modules/jwks-rsa/src']}))"
+```
+
+Tem que terminar em `jose/dist/node/cjs/index.js`. Se aparecer `webapi`, o
+override caiu e os endpoints autenticados vão quebrar no próximo deploy.

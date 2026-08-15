@@ -43,7 +43,10 @@ export async function exigirUsuario(req, res) {
   const token = cabecalho.startsWith('Bearer ') ? cabecalho.slice(7).trim() : null;
 
   if (!token) {
-    res.status(401).json({ error: 'Faça login para enviar mensagens.' });
+    // Genérica de propósito: os três endpoints que passam por aqui fazem
+    // coisas diferentes, e "faça login para enviar mensagens" na tela de
+    // usuários manda a pessoa procurar problema no lugar errado.
+    res.status(401).json({ error: 'Faça login para continuar.' });
     return null;
   }
 
