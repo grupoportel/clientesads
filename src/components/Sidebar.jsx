@@ -17,7 +17,7 @@ export default function Sidebar({
   paginaAtiva, setPaginaAtiva, leads = [],
   tarefasPendentes = 0, conversasNaoLidas = 0, emailsNaoLidos = 0,
   nomeEmpresa = 'Grupo Portel', nomeUsuario = 'Usuário', emailUsuario = '',
-  iniciaisUsuario = '?', onLogout,
+  iniciaisUsuario = '?', onLogout, aberta = false, onFechar = () => {},
 }) {
   const isActive = (id) => paginaAtiva === id;
 
@@ -48,7 +48,7 @@ export default function Sidebar({
   });
 
   return (
-    <div className="sidebar-v2">
+    <div className={`sidebar-v2 ${aberta ? 'aberta' : ''}`}>
       {/* ── LOGO ── */}
       <div style={{ padding: '20px 16px 12px', borderBottom: '1px solid var(--border)', marginBottom: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -65,8 +65,22 @@ export default function Sidebar({
             {nomeEmpresa}
           </span>
         </div>
-        <div style={{ fontSize: '10px', color: 'var(--text3)', marginTop: '4px', paddingLeft: '17px' }}>
-          CRM v2.0
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: '10px', color: 'var(--text3)', marginTop: '4px', paddingLeft: '17px' }}>
+            CRM v2.0
+          </div>
+          {aberta && (
+            <button
+              onClick={onFechar}
+              aria-label="Fechar menu"
+              style={{
+                background: 'transparent', border: 'none', color: 'var(--text3)',
+                fontSize: 20, cursor: 'pointer', lineHeight: 1, padding: '0 4px',
+              }}
+            >
+              ×
+            </button>
+          )}
         </div>
       </div>
 

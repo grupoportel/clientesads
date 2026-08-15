@@ -30,17 +30,6 @@ export default function BuscaGlobal({
   const campoRef = useRef(null);
   const listaRef = useRef(null);
 
-  // Foca o campo e zera o estado sempre que abrir
-  useEffect(() => {
-    if (aberta) {
-      setTermo('');
-      setSelecionado(0);
-      // timeout de 0 para o foco acontecer depois do elemento existir na tela
-      const t = setTimeout(() => campoRef.current?.focus(), 0);
-      return () => clearTimeout(t);
-    }
-  }, [aberta]);
-
   const resultados = useMemo(() => {
     const t = normalizar(termo).trim();
     if (t.length < 2) return [];
@@ -169,6 +158,7 @@ export default function BuscaGlobal({
           <span style={{ fontSize: 17, color: 'var(--text3)' }}>🔍</span>
           <input
             ref={campoRef}
+            autoFocus
             value={termo}
             onChange={e => { setTermo(e.target.value); setSelecionado(0); }}
             onKeyDown={aoTeclar}

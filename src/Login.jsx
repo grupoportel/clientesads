@@ -1,27 +1,71 @@
 import { useState } from 'react';
 import { auth } from './firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+
+// Antes, qualquer falha virava "E-mail ou senha incorretos" — inclusive queda
+// de rede, o que mandava a pessoa conferir a senha em vez da internet.
+const MENSAGENS_DE_ERRO = {
+  'auth/invalid-email':           'Esse e-mail não parece válido. Confira o endereço.',
+  'auth/user-disabled':           'Esta conta foi desativada. Fale com o administrador.',
+  'auth/user-not-found':          'E-mail ou senha incorretos.',
+  'auth/wrong-password':          'E-mail ou senha incorretos.',
+  'auth/invalid-credential':      'E-mail ou senha incorretos.',
+  'auth/too-many-requests':       'Muitas tentativas seguidas. Aguarde alguns minutos ou redefina a senha.',
+  'auth/network-request-failed':  'Sem conexão com o servidor. Verifique sua internet e tente de novo.',
+  'auth/internal-error':          'O servidor de login falhou. Tente novamente em instantes.',
+};
 
 export default function Login() {
-  // O React guarda o que é digitado aqui nestas "variáveis" (estados)
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [erro, setErro] = useState('');
+  const [aviso, setAviso] = useState('');
+  const [entrando, setEntrando] = useState(false);
+  const [enviandoReset, setEnviandoReset] = useState(false);
 
-  // A função que é chamada quando clicamos em "Entrar"
   const fazerLogin = (e) => {
-    e.preventDefault(); // Evita que a página recarregue
-    setErro(''); // Limpa erros anteriores
+    e.preventDefault();
+    if (entrando) return; // impede o clique repetido enquanto a requisição corre
+    setErro('');
+    setAviso('');
+    setEntrando(true);
 
     signInWithEmailAndPassword(auth, email, senha)
+      .catch((error) => {
+        console.error('[Login]', error?.code);
+        setErro(MENSAGENS_DE_ERRO[error?.code] || 'Não foi possível entrar. Tente novamente.');
+      })
+      .finally(() => setEntrando(false));
+    // Em caso de sucesso o App troca de tela sozinho pelo onAuthStateChanged
+  };
+
+  const recuperarSenha = () => {
+    if (enviandoReset) return;
+    setErro('');
+    setAviso('');
+
+    const destino = email.trim();
+    if (!destino) {
+      setErro('Digite o seu e-mail no campo acima para receber o link de redefinição.');
+      return;
+    }
+
+    setEnviandoReset(true);
+    sendPasswordResetEmail(auth, destino)
       .then(() => {
-        console.log("Logado com sucesso!");
-        // O App.jsx vai perceber isso automaticamente e mudar a tela
+        // Mensagem igual mesmo quando o e-mail não existe: dizer "essa conta
+        // não existe" entregaria a estranhos quais endereços têm cadastro.
+        setAviso(`Se houver uma conta para ${destino}, o link de redefinição chegou na caixa de entrada. Verifique também o spam.`);
       })
       .catch((error) => {
-        console.error(error);
-        setErro("E-mail ou senha incorretos.");
-      });
+        console.error('[Login] reset:', error?.code);
+        if (error?.code === 'auth/user-not-found') {
+          setAviso(`Se houver uma conta para ${destino}, o link de redefinição chegou na caixa de entrada. Verifique também o spam.`);
+        } else {
+          setErro(MENSAGENS_DE_ERRO[error?.code] || 'Não foi possível enviar o link agora. Tente novamente.');
+        }
+      })
+      .finally(() => setEnviandoReset(false));
   };
 
   return (
@@ -128,35 +172,56 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Forgot Password Link */}
+          {/* Esqueci minha senha */}
           <div style={{ textAlign: 'right', marginBottom: '24px' }}>
-            <span style={{
-              fontSize: '12px', color: 'var(--accent2)',
-              cursor: 'pointer', transition: 'opacity 0.15s',
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.opacity = '0.7'}
-            onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+            <button
+              type="button"
+              onClick={recuperarSenha}
+              disabled={enviandoReset}
+              style={{
+                fontSize: '12px', color: 'var(--accent2)',
+                background: 'transparent', border: 'none', padding: 0,
+                cursor: enviandoReset ? 'default' : 'pointer',
+                fontFamily: 'inherit', transition: 'opacity 0.15s',
+                opacity: enviandoReset ? 0.6 : 1,
+              }}
+              onMouseEnter={(e) => { if (!enviandoReset) e.currentTarget.style.opacity = '0.7'; }}
+              onMouseLeave={(e) => { if (!enviandoReset) e.currentTarget.style.opacity = '1'; }}
             >
-              Esqueci minha senha
-            </span>
+              {enviandoReset ? 'Enviando…' : 'Esqueci minha senha'}
+            </button>
           </div>
 
-          {/* Error Message */}
+          {/* Erro */}
           {erro && (
             <div style={{
               color: 'var(--red)', marginBottom: '16px',
-              fontSize: '13px', textAlign: 'center',
+              fontSize: '13px', textAlign: 'center', lineHeight: 1.5,
               background: 'rgba(239,68,68,.08)',
-              padding: '10px', borderRadius: '8px',
+              padding: '10px 12px', borderRadius: '8px',
               border: '1px solid rgba(239,68,68,.2)',
             }}>
               {erro}
             </div>
           )}
 
+          {/* Confirmação do link de redefinição */}
+          {aviso && (
+            <div style={{
+              color: 'var(--green)', marginBottom: '16px',
+              fontSize: '13px', textAlign: 'center', lineHeight: 1.5,
+              background: 'rgba(34,197,94,.08)',
+              padding: '10px 12px', borderRadius: '8px',
+              border: '1px solid rgba(34,197,94,.25)',
+            }}>
+              ✉️ {aviso}
+            </div>
+          )}
+
           {/* Submit Button */}
           <button
             type="submit"
+            disabled={entrando}
             style={{
               width: '100%',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -164,16 +229,18 @@ export default function Login() {
               padding: '12px',
               borderRadius: '10px',
               border: 'none',
-              cursor: 'pointer',
+              cursor: entrando ? 'default' : 'pointer',
               background: 'linear-gradient(135deg, var(--accent), var(--accent2))',
               color: '#fff',
               fontSize: '14px',
               fontWeight: 600,
               fontFamily: "'DM Sans', sans-serif",
               boxShadow: '0 4px 16px rgba(0,210,223,.25)',
-              transition: 'transform 0.15s, box-shadow 0.15s',
+              transition: 'transform 0.15s, box-shadow 0.15s, opacity 0.15s',
+              opacity: entrando ? 0.7 : 1,
             }}
             onMouseEnter={(e) => {
+              if (entrando) return;
               e.currentTarget.style.transform = 'translateY(-1px)';
               e.currentTarget.style.boxShadow = '0 6px 24px rgba(0,210,223,.35)';
             }}
@@ -182,7 +249,7 @@ export default function Login() {
               e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,210,223,.25)';
             }}
           >
-            Entrar
+            {entrando ? '⏳ Entrando…' : 'Entrar'}
           </button>
         </form>
       </div>

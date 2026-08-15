@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 const CAMPOS_INICIAIS = {
   nome: '', nicho: '', responsavel: '', plano: '', valorMensal: '',
@@ -7,17 +7,10 @@ const CAMPOS_INICIAIS = {
 };
 
 export default function ClienteModal({ isOpen, onClose, onSave, clienteAtual, nichos = [], responsaveis = [] }) {
-  const [dados, setDados] = useState(CAMPOS_INICIAIS);
+  const [dados, setDados] = useState(() => (clienteAtual ? { ...CAMPOS_INICIAIS, ...clienteAtual } : CAMPOS_INICIAIS));
   const [erro, setErro] = useState('');
 
-  useEffect(() => {
-    if (clienteAtual) {
-      setDados({ ...CAMPOS_INICIAIS, ...clienteAtual });
-    } else {
-      setDados(CAMPOS_INICIAIS);
-    }
-    setErro('');
-  }, [clienteAtual, isOpen]);
+
 
   if (!isOpen) return null;
 

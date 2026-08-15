@@ -1,4 +1,4 @@
-import { ref, push, set, query, orderByChild, equalTo, limitToLast, onValue } from 'firebase/database';
+import { ref, push, set, update, query, orderByChild, equalTo, limitToLast, onValue } from 'firebase/database';
 import { database, auth } from './firebase';
 
 // Histórico automático. Antes disso o único registro era o campo "Histórico",
@@ -51,6 +51,41 @@ export function registrarAtividade({ leadId, leadNome = '', tipo = 'nota', descr
     criadoEm: new Date().toISOString(),
   }).catch(erro => {
     console.warn('[atividades] Não foi possível registrar o histórico:', erro?.message);
+  });
+}
+
+/**
+ * Registra várias atividades numa gravação só.
+ * Numa edição em massa de 600 leads, 600 chamadas separadas travariam a tela e
+ * castigariam a cota do Firebase; isto vai em uma única escrita multi-caminho.
+ */
+export function registrarAtividadesEmLote(itens) {
+  if (!itens || itens.length === 0) return Promise.resolve();
+
+  const autor = autorAtual();
+  const criadoEm = new Date().toISOString();
+  const gravacoes = {};
+
+  itens.forEach(item => {
+    if (!item?.leadId || !item?.descricao) return;
+    const novaRef = push(ref(database, 'crm_data/atividades'));
+    gravacoes[novaRef.key] = {
+      id: novaRef.key,
+      leadId: item.leadId,
+      leadNome: item.leadNome || '',
+      tipo: item.tipo || 'editado',
+      descricao: item.descricao,
+      detalhe: item.detalhe || null,
+      autorUid: autor.uid,
+      autorNome: autor.nome,
+      criadoEm,
+    };
+  });
+
+  if (Object.keys(gravacoes).length === 0) return Promise.resolve();
+
+  return update(ref(database, 'crm_data/atividades'), gravacoes).catch(erro => {
+    console.warn('[atividades] Não foi possível registrar o histórico em lote:', erro?.message);
   });
 }
 

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ref, onValue, set, push } from 'firebase/database';
 import { database } from '../firebase';
+import ConfigModelos from './ConfigModelos';
+import ConfigAutomacoes from './ConfigAutomacoes';
 
 /* ─────────────────────────────────────────────
    Inline Reusable Components
@@ -66,18 +68,29 @@ const roleBadge = (role) => {
    ConfigPage
 ───────────────────────────────────────────── */
 
-export default function ConfigPage({ etapas = [], metas = {} }) {
+export default function ConfigPage({ etapas = [], metas = {}, leads = [], modelos = [], automacoes = [] }) {
   const [activeTab, setActiveTab] = useState('Pipeline');
-  const tabs = ['Pipeline', 'Metas', 'Equipe', 'Nichos', 'Regiões', 'Empresa', 'Usuários'];
+  const tabs = ['Pipeline', 'Automações', 'Modelos', 'Metas', 'Equipe', 'Nichos', 'Regiões', 'Empresa', 'Usuários'];
 
-  // Rascunho local das etapas — só vai para o banco quando o usuário salvar
+  // Rascunho local — só vai para o banco quando o usuário salvar.
+  // O sincronismo é feito durante o render (padrão recomendado do React para
+  // "estado derivado de prop") em vez de num efeito, que dispararia um segundo
+  // render em cascata a cada mudança vinda do banco.
   const [rascunhoEtapas, setRascunhoEtapas] = useState(etapas);
+  const [etapasVistas, setEtapasVistas] = useState(etapas);
   const [etapasSalvas, setEtapasSalvas] = useState(false);
-  useEffect(() => { setRascunhoEtapas(etapas); }, [etapas]);
+  if (etapas !== etapasVistas) {
+    setEtapasVistas(etapas);
+    setRascunhoEtapas(etapas);
+  }
 
   const [rascunhoMetas, setRascunhoMetas] = useState(metas);
+  const [metasVistas, setMetasVistas] = useState(metas);
   const [metasSalvas, setMetasSalvas] = useState(false);
-  useEffect(() => { setRascunhoMetas(metas); }, [metas]);
+  if (metas !== metasVistas) {
+    setMetasVistas(metas);
+    setRascunhoMetas(metas);
+  }
 
   // Firebase state
   const [nichos, setNichos] = useState([]);
@@ -141,8 +154,18 @@ export default function ConfigPage({ etapas = [], metas = {} }) {
     setNewItem('');
   };
 
-  const removeItem = (path, list, item) => {
-    if (window.confirm(`Remover "${item}"?`)) {
+  // Conta quantos leads usam o valor antes de tirá-lo da lista. Removendo às
+  // cegas, esses leads ficam com um campo que nenhum filtro alcança mais.
+  const removeItem = (path, list, item, campoNoLead) => {
+    const emUso = campoNoLead ? leads.filter((l) => l[campoNoLead] === item).length : 0;
+
+    const aviso = emUso > 0
+      ? `"${item}" está em uso por ${emUso} lead(s).\n\n` +
+        'Eles continuam com o valor gravado, mas ele deixa de aparecer nos ' +
+        'filtros e nos formulários.\n\nRemover mesmo assim?'
+      : `Remover "${item}"?`;
+
+    if (window.confirm(aviso)) {
       set(ref(database, path), list.filter((i) => i !== item));
     }
   };
@@ -400,7 +423,7 @@ export default function ConfigPage({ etapas = [], metas = {} }) {
             <Chip
               key={i}
               label={r}
-              onRemove={() => removeItem('crm_data/responsaveis', responsaveis, r)}
+              onRemove={() => removeItem('crm_data/responsaveis', responsaveis, r, 'responsavel')}
             />
           ))}
         </div>
@@ -435,7 +458,7 @@ export default function ConfigPage({ etapas = [], metas = {} }) {
               key={i}
               label={n}
               color="var(--accent)"
-              onRemove={() => removeItem('crm_data/nichos', nichos, n)}
+              onRemove={() => removeItem('crm_data/nichos', nichos, n, 'nicho')}
             />
           ))}
         </div>
@@ -455,7 +478,7 @@ export default function ConfigPage({ etapas = [], metas = {} }) {
      Tab: Regiões
   ───────────────────────────────────────────── */
   const renderRegioes = () => (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, maxWidth: 900 }}>
+    <div className="grid-2" style={{ maxWidth: 900 }}>
       {/* Estados */}
       <div className="crm-card">
         <div className="crm-card-header">
@@ -470,7 +493,7 @@ export default function ConfigPage({ etapas = [], metas = {} }) {
                 key={i}
                 label={e}
                 color="var(--yellow)"
-                onRemove={() => removeItem('crm_data/estados', estados, e)}
+                onRemove={() => removeItem('crm_data/estados', estados, e, 'estado')}
               />
             ))}
           </div>
@@ -499,7 +522,7 @@ export default function ConfigPage({ etapas = [], metas = {} }) {
                 key={i}
                 label={c}
                 color="var(--purple)"
-                onRemove={() => removeItem('crm_data/cidades', cidades, c)}
+                onRemove={() => removeItem('crm_data/cidades', cidades, c, 'cidade')}
               />
             ))}
           </div>
@@ -728,6 +751,15 @@ export default function ConfigPage({ etapas = [], metas = {} }) {
 
         {/* Tab content */}
         {activeTab === 'Pipeline' && renderPipeline()}
+        {activeTab === 'Automações' && (
+          <ConfigAutomacoes
+            automacoes={automacoes}
+            etapas={etapas}
+            responsaveis={responsaveis}
+            nichos={nichos}
+          />
+        )}
+        {activeTab === 'Modelos' && <ConfigModelos modelos={modelos} />}
         {activeTab === 'Metas' && renderMetas()}
         {activeTab === 'Equipe' && renderEquipe()}
         {activeTab === 'Nichos' && renderNichos()}

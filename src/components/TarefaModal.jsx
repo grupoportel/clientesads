@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { hojeISO } from '../periodo';
 
 const CAMPOS_INICIAIS = {
   titulo: '', tipo: 'ligacao', leadId: '', leadNome: '',
@@ -6,18 +7,14 @@ const CAMPOS_INICIAIS = {
 };
 
 export default function TarefaModal({ isOpen, onClose, onSave, tarefaAtual, leads = [], responsaveis = [] }) {
-  const [formData, setFormData] = useState(CAMPOS_INICIAIS);
+  const [formData, setFormData] = useState(() => (
+    tarefaAtual
+      ? { ...CAMPOS_INICIAIS, ...tarefaAtual }
+      : { ...CAMPOS_INICIAIS, data: hojeISO() }
+  ));
   const [erro, setErro] = useState('');
 
-  useEffect(() => {
-    if (tarefaAtual) {
-      setFormData({ ...CAMPOS_INICIAIS, ...tarefaAtual });
-    } else {
-      const hoje = new Date().toISOString().slice(0, 10);
-      setFormData({ ...CAMPOS_INICIAIS, data: hoje });
-    }
-    setErro('');
-  }, [tarefaAtual, isOpen]);
+
 
   if (!isOpen) return null;
 

@@ -59,3 +59,56 @@ só o ambiente local fica sem.
 > `EMAIL_WEBHOOK_SECRET` tem um valor padrão no código (`portelcrm_email_secret`).
 > Como ele é público neste repositório, defina um valor próprio no Vercel e no
 > Apps Script do Gmail.
+
+---
+
+## 3. Entrada automática de leads (`/api/lead-in`)
+
+Endpoint para o formulário do site, Meta Ads, Google Ads, Zapier ou Make
+criarem leads direto no CRM.
+
+**Antes de usar, defina no Vercel:**
+
+| Variável | Para quê |
+|---|---|
+| `LEAD_IN_SECRET` | Segredo que autoriza a chamada. Sem ele o endpoint recusa tudo. |
+
+Gere um valor longo e aleatório. Sem esse segredo, qualquer um que descobrisse
+a URL poderia encher a sua base de lixo.
+
+### Como chamar
+
+```bash
+curl -X POST https://SEU-DOMINIO/api/lead-in \
+  -H "Content-Type: application/json" \
+  -H "x-webhook-secret: SEU_SEGREDO" \
+  -d '{"nome":"Clínica Sorriso","email":"contato@sorriso.com","telefone":"66999991234","origem":"site"}'
+```
+
+O segredo também pode ir na query (`?secret=...`) para plataformas que não
+deixam configurar cabeçalho.
+
+### O que ele entende
+
+- **Nomes de campo variados.** `nome`, `name`, `full_name`, `empresa`,
+  `razao_social` — todos viram o nome. O mesmo vale para telefone, e-mail,
+  cidade e os demais.
+- **Formato do Meta Ads**, que manda `field_data: [{ name, values }]`.
+- **Objetos aninhados.** `{ contato: { nome } }` também é encontrado.
+- **UTMs.** `utm_source`, `utm_campaign` etc. são guardados no lead, e
+  `utm_source` vira a origem quando nenhuma for informada.
+
+### Deduplicação
+
+Se o e-mail ou o telefone já existirem na base, **não cria um lead novo**:
+completa os campos que estavam vazios e anota na linha do tempo que a pessoa
+preencheu o formulário de novo. Um telefone com menos de 10 dígitos não é usado
+para comparar, porque não identifica ninguém com segurança.
+
+### Resposta
+
+- `201` — lead criado, devolve `leadId`
+- `200` com `duplicado: true` — lead já existia e foi completado
+- `400` — não achou nome, e-mail nem telefone no payload (a resposta lista as
+  chaves recebidas, para ajudar a mapear)
+- `403` — segredo errado

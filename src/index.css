@@ -31,15 +31,15 @@
   --pink: #ec4899; --pink-bg: #2a0d1a;
 
   /* CORES DO FUNIL (Otimizado) */
-  --s-nenhum: #5865f2;
-  --s-lead-qualificado: #3b82f6;
-  --s-ligacao-feita: #eab308;
-  --s-contato-decisor: #a855f7;
-  --s-reuniao-marcada: #22c55e;
-  --s-contrato-realizado: #ec4899;
-  --s-venda: #14b8a6;
-  --s-perda: #ef4444;
-  --s-concluido: #8b5cf6;
+  --s-nenhum: #64748b;
+  --s-lead-qualificado: #1791d0;
+  --s-ligacao-feita: #d97706;
+  --s-contato-decisor: #9333ea;
+  --s-reuniao-marcada: #0fa06f;
+  --s-contrato-realizado: #c026d3;
+  --s-venda: #0499b3;
+  --s-perda: #dc2626;
+  --s-concluido: #6ba30d;
 
   --radius: 10px;
   --shadow: 0 4px 24px rgba(0,0,0,.45);
@@ -242,15 +242,24 @@ tbody tr:hover .row-actions{opacity:1}
 .status-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap;cursor:pointer;border:none;font-family:'DM Sans',sans-serif;transition:filter .15s,transform .1s;}
 .status-badge:hover{filter:brightness(1.15)}
 .status-badge:active{transform:scale(.96)}
-.s-nenhum{background:#1a1e42;color:var(--s-nenhum);border:1px solid #2d3365}
-.s-lead-qualificado{background:#0f172a;color:var(--s-lead-qualificado);border:1px solid #1e293b}
-.s-ligacao-feita{background:#2d2508;color:var(--s-ligacao-feita);border:1px solid #4a3c0a}
-.s-contato-decisor{background:#1e0d2d;color:var(--s-contato-decisor);border:1px solid #32134a}
-.s-reuniao-marcada{background:#0d2820;color:var(--s-reuniao-marcada);border:1px solid #0e4232}
-.s-contrato-realizado{background:#2d0d1a;color:var(--s-contrato-realizado);border:1px solid #4a1028}
-.s-venda{background:#0d2828;color:var(--s-venda);border:1px solid #0e4242}
-.s-perda{background:#2a0d0d;color:var(--s-perda);border:1px solid #4a1515}
-.s-concluido{background:#1d1033;color:var(--s-concluido);border:1px solid #3b2266}
+/* O fundo e a borda de cada badge derivam da própria cor da etapa. Antes cada
+   classe tinha o seu tom fixo, então mudar a cor em Configurações mudava o
+   texto mas não o fundo — as cores viviam em dois lugares ao mesmo tempo. */
+.s-nenhum,.s-lead-qualificado,.s-ligacao-feita,.s-contato-decisor,
+.s-reuniao-marcada,.s-contrato-realizado,.s-venda,.s-perda,.s-concluido{
+  background:color-mix(in srgb, var(--cor-etapa) 16%, transparent);
+  color:color-mix(in srgb, var(--cor-etapa) 82%, white);
+  border:1px solid color-mix(in srgb, var(--cor-etapa) 38%, transparent);
+}
+.s-nenhum{--cor-etapa:var(--s-nenhum)}
+.s-lead-qualificado{--cor-etapa:var(--s-lead-qualificado)}
+.s-ligacao-feita{--cor-etapa:var(--s-ligacao-feita)}
+.s-contato-decisor{--cor-etapa:var(--s-contato-decisor)}
+.s-reuniao-marcada{--cor-etapa:var(--s-reuniao-marcada)}
+.s-contrato-realizado{--cor-etapa:var(--s-contrato-realizado)}
+.s-venda{--cor-etapa:var(--s-venda)}
+.s-perda{--cor-etapa:var(--s-perda)}
+.s-concluido{--cor-etapa:var(--s-concluido)}
 
 /* ── DETAIL PANEL ── */
 .detail-panel{width:0;background:var(--surface);border-left:1px solid var(--border);flex-shrink:0;overflow:hidden;transition:width .25s cubic-bezier(.4,0,.2,1);}
@@ -1393,3 +1402,140 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVO
+   O CRM era desenhado só para desktop: menu fixo de 240px, tabela de 23
+   colunas e grades travadas em "2fr 1fr". Com dois vendedores em campo, isso
+   significava não conseguir abrir o sistema entre uma visita e outra.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Grades reutilizáveis, no lugar de gridTemplateColumns inline —
+   estilo inline não pode ser alcançado por media query. */
+.grid-2       { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.grid-3       { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+.grid-conteudo{ display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 20px; }
+.grid-lateral { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; }
+
+@media (max-width: 1024px) {
+  .grid-3 { grid-template-columns: 1fr 1fr; }
+  .grid-conteudo, .grid-lateral { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+}
+
+/* ── Gaveta do menu ── */
+.abrir-menu { display: none; }
+.fundo-menu { display: none; }
+
+@media (max-width: 1024px) {
+  .abrir-menu {
+    display: flex; align-items: center; justify-content: center;
+    width: 38px; height: 38px; flex-shrink: 0;
+    background: transparent; border: 1px solid var(--border);
+    border-radius: 9px; color: var(--text2);
+    font-size: 17px; cursor: pointer;
+  }
+  .abrir-menu:active { background: var(--surface2); }
+
+  /* Fora da tela até ser chamada */
+  .sidebar-v2 {
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 400;
+    width: 264px; height: 100%;
+    transform: translateX(-100%);
+    transition: transform .22s cubic-bezier(.4,0,.2,1);
+    box-shadow: 8px 0 32px rgba(0,0,0,.5);
+  }
+  .sidebar-v2.aberta { transform: translateX(0); }
+
+  .fundo-menu {
+    display: block; position: fixed; inset: 0; z-index: 390;
+    background: rgba(0,0,0,.55); backdrop-filter: blur(2px);
+    animation: fadeIn .18s ease;
+  }
+
+  /* O painel de detalhe vira folha deslizante, não uma terceira coluna */
+  .detail-panel.open {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 380;
+    width: min(420px, 92vw); box-shadow: -8px 0 32px rgba(0,0,0,.5);
+  }
+}
+
+/* ── Celular ── */
+@media (max-width: 768px) {
+  .topbar { padding: 0 12px; gap: 8px; }
+  .topbar .search-wrap { width: auto !important; min-width: 0; flex: 1; }
+  .topbar .search-wrap kbd { display: none; }
+  .user-menu-name { display: none; }
+
+  .page-header {
+    flex-direction: column; align-items: flex-start; gap: 12px;
+    padding: 14px 16px;
+  }
+  .page-actions { width: 100%; flex-wrap: wrap; }
+  .page-content { padding: 16px 14px 72px; }
+
+  /* Alvo de toque: 12px de altura não se acerta com o dedo */
+  .btn { min-height: 38px; }
+  .btn-icon { min-width: 36px; min-height: 36px; }
+  .filter-chip { min-height: 34px; display: inline-flex; align-items: center; }
+  input.form-control, select.form-control, textarea.form-control {
+    min-height: 40px;
+    font-size: 16px; /* abaixo de 16px o iOS dá zoom ao focar o campo */
+  }
+
+  /* Modal ocupa a tela toda: 90vh com margem sobra pouco espaço útil */
+  .modal-overlay { padding: 0; align-items: stretch; }
+  .modal {
+    max-width: 100% !important; width: 100% !important;
+    max-height: 100% !important; height: 100%;
+    border-radius: 0; display: flex; flex-direction: column;
+  }
+  .modal-body { flex: 1; overflow-y: auto; }
+  .modal-footer { position: sticky; bottom: 0; background: var(--surface); }
+  .form-grid { grid-template-columns: 1fr !important; }
+
+  /* Kanban rola na horizontal com colunas mais estreitas */
+  .kanban-col { min-width: 240px; }
+
+  .stats-bar { overflow-x: auto; padding-bottom: 6px; }
+  .stat-card { min-width: 132px; flex-shrink: 0; }
+
+  .detail-panel.open { width: 100vw; }
+}
+
+/* ── Cartões de lead, no lugar da tabela ── */
+.lista-cartoes { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; overflow-y: auto; flex: 1; }
+
+.cartao-lead {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 13px 15px;
+  display: flex; flex-direction: column; gap: 9px;
+}
+.cartao-lead.selecionado { border-color: var(--accent); background: rgba(0,208,223,.06); }
+.cartao-lead-topo { display: flex; align-items: flex-start; gap: 10px; }
+.cartao-lead-nome { font-size: 14.5px; font-weight: 650; color: var(--text); line-height: 1.3; }
+.cartao-lead-sub { font-size: 11.5px; color: var(--text3); margin-top: 2px; }
+.cartao-lead-linha { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cartao-lead-acoes { display: flex; gap: 7px; flex-wrap: wrap; padding-top: 4px; border-top: 1px solid var(--border); }
+.cartao-lead-acoes .btn { flex: 1; min-width: 0; justify-content: center; font-size: 12px; }
+
+/* Larguras fixas que sobraram do desenho só-desktop e estouram no celular */
+@media (max-width: 768px) {
+  /* O painel de detalhe ocupa a tela toda; 360px fixos cortavam o conteúdo
+     em aparelhos de 320px */
+  .detail-inner { min-width: 0; width: 100%; }
+
+  /* Campo de busca das páginas: 240px fixos, crescendo para 300px ao focar */
+  .search-wrap { width: 100%; }
+  .search-wrap input,
+  .search-wrap input:focus { width: 100%; min-width: 0; }
+
+  /* A tabela continua com min-width para rolar no tablet, mas no celular ela
+     nem é renderizada — os cartões entram no lugar */
+  .table-wrapper { -webkit-overflow-scrolling: touch; }
+}
+
+/* Nada pode empurrar a página para os lados: rolagem horizontal no corpo
+   inteiro é a forma mais rápida de tornar um app inutilizável no celular */
+html, body { max-width: 100%; overflow-x: hidden; }

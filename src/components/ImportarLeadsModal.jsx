@@ -7,7 +7,7 @@ import { etapasAtivas } from '../pipeline';
 
 // Campos do CRM que a importação sabe preencher. "apelidos" são outros títulos
 // de coluna que aparecem em planilhas reais e que devem casar automaticamente.
-export const CAMPOS_IMPORTAVEIS = [
+const CAMPOS_IMPORTAVEIS = [
   { campo: 'nome',           rotulo: 'Nome / Empresa', obrigatorio: true, apelidos: ['empresa', 'razaosocial', 'cliente', 'nomefantasia'] },
   { campo: 'valor',          rotulo: 'Valor',          apelidos: ['valornegocio', 'ticket', 'valorcontrato', 'preco'] },
   { campo: 'telefone',       rotulo: 'Telefone',       apelidos: ['fone', 'tel', 'telefone1'] },

@@ -3,6 +3,8 @@ import { ref, onValue, push, set, update } from 'firebase/database';
 import { database } from '../firebase';
 import { apiPost } from '../api';
 import { acharEtapa } from '../pipeline';
+import SeletorModelo from './SeletorModelo';
+import { useTelaEstreita } from '../useTelaEstreita';
 
 /* ── Helpers ── */
 const fmtHora = (iso) => {
@@ -35,10 +37,9 @@ const avatarColor = (nome = '') => AVATAR_COLORS[nome.charCodeAt(0) % AVATAR_COL
 /* ─────────────────────────────────────────────
    ConversasPage
 ───────────────────────────────────────────── */
-export default function ConversasPage({ leads = [], etapas = [] }) {
-  const [conversas, setConversas] = useState([]);
+export default function ConversasPage({ leads = [], etapas = [], conversas = [], modelos = [], empresa = '', meuNome = '' }) {
+  const estreita = useTelaEstreita();
   const [conversaSelecionada, setConversaSelecionada] = useState(null);
-  const [mensagens, setMensagens] = useState([]);
   const [novaMensagem, setNovaMensagem] = useState('');
   const [buscaConversa, setBuscaConversa] = useState('');
   const [abaInfo, setAbaInfo] = useState('Informações'); // 'Informações' | 'Histórico'
@@ -50,42 +51,37 @@ export default function ConversasPage({ leads = [], etapas = [] }) {
 
   const mensagensRef = useRef(null);
 
-  /* ── Firebase: carregar conversas ── */
-  useEffect(() => {
-    const unsub = onValue(ref(database, 'crm_data/conversas'), (snap) => {
-      const data = snap.val();
-      if (data) {
-        const lista = Object.entries(data)
-          .map(([id, c]) => ({ ...c, id }))
-          .sort((a, b) => new Date(b.ultimaAt || 0) - new Date(a.ultimaAt || 0));
-        setConversas(lista);
-      } else {
-        setConversas([]);
-      }
-    });
-    return () => unsub();
-  }, []);
-
   /* ── Firebase: carregar mensagens da conversa ativa ── */
+  // A carga guarda de qual conversa as mensagens são. Assim trocar de conversa
+  // já mostra vazio no mesmo render, sem precisar de um setState de limpeza
+  // dentro do efeito — que forçava um render extra e mostrava por um instante
+  // as mensagens da conversa anterior.
+  const [carga, setCarga] = useState({ id: null, lista: [] });
+  const idAtivo = conversaSelecionada?.id ?? null;
+  const mensagens = useMemo(() => (carga.id === idAtivo ? carga.lista : []), [carga, idAtivo]);
+
   useEffect(() => {
-    if (!conversaSelecionada) { setMensagens([]); return; }
-    const unsub = onValue(ref(database, `crm_data/conversas/${conversaSelecionada.id}/mensagens`), (snap) => {
+    if (!idAtivo) return;
+
+    const unsub = onValue(ref(database, `crm_data/conversas/${idAtivo}/mensagens`), (snap) => {
       const data = snap.val();
-      if (data) {
-        const lista = Object.entries(data)
-          .map(([id, m]) => ({ ...m, id }))
-          .sort((a, b) => new Date(a.criadoEm) - new Date(b.criadoEm));
-        setMensagens(lista);
-      } else {
-        setMensagens([]);
-      }
-      // Marcar como lida
-      if (conversaSelecionada.naoLidas > 0) {
-        update(ref(database, `crm_data/conversas/${conversaSelecionada.id}`), { naoLidas: 0 });
-      }
+      const lista = data
+        ? Object.entries(data)
+            .map(([id, m]) => ({ ...m, id }))
+            .sort((a, b) => new Date(a.criadoEm) - new Date(b.criadoEm))
+        : [];
+      setCarga({ id: idAtivo, lista });
     });
+
     return () => unsub();
-  }, [conversaSelecionada?.id]);
+  }, [idAtivo]);
+
+  /* ── Marcar como lida ao abrir ── */
+  const naoLidasAtivo = conversaSelecionada?.naoLidas || 0;
+  useEffect(() => {
+    if (!idAtivo || naoLidasAtivo <= 0) return;
+    update(ref(database, `crm_data/conversas/${idAtivo}`), { naoLidas: 0 });
+  }, [idAtivo, naoLidasAtivo]);
 
   /* ── Auto-scroll ao final das mensagens ── */
   useEffect(() => {
@@ -193,7 +189,10 @@ export default function ConversasPage({ leads = [], etapas = [] }) {
 
       {/* ══ COLUNA 1: Lista de Conversas ══ */}
       <div style={{
-        width: 300, flexShrink: 0, display: 'flex', flexDirection: 'column',
+        width: estreita ? '100%' : 300,
+        flexShrink: 0,
+        display: estreita && conversaSelecionada ? 'none' : 'flex',
+        flexDirection: 'column',
         borderRight: '1px solid var(--border)', background: 'var(--surface)',
       }}>
         {/* Header */}
@@ -303,7 +302,11 @@ export default function ConversasPage({ leads = [], etapas = [] }) {
 
       {/* ══ COLUNA 2: Chat ══ */}
       {!conversaSelecionada ? (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16, color: 'var(--text3)' }}>
+        <div style={{
+          flex: 1, display: estreita ? 'none' : 'flex',
+          alignItems: 'center', justifyContent: 'center',
+          flexDirection: 'column', gap: 16, color: 'var(--text3)',
+        }}>
           <div style={{ fontSize: 56 }}>💬</div>
           <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text2)' }}>Selecione uma conversa</div>
           <div style={{ fontSize: 13 }}>Escolha uma conversa na lista ou crie uma nova.</div>
@@ -317,6 +320,18 @@ export default function ConversasPage({ leads = [], etapas = [] }) {
             display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px',
             borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0,
           }}>
+            {estreita && (
+              <button
+                onClick={() => setConversaSelecionada(null)}
+                aria-label="Voltar para a lista"
+                style={{
+                  background: 'transparent', border: 'none', color: 'var(--text2)',
+                  fontSize: 20, cursor: 'pointer', padding: '0 4px 0 0', flexShrink: 0,
+                }}
+              >
+                ‹
+              </button>
+            )}
             <div style={{
               width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
               background: avatarColor(conversaSelecionada.nome),
@@ -445,6 +460,16 @@ export default function ConversasPage({ leads = [], etapas = [] }) {
             padding: '12px 20px', borderTop: '1px solid var(--border)',
             background: 'var(--surface)', display: 'flex', gap: 10, alignItems: 'flex-end', flexShrink: 0,
           }}>
+            <SeletorModelo
+              modelos={modelos}
+              canal="whatsapp"
+              lead={leadAssociado}
+              empresa={empresa}
+              meuNome={meuNome}
+              onEscolher={({ corpo }) => setNovaMensagem(corpo)}
+              compacto
+            />
+
             <textarea
               value={novaMensagem}
               onChange={e => setNovaMensagem(e.target.value)}
@@ -478,7 +503,8 @@ export default function ConversasPage({ leads = [], etapas = [] }) {
       {conversaSelecionada && (
         <div style={{
           width: 280, flexShrink: 0, borderLeft: '1px solid var(--border)',
-          background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          background: 'var(--surface)', display: estreita ? 'none' : 'flex',
+          flexDirection: 'column', overflow: 'hidden',
         }}>
           {/* Abas */}
           <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>

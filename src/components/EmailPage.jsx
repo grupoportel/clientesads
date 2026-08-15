@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { database } from '../firebase';
 import { ref, onValue, update, push, set } from 'firebase/database';
 import { apiPost } from '../api';
+import SeletorModelo from './SeletorModelo';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const formatarData = (iso) => {
@@ -27,10 +28,9 @@ const getCor = (str = '') => {
 };
 
 // ── Componente Principal ──────────────────────────────────────────────────────
-export default function EmailPage() {
+export default function EmailPage({ leads = [], modelos = [], empresa = '', meuNome = '' }) {
   const [threads, setThreads] = useState([]);
   const [threadAtiva, setThreadAtiva] = useState(null);
-  const [mensagens, setMensagens] = useState([]);
   const [filtro, setFiltro] = useState('inbox'); // inbox | enviados | todos
   const [busca, setBusca] = useState('');
   const [redigindo, setRedigindo] = useState(false);
@@ -66,25 +66,35 @@ export default function EmailPage() {
   }, []);
 
   // ── Carregar mensagens da thread ativa ────────────────────────────────────
+  // A carga guarda de qual thread as mensagens são, para trocar de conversa
+  // mostrar vazio no mesmo render em vez de depender de um setState de limpeza
+  // dentro do efeito.
+  const [carga, setCarga] = useState({ id: null, lista: [] });
+  const idAtivo = threadAtiva?.id ?? null;
+  const mensagens = useMemo(() => (carga.id === idAtivo ? carga.lista : []), [carga, idAtivo]);
+
   useEffect(() => {
-    if (!threadAtiva) { setMensagens([]); return; }
-    const msgRef = ref(database, `crm_data/emails/${threadAtiva.id}/mensagens`);
-    const unsub = onValue(msgRef, (snap) => {
+    if (!idAtivo) return;
+
+    const unsub = onValue(ref(database, `crm_data/emails/${idAtivo}/mensagens`), (snap) => {
       const data = snap.val();
-      if (data) {
-        const lista = Object.entries(data).map(([id, m]) => ({ ...m, id }));
-        lista.sort((a, b) => new Date(a.criadoEm) - new Date(b.criadoEm));
-        setMensagens(lista);
-        // Marcar como lido
-        if (threadAtiva.naoLidas > 0) {
-          update(ref(database, `crm_data/emails/${threadAtiva.id}`), { naoLidas: 0 });
-        }
-      } else {
-        setMensagens([]);
-      }
+      const lista = data
+        ? Object.entries(data)
+            .map(([id, m]) => ({ ...m, id }))
+            .sort((a, b) => new Date(a.criadoEm) - new Date(b.criadoEm))
+        : [];
+      setCarga({ id: idAtivo, lista });
     });
+
     return () => unsub();
-  }, [threadAtiva]);
+  }, [idAtivo]);
+
+  // ── Marcar como lido ao abrir ─────────────────────────────────────────────
+  const naoLidasAtivo = threadAtiva?.naoLidas || 0;
+  useEffect(() => {
+    if (!idAtivo || naoLidasAtivo <= 0) return;
+    update(ref(database, `crm_data/emails/${idAtivo}`), { naoLidas: 0 });
+  }, [idAtivo, naoLidasAtivo]);
 
   // ── Scroll para o fim ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -419,7 +429,16 @@ export default function EmailPage() {
 
           {avisoErro}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', alignItems: 'center' }}>
+            <SeletorModelo
+              modelos={modelos}
+              canal="email"
+              lead={leads.find(l => l.email && l.email.toLowerCase() === para.trim().toLowerCase()) || null}
+              empresa={empresa}
+              meuNome={meuNome}
+              onEscolher={({ corpo: c, assunto: a }) => { setCorpo(c); if (a) setAssunto(a); }}
+            />
+            <div style={{ flex: 1 }} />
             <button onClick={() => setRedigindo(false)} style={{
               background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '8px',
               padding: '8px 16px', fontSize: '13px', color: 'var(--text2)', cursor: 'pointer',
@@ -518,7 +537,16 @@ export default function EmailPage() {
             />
             {avisoErro}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
+              <SeletorModelo
+                modelos={modelos}
+                canal="email"
+                lead={leads.find(l => l.email && l.email.toLowerCase() === (threadAtiva.email || '').toLowerCase()) || null}
+                empresa={empresa}
+                meuNome={meuNome}
+                onEscolher={({ corpo: c }) => setRespostaTexto(c)}
+              />
+              <div style={{ flex: 1 }} />
               <button
                 onClick={responderEmail}
                 disabled={respondendo || !respostaTexto.trim()}

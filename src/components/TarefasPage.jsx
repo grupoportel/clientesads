@@ -1,29 +1,31 @@
-import { useState, useEffect, useMemo } from 'react';
-import { ref, onValue, set, update, remove, push } from 'firebase/database';
+import { useState, useMemo } from 'react';
+import { ref, remove } from 'firebase/database';
 import { database } from '../firebase';
 import TarefaModal from './TarefaModal';
-import { registrarAtividade } from '../atividades';
+import { iso } from '../periodo';
 
-export default function TarefasPage({ leads = [], responsaveis = [] }) {
-  const [tarefas, setTarefas] = useState([]);
-  const [carregando, setCarregando] = useState(true);
+// Tarefas e gravação vêm do App: era o quarto listener no mesmo caminho do
+// banco, e salvar aqui divergia de salvar pela Agenda.
+export default function TarefasPage({
+  leads = [], tarefas = [], responsaveis = [],
+  onSalvarTarefa = () => {}, onAlternarTarefa = () => {}, onAbrirLead = () => {},
+}) {
   const [modalAberto, setModalAberto] = useState(false);
   const [tarefaEmEdicao, setTarefaEmEdicao] = useState(null);
   const [filtroTipo, setFiltroTipo] = useState('Todas');
+  const [filtroResp, setFiltroResp] = useState('');
+  const [ocultarConcluidas, setOcultarConcluidas] = useState(false);
 
-  // ─── Firebase listener ────────────────────────────────────────────────────
-  useEffect(() => {
-    const unsub = onValue(ref(database, 'crm_data/tarefas'), (snap) => {
-      const data = snap.val();
-      setTarefas(data ? Object.entries(data).map(([id, t]) => ({ ...t, id })) : []);
-      setCarregando(false);
-    });
-    return () => unsub();
+  // ─── Datas de corte ───────────────────────────────────────────────────────
+  // Dentro de useMemo porque ler o relógio durante o render é impuro: o React
+  // pode renderizar duas vezes e obter valores diferentes.
+  const { hoje, fimSemana } = useMemo(() => {
+    const agora = new Date();
+    return {
+      hoje: iso(agora),
+      fimSemana: iso(new Date(agora.getTime() + 7 * 86400000)),
+    };
   }, []);
-
-  // ─── Date helpers ─────────────────────────────────────────────────────────
-  const hoje = new Date().toISOString().slice(0, 10);
-  const fimSemana = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
 
   // ─── Filtering ────────────────────────────────────────────────────────────
   const tarefasFiltradas = useMemo(() => {
@@ -33,10 +35,14 @@ export default function TarefasPage({ leads = [], responsaveis = [] }) {
       'Reuniões': 'reuniao',
       'Follow-ups': 'followup',
     };
-    if (filtroTipo === 'Todas') return tarefas;
     const tipoChave = tipoMap[filtroTipo];
-    return tipoChave ? tarefas.filter(t => t.tipo === tipoChave) : tarefas;
-  }, [tarefas, filtroTipo]);
+    return tarefas.filter(t => {
+      if (tipoChave && t.tipo !== tipoChave) return false;
+      if (filtroResp && t.responsavel !== filtroResp) return false;
+      if (ocultarConcluidas && t.concluida) return false;
+      return true;
+    });
+  }, [tarefas, filtroTipo, filtroResp, ocultarConcluidas]);
 
   // ─── Grouping ─────────────────────────────────────────────────────────────
   const grupos = useMemo(() => {
@@ -56,44 +62,30 @@ export default function TarefasPage({ leads = [], responsaveis = [] }) {
       .filter(t => t.data > fimSemana && !t.concluida)
       .sort((a, b) => a.data.localeCompare(b.data));
 
+    // Sem este grupo, uma tarefa sem data não caía em nenhuma faixa e
+    // simplesmente desaparecia da tela.
+    const semData = tarefasFiltradas.filter(t => !t.data && !t.concluida);
+
+    const concluidas = tarefasFiltradas
+      .filter(t => t.concluida && t.data !== hoje)
+      .sort((a, b) => (b.data || '').localeCompare(a.data || ''))
+      .slice(0, 20);
+
     return [
       { key: 'atrasadas', label: '🔴 Atrasadas',   accent: 'var(--red)',    tasks: atrasadas  },
       { key: 'hoje',      label: '🟡 Hoje',         accent: 'var(--yellow)', tasks: hoje_tasks },
       { key: 'semana',    label: '🟢 Esta Semana',  accent: 'var(--green)',  tasks: semana     },
       { key: 'futuras',   label: '📅 Futuras',      accent: 'var(--accent)', tasks: futuras    },
+      { key: 'semData',   label: '❓ Sem data',     accent: 'var(--text3)',  tasks: semData    },
+      { key: 'feitas',    label: '✅ Concluídas',   accent: 'var(--green)',  tasks: concluidas },
     ];
   }, [tarefasFiltradas, hoje, fimSemana]);
 
   // ─── CRUD ─────────────────────────────────────────────────────────────────
   const salvarTarefa = (dados) => {
-    const agora = new Date().toISOString();
-    if (!tarefaEmEdicao) {
-      const novaRef = push(ref(database, 'crm_data/tarefas'));
-      set(novaRef, { ...dados, id: novaRef.key, concluida: false, createdAt: agora, updatedAt: agora });
-      registrarAtividade({
-        leadId: dados.leadId, leadNome: dados.leadNome, tipo: 'tarefaCriada',
-        descricao: `Tarefa criada: "${dados.titulo}" para ${dados.data ? dados.data.split('-').reverse().join('/') : 'sem data'}`,
-      });
-    } else {
-      const { id, createdAt, ...camposEditaveis } = dados;
-      update(ref(database, 'crm_data/tarefas/' + (id || tarefaEmEdicao.id)), { ...camposEditaveis, updatedAt: agora });
-    }
+    onSalvarTarefa(dados, tarefaEmEdicao);
     setModalAberto(false);
     setTarefaEmEdicao(null);
-  };
-
-  const toggleConcluida = (tarefa) => {
-    const concluindo = !tarefa.concluida;
-    update(ref(database, 'crm_data/tarefas/' + tarefa.id), {
-      concluida: concluindo,
-      updatedAt: new Date().toISOString(),
-    });
-    if (concluindo) {
-      registrarAtividade({
-        leadId: tarefa.leadId, leadNome: tarefa.leadNome, tipo: 'tarefa',
-        descricao: `Tarefa concluída: "${tarefa.titulo}"`,
-      });
-    }
   };
 
   const deletarTarefa = (id) => {
@@ -143,8 +135,8 @@ export default function TarefasPage({ leads = [], responsaveis = [] }) {
       {/* Scrollable content */}
       <div className="page-content">
 
-        {/* Filter chips */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+        {/* Filtros */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
           {['Todas', 'Ligações', 'E-mails', 'Reuniões', 'Follow-ups'].map(f => (
             <div
               key={f}
@@ -154,17 +146,38 @@ export default function TarefasPage({ leads = [], responsaveis = [] }) {
               {f}
             </div>
           ))}
+
+          <div style={{ width: 1, height: 22, background: 'var(--border2)', margin: '0 4px' }} />
+
+          {responsaveis.length > 0 && (
+            <select
+              className="form-control"
+              style={{ width: 'auto', fontSize: 12, padding: '5px 10px' }}
+              value={filtroResp}
+              onChange={e => setFiltroResp(e.target.value)}
+              title="Filtrar por responsável"
+            >
+              <option value="">Toda a equipe</option>
+              {responsaveis.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          )}
+
+          <label style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            fontSize: 12, color: 'var(--text3)', cursor: 'pointer',
+          }}>
+            <input
+              type="checkbox"
+              checked={ocultarConcluidas}
+              onChange={e => setOcultarConcluidas(e.target.checked)}
+              style={{ cursor: 'pointer' }}
+            />
+            Ocultar concluídas
+          </label>
         </div>
 
-        {/* Loading */}
-        {carregando && (
-          <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text3)' }}>
-            Carregando tarefas...
-          </div>
-        )}
-
         {/* Empty state */}
-        {!carregando && tarefas.length === 0 && (
+        {tarefas.length === 0 && (
           <div style={{ textAlign: 'center', padding: '80px 40px' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
             <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text)', marginBottom: '8px' }}>
@@ -180,7 +193,7 @@ export default function TarefasPage({ leads = [], responsaveis = [] }) {
         )}
 
         {/* Empty filtered state */}
-        {!carregando && tarefas.length > 0 && tarefasFiltradas.length === 0 && (
+        {tarefas.length > 0 && tarefasFiltradas.length === 0 && (
           <div style={{ textAlign: 'center', padding: '60px 40px', color: 'var(--text3)' }}>
             <div style={{ fontSize: '32px', marginBottom: '12px' }}>🔍</div>
             <div style={{ fontSize: '14px' }}>Nenhuma tarefa encontrada para este filtro.</div>
@@ -188,7 +201,7 @@ export default function TarefasPage({ leads = [], responsaveis = [] }) {
         )}
 
         {/* Task groups */}
-        {!carregando && grupos.map(grupo =>
+        {grupos.map(grupo =>
           grupo.tasks.length > 0 && (
             <div key={grupo.key} style={{ marginBottom: '28px' }}>
 
@@ -236,7 +249,7 @@ export default function TarefasPage({ leads = [], responsaveis = [] }) {
                     {/* Checkbox */}
                     <div
                       className={`task-checkbox ${t.concluida ? 'checked' : ''}`}
-                      onClick={() => toggleConcluida(t)}
+                      onClick={() => onAlternarTarefa(t)}
                       title={t.concluida ? 'Marcar como pendente' : 'Marcar como concluída'}
                     >
                       {t.concluida && '✓'}
@@ -263,12 +276,28 @@ export default function TarefasPage({ leads = [], responsaveis = [] }) {
                     {/* Content */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="task-title">{t.titulo}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--accent2)', marginTop: '2px' }}>
-                        🔗 {t.leadNome || 'Lead não definido'}
+                      <div style={{ fontSize: '11px', marginTop: '2px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {(() => {
+                          const lead = leads.find(l => l.id === t.leadId);
+                          if (!lead) {
+                            return <span style={{ color: 'var(--text3)' }}>🔗 {t.leadNome || 'Lead não definido'}</span>;
+                          }
+                          return (
+                            <button
+                              onClick={() => onAbrirLead(lead)}
+                              title={`Abrir ${lead.nome}`}
+                              style={{
+                                background: 'transparent', border: 'none', padding: 0,
+                                color: 'var(--accent2)', fontSize: '11px', cursor: 'pointer',
+                                fontFamily: 'inherit',
+                              }}
+                            >
+                              🔗 {lead.nome}
+                            </button>
+                          );
+                        })()}
                         {t.responsavel && (
-                          <span style={{ color: 'var(--text3)', marginLeft: '8px' }}>
-                            👤 {t.responsavel}
-                          </span>
+                          <span style={{ color: 'var(--text3)' }}>👤 {t.responsavel}</span>
                         )}
                       </div>
                     </div>
@@ -304,14 +333,17 @@ export default function TarefasPage({ leads = [], responsaveis = [] }) {
       </div>
 
       {/* Modal */}
-      <TarefaModal
-        isOpen={modalAberto}
-        onClose={() => { setModalAberto(false); setTarefaEmEdicao(null); }}
-        onSave={salvarTarefa}
-        tarefaAtual={tarefaEmEdicao}
-        leads={leads}
-        responsaveis={responsaveis}
-      />
+      {modalAberto && (
+        <TarefaModal
+          key={tarefaEmEdicao?.id || 'nova'}
+          isOpen={modalAberto}
+          onClose={() => { setModalAberto(false); setTarefaEmEdicao(null); }}
+          onSave={salvarTarefa}
+          tarefaAtual={tarefaEmEdicao}
+          leads={leads}
+          responsaveis={responsaveis}
+        />
+      )}
     </div>
   );
 }

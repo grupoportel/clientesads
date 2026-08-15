@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+import TarefaModal from './TarefaModal';
+import { iso } from '../periodo';
 
 function buildCalendar(year, month) {
   const firstDay = new Date(year, month, 1).getDay();
@@ -36,11 +38,20 @@ const dayOfWeekNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sex
 
 // As tarefas chegam por prop: o App já mantém esse dado carregado, então esta
 // tela não precisa abrir um segundo listener no mesmo caminho do banco.
-export default function AgendaPage({ leads = [], tarefas = [] }) {
+export default function AgendaPage({
+  leads = [], tarefas = [], responsaveis = [],
+  onSalvarTarefa = () => {}, onAlternarTarefa = () => {}, onAbrirLead = () => {},
+}) {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [selectedDay, setSelectedDay] = useState(today.getDate());
+  const [modalTarefa, setModalTarefa] = useState(null); // { data } quando aberto
+
+  // Abre o formulário já com a data do dia escolhido preenchida
+  const novaTarefaNoDia = (dia = selectedDay) => {
+    setModalTarefa({ data: iso(new Date(viewYear, viewMonth, dia)) });
+  };
 
   /* ── Build events from leads.reuniao + tarefas ── */
   const allEvents = useMemo(() => {
@@ -54,6 +65,8 @@ export default function AgendaPage({ leads = [], tarefas = [] }) {
       if (y !== viewYear || m - 1 !== viewMonth) return;
       if (!events[d]) events[d] = [];
       events[d].push({
+        tipo: 'lead',
+        dado: l,
         time: '',
         title: `Reunião: ${l.nome}`,
         lead: l.nome,
@@ -71,6 +84,9 @@ export default function AgendaPage({ leads = [], tarefas = [] }) {
       if (y !== viewYear || m - 1 !== viewMonth) return;
       if (!events[d]) events[d] = [];
       events[d].push({
+        tipo: 'tarefa',
+        dado: t,
+        concluida: !!t.concluida,
         time: t.hora || '',
         title: t.titulo || 'Tarefa',
         lead: t.leadNome || '',
@@ -159,16 +175,7 @@ export default function AgendaPage({ leads = [], tarefas = [] }) {
       </div>
 
       <div className="page-content" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 320px',
-            gap: 20,
-            flex: 1,
-            overflow: 'hidden',
-            minHeight: 0,
-          }}
-        >
+        <div className="grid-lateral" style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
           {/* LEFT: Calendar */}
           <div className="crm-card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Day names header */}
@@ -194,6 +201,8 @@ export default function AgendaPage({ leads = [], tarefas = [] }) {
                     key={idx}
                     className={`calendar-day ${!cell.current ? 'outside' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}`}
                     onClick={() => cell.current && setSelectedDay(cell.day)}
+                    onDoubleClick={() => cell.current && novaTarefaNoDia(cell.day)}
+                    title={cell.current ? 'Clique para ver o dia · duplo clique para criar uma tarefa' : undefined}
                     style={{ cursor: cell.current ? 'pointer' : 'default' }}
                   >
                     <div className="calendar-day-number">{cell.day}</div>
@@ -216,13 +225,21 @@ export default function AgendaPage({ leads = [], tarefas = [] }) {
 
           {/* RIGHT: Day detail panel */}
           <div className="crm-card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <div className="crm-card-header">
-              <div style={{ flex: 1 }}>
+            <div className="crm-card-header" style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="crm-card-title" style={{ fontSize: 14 }}>{dayLabel}</div>
                 <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
                   {dayEvents.length} evento{dayEvents.length !== 1 ? 's' : ''}
                 </div>
               </div>
+              <button
+                className="btn btn-primary"
+                style={{ fontSize: 11.5, padding: '5px 11px', flexShrink: 0 }}
+                onClick={() => novaTarefaNoDia()}
+                title="Criar uma tarefa neste dia"
+              >
+                + Tarefa
+              </button>
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', paddingRight: 2 }}>
@@ -239,18 +256,62 @@ export default function AgendaPage({ leads = [], tarefas = [] }) {
                       borderRadius: 8,
                       marginBottom: 8,
                       transition: 'opacity 0.2s',
+                      opacity: ev.concluida ? 0.5 : 1,
                     }}
                   >
-                    <span style={{ fontSize: 16, lineHeight: 1 }}>{ev.icon}</span>
+                    {ev.tipo === 'tarefa' ? (
+                      <button
+                        onClick={() => onAlternarTarefa(ev.dado)}
+                        title={ev.concluida ? 'Marcar como pendente' : 'Marcar como concluída'}
+                        style={{
+                          width: 18, height: 18, borderRadius: '50%', flexShrink: 0, padding: 0,
+                          alignSelf: 'flex-start', marginTop: 1,
+                          border: ev.concluida ? 'none' : '2px solid var(--border2)',
+                          background: ev.concluida ? 'var(--green)' : 'transparent',
+                          color: '#fff', fontSize: 10, cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >
+                        {ev.concluida && '✓'}
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: 16, lineHeight: 1 }}>{ev.icon}</span>
+                    )}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>
+                      <div
+                        style={{
+                          fontWeight: 600, fontSize: 13, color: 'var(--text)',
+                          textDecoration: ev.concluida ? 'line-through' : 'none',
+                          cursor: ev.tipo === 'tarefa' ? 'pointer' : 'default',
+                        }}
+                        onClick={() => ev.tipo === 'tarefa' && setModalTarefa(ev.dado)}
+                        title={ev.tipo === 'tarefa' ? 'Clique para editar a tarefa' : undefined}
+                      >
                         {ev.title}
                       </div>
-                      {ev.lead && (
-                        <div style={{ fontSize: 11, color: 'var(--accent2)', marginTop: 2 }}>
-                          🔗 {ev.lead}
-                        </div>
-                      )}
+                      {ev.lead && (() => {
+                        // Resolve o lead pelo id gravado na tarefa; o nome
+                        // guardado é uma cópia e pode estar desatualizado.
+                        const leadDoEvento = ev.tipo === 'lead'
+                          ? ev.dado
+                          : leads.find(l => l.id === ev.dado?.leadId);
+                        if (!leadDoEvento) {
+                          return <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>🔗 {ev.lead}</div>;
+                        }
+                        return (
+                          <button
+                            onClick={() => onAbrirLead(leadDoEvento)}
+                            title={`Abrir ${leadDoEvento.nome}`}
+                            style={{
+                              background: 'transparent', border: 'none', padding: 0, marginTop: 2,
+                              fontSize: 11, color: 'var(--accent2)', cursor: 'pointer',
+                              fontFamily: 'inherit', textAlign: 'left',
+                            }}
+                          >
+                            🔗 {leadDoEvento.nome}
+                          </button>
+                        );
+                      })()}
                       {ev.time && (
                         <div
                           style={{
@@ -295,11 +356,29 @@ export default function AgendaPage({ leads = [], tarefas = [] }) {
                 lineHeight: 1.5,
               }}
             >
-              Eventos das tarefas e reuniões dos leads
+              Duplo clique num dia do calendário cria uma tarefa nele
             </div>
           </div>
         </div>
       </div>
+
+      {/* Criar ou editar tarefa direto da agenda */}
+      {!!modalTarefa && (
+        <TarefaModal
+          key={modalTarefa?.id || modalTarefa?.data || 'nova'}
+          isOpen={!!modalTarefa}
+          onClose={() => setModalTarefa(null)}
+          onSave={(dados) => {
+            // Tarefa já existente tem id; o pré-preenchido do calendário só tem data
+            const existente = modalTarefa?.id ? modalTarefa : null;
+            onSalvarTarefa(dados, existente);
+            setModalTarefa(null);
+          }}
+          tarefaAtual={modalTarefa}
+          leads={leads}
+          responsaveis={responsaveis}
+        />
+      )}
     </div>
   );
 }

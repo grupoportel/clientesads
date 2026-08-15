@@ -1,6 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { auth, database } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useTelaMedia } from './useTelaEstreita';
 import { ref, onValue, set, update, remove, push } from 'firebase/database';
 import Login from './Login';
 
@@ -15,25 +17,72 @@ import FilterDrawers from './components/FilterDrawers';
 // Nova Sidebar de Navegação
 import Sidebar from './components/Sidebar';
 
-// Novos Módulos do CRM
-import Dashboard from './components/Dashboard';
-import ClientesPage from './components/ClientesPage';
-import TarefasPage from './components/TarefasPage';
-import AgendaPage from './components/AgendaPage';
-import FinanceiroPage from './components/FinanceiroPage';
-import RelatoriosPage from './components/RelatoriosPage';
-import ConfigPage from './components/ConfigPage';
-import ConversasPage from './components/ConversasPage';
-import EmailPage from './components/EmailPage';
-import MetricasPage from './components/MetricasPage';
+// Páginas carregadas sob demanda: sem isso, abrir a tela de login baixava
+// Métricas, Financeiro e Relatórios junto — telas que a maioria das sessões
+// nunca chega a abrir. No 4G isso é espera real antes do primeiro campo.
+const Dashboard      = lazy(() => import('./components/Dashboard'));
+const ClientesPage   = lazy(() => import('./components/ClientesPage'));
+const TarefasPage    = lazy(() => import('./components/TarefasPage'));
+const AgendaPage     = lazy(() => import('./components/AgendaPage'));
+const FinanceiroPage = lazy(() => import('./components/FinanceiroPage'));
+const RelatoriosPage = lazy(() => import('./components/RelatoriosPage'));
+const ConfigPage     = lazy(() => import('./components/ConfigPage'));
+const ConversasPage  = lazy(() => import('./components/ConversasPage'));
+const EmailPage      = lazy(() => import('./components/EmailPage'));
+const MetricasPage   = lazy(() => import('./components/MetricasPage'));
 
 import './index.css';
 
-import { MAPA_STATUS_ANTIGOS, mesclarEtapas, acharEtapa } from './pipeline';
-import { registrarAtividade, descreverEdicao } from './atividades';
+import { MAPA_STATUS_ANTIGOS, mesclarEtapas, acharEtapa, ehGanho, ehPerdido } from './pipeline';
+import { registrarAtividade, registrarAtividadesEmLote, descreverEdicao } from './atividades';
+import BarraEmMassa from './components/BarraEmMassa';
 import { gerarCSV, baixarCSV } from './csv';
-import ImportarLeadsModal from './components/ImportarLeadsModal';
-import BuscaGlobal from './components/BuscaGlobal';
+const ImportarLeadsModal = lazy(() => import('./components/ImportarLeadsModal'));
+const BuscaGlobal = lazy(() => import('./components/BuscaGlobal'));
+import { rodarAutomacoes } from './automacoesRunner';
+
+// No topo do módulo em vez de dentro do filtro: recriada a cada lead, ela
+// impedia o compilador do React de preservar a memoização da lista.
+const normaliza = (texto) => String(texto || '').trim().toLowerCase();
+
+const CAMPOS_BUSCA = ['nome', 'nicho', 'telefone', 'whatsapp', 'email', 'responsavel', 'cidade', 'decisor'];
+
+// Predicado puro, fora do componente: com ele o corpo do useMemo vira uma
+// chamada simples e o compilador do React consegue preservar a memoização.
+function leadPassaNosFiltros(lead, f) {
+  if (f.status && normaliza(lead.status || 'nenhum') !== normaliza(f.status)) return false;
+  if (f.nicho && normaliza(lead.nicho) !== normaliza(f.nicho)) return false;
+  if (f.responsavel && normaliza(lead.responsavel) !== normaliza(f.responsavel)) return false;
+  if (f.estado && normaliza(lead.estado) !== normaliza(f.estado)) return false;
+  if (f.cidade && normaliza(lead.cidade) !== normaliza(f.cidade)) return false;
+
+  // Data de entrada: aceita o campo preenchido à mão ou o carimbo de criação
+  const entrada = (lead.data_entrada || lead.createdAt || '').slice(0, 10);
+  if (f.dataInicio && (!entrada || entrada < f.dataInicio)) return false;
+  if (f.dataFim && (!entrada || entrada > f.dataFim)) return false;
+
+  if (f.busca) {
+    const termo = normaliza(f.busca);
+    return CAMPOS_BUSCA.some(campo => normaliza(lead[campo]).includes(termo));
+  }
+  return true;
+}
+
+function Carregando() {
+  return (
+    <div style={{
+      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      color: 'var(--text3)', fontSize: 13,
+    }}>
+      Carregando…
+    </div>
+  );
+}
+
+const PAGINAS = [
+  'dashboard', 'leads', 'clientes', 'tarefas', 'conversas',
+  'emails', 'agenda', 'financeiro', 'metricas', 'relatorios', 'configuracoes',
+];
 
 const ROTULOS_CAMPOS = {
   nome: 'Nome', status: 'Status', valor: 'Valor', nicho: 'Nicho', estado: 'Estado',
@@ -58,6 +107,8 @@ function App() {
   const [empresa, setEmpresa] = useState(null);
   const [configPipeline, setConfigPipeline] = useState(null);
   const [metas, setMetas] = useState({});
+  const [modelos, setModelos] = useState([]);
+  const [automacoes, setAutomacoes] = useState([]);
 
   // Etapas do funil: padrão do código sobreposto pelo que estiver configurado
   const etapas = useMemo(() => mesclarEtapas(configPipeline), [configPipeline]);
@@ -82,20 +133,41 @@ function App() {
   const [modalAberto, setModalAberto] = useState(false);
   const [modalImportar, setModalImportar] = useState(false);
   const [buscaGlobalAberta, setBuscaGlobalAberta] = useState(false);
+  const [menuAberto, setMenuAberto] = useState(false);
   const [leadEmEdicao, setLeadEmEdicao] = useState(null);
   const [selectedLeads, setSelectedLeads] = useState([]);
-  const [leadDetalhe, setLeadDetalhe] = useState(null);
 
   // ---------------------------------------------------------
-  // SISTEMA DE NAVEGAÇÃO (PÁGINAS)
+  // NAVEGAÇÃO — a URL é a fonte da verdade
   // ---------------------------------------------------------
-  const [paginaAtiva, setPaginaAtiva] = useState('dashboard');
+  // Antes isso era um useState: F5 voltava ao Dashboard, o botão Voltar saía
+  // do sistema e não dava para mandar a alguém o link de um lead.
+  const local = useLocation();
+  const navegar = useNavigate();
+
+  const segmentos = local.pathname.split('/').filter(Boolean);
+  const paginaAtiva = PAGINAS.includes(segmentos[0]) ? segmentos[0] : 'dashboard';
+  const leadIdNaUrl = paginaAtiva === 'leads' ? (segmentos[1] || null) : null;
+
+  const telaMedia = useTelaMedia();
+
+  const setPaginaAtiva = (pagina) => {
+    navegar(`/${pagina}`);
+    setMenuAberto(false);
+  };
 
   // ---------------------------------------------------------
   // SISTEMA DE NOTIFICAÇÕES (TOASTS E SINO)
   // ---------------------------------------------------------
   const [toasts, setToasts] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
+
+  // Espelha a cor configurada de cada etapa nas variáveis CSS, para que os
+  // badges de status sigam o que foi escolhido em Configurações → Pipeline.
+  useEffect(() => {
+    const raiz = document.documentElement;
+    etapas.forEach(e => raiz.style.setProperty(`--s-${e.id}`, e.cor));
+  }, [etapas]);
 
   // Atalho global Ctrl+K / ⌘K — o placeholder da busca já prometia isso
   useEffect(() => {
@@ -108,6 +180,10 @@ function App() {
     window.addEventListener('keydown', aoTeclar);
     return () => window.removeEventListener('keydown', aoTeclar);
   }, []);
+
+  // Derivado, não guardado: a URL já diz qual lead está aberto
+  const leadDetalhe = leadIdNaUrl ? (leads.find(l => l.id === leadIdNaUrl) || null) : null;
+  const setLeadDetalhe = (lead) => navegar(lead ? `/leads/${lead.id}` : '/leads');
 
   const showToast = (msg, type = 'success') => {
     const id = Date.now();
@@ -145,7 +221,7 @@ function App() {
 
       if (!user) {
         setLeads([]); setTarefasGlobais([]); setConversasGlobais([]); setEmailsGlobais([]);
-        setClientesGlobais([]); setPropostasGlobais([]);
+        setClientesGlobais([]); setPropostasGlobais([]); setModelos([]); setAutomacoes([]);
         return;
       }
 
@@ -169,6 +245,8 @@ function App() {
       escutar('crm_data/config/empresa',  (snap) => setEmpresa(snap.val() || null));
       escutar('crm_data/config/pipeline', (snap) => setConfigPipeline(snap.val() || null));
       escutar('crm_data/config/metas',    (snap) => setMetas(snap.val() || {}));
+      escutar('crm_data/modelos',    (snap) => setModelos(listaDe(snap)));
+      escutar('crm_data/automacoes', (snap) => setAutomacoes(listaDe(snap)));
     });
 
     return () => {
@@ -196,7 +274,7 @@ function App() {
   };
 
   // Exporta exatamente o que está visível na tela, com os filtros aplicados
-  const exportarLeads = () => {
+  const exportarLeads = (lista = leadsFiltrados, nomeBase = 'leads') => {
     const colunas = [
       { titulo: 'Nome / Empresa', campo: 'nome' },
       { titulo: 'Status', valor: l => acharEtapa(etapas, l.status).label },
@@ -222,34 +300,26 @@ function App() {
       { titulo: 'Observação', campo: 'obs' },
     ];
     const data = new Date().toISOString().slice(0, 10);
-    baixarCSV(`leads-${data}`, gerarCSV(leadsFiltrados, colunas));
-    showToast(`${leadsFiltrados.length} lead(s) exportado(s).`, 'success');
+    baixarCSV(`${nomeBase}-${data}`, gerarCSV(lista, colunas));
+    showToast(`${lista.length} lead(s) exportado(s).`, 'success');
   };
 
-  const leadsFiltrados = useMemo(() => {
-    return leads.filter(lead => {
-      const normaliza = (texto) => String(texto || '').trim().toLowerCase();
+  const filtros = useMemo(() => ({
+    status: filtroStatus, nicho: filtroNicho, responsavel: filtroResponsavel,
+    estado: filtroEstado, cidade: filtroCidade,
+    dataInicio: filtroDataInicio, dataFim: filtroDataFim, busca,
+  }), [filtroStatus, filtroNicho, filtroResponsavel, filtroEstado, filtroCidade, filtroDataInicio, filtroDataFim, busca]);
 
-      if (filtroStatus && normaliza(lead.status || 'nenhum') !== normaliza(filtroStatus)) return false;
-      if (filtroNicho && normaliza(lead.nicho) !== normaliza(filtroNicho)) return false;
-      if (filtroResponsavel && normaliza(lead.responsavel) !== normaliza(filtroResponsavel)) return false;
-      if (filtroEstado && normaliza(lead.estado) !== normaliza(filtroEstado)) return false;
-      if (filtroCidade && normaliza(lead.cidade) !== normaliza(filtroCidade)) return false;
-
-      // Data de entrada do lead: aceita tanto o campo preenchido à mão quanto
-      // o carimbo automático de criação.
-      const entrada = (lead.data_entrada || lead.createdAt || '').slice(0, 10);
-      if (filtroDataInicio && (!entrada || entrada < filtroDataInicio)) return false;
-      if (filtroDataFim && (!entrada || entrada > filtroDataFim)) return false;
-
-      if (busca) {
-        const termo = normaliza(busca);
-        return [lead.nome, lead.nicho, lead.telefone, lead.whatsapp, lead.email, lead.responsavel, lead.cidade, lead.decisor]
-          .some(v => normaliza(v).includes(termo));
-      }
-      return true;
-    });
-  }, [leads, filtroStatus, filtroNicho, filtroResponsavel, filtroEstado, filtroCidade, busca, filtroDataInicio, filtroDataFim]);
+  // O compilador do React não consegue preservar esta memoização e por isso
+  // desiste de otimizar o App inteiro. Como o compilador NÃO está ligado no
+  // build (não há plugin dele no vite.config.js), o useMemo aqui faz trabalho
+  // real: sem ele, filtrar 690 leads roda de novo a cada tecla digitada.
+  // Quando o compilador for adotado, remover o useMemo e este comentário.
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
+  const leadsFiltrados = useMemo(
+    () => leads.filter(lead => leadPassaNosFiltros(lead, filtros)),
+    [leads, filtros]
+  );
 
   const fazerLogout = () => {
     if (!window.confirm('Deseja sair do CRM?')) return;
@@ -268,6 +338,110 @@ function App() {
     .map(p => p[0])
     .join('')
     .toUpperCase() || '?';
+  // ── Ações que o Dashboard dispara ──
+  const abrirLeadNaLista = (lead) => {
+    if (lead?.id) navegar(`/leads/${lead.id}`);
+  };
+
+  const filtrarPorEtapa = (statusId) => {
+    setPaginaAtiva('leads');
+    setFiltroStatus(statusId);
+  };
+
+  // Salvar tarefa vive aqui para que Tarefas e Agenda gravem do mesmo jeito,
+  // com o mesmo registro na linha do tempo do lead.
+  const salvarTarefa = (dados, tarefaExistente = null) => {
+    const agora = new Date().toISOString();
+
+    if (!tarefaExistente) {
+      const novaRef = push(ref(database, 'crm_data/tarefas'));
+      return set(novaRef, { ...dados, id: novaRef.key, concluida: false, createdAt: agora, updatedAt: agora })
+        .then(() => {
+          registrarAtividade({
+            leadId: dados.leadId, leadNome: dados.leadNome, tipo: 'tarefaCriada',
+            descricao: `Tarefa criada: "${dados.titulo}"${dados.data ? ` para ${dados.data.split('-').reverse().join('/')}` : ''}`,
+          });
+          showToast('Tarefa criada!', 'success');
+        })
+        .catch(e => showToast('Erro ao criar a tarefa: ' + e.message, 'error'));
+    }
+
+    const { id, createdAt, ...campos } = dados;
+    return update(ref(database, 'crm_data/tarefas/' + (id || tarefaExistente.id)), { ...campos, updatedAt: agora })
+      .then(() => showToast('Tarefa atualizada!', 'success'))
+      .catch(e => showToast('Erro ao salvar a tarefa: ' + e.message, 'error'));
+  };
+
+  const alternarTarefa = (tarefa) => {
+    const concluindo = !tarefa.concluida;
+    update(ref(database, 'crm_data/tarefas/' + tarefa.id), {
+      concluida: concluindo,
+      updatedAt: new Date().toISOString(),
+    })
+      .then(() => {
+        if (concluindo) {
+          registrarAtividade({
+            leadId: tarefa.leadId, leadNome: tarefa.leadNome, tipo: 'tarefa',
+            descricao: `Tarefa concluída: "${tarefa.titulo}"`,
+          });
+          showToast('Tarefa concluída!', 'success');
+        }
+      })
+      .catch(e => showToast('Erro ao atualizar a tarefa: ' + e.message, 'error'));
+  };
+
+  // ── Edição em massa ──
+  // Uma única gravação multi-caminho para todos os leads selecionados, em vez
+  // de N chamadas — com 600 leads a diferença é entre instantâneo e travar.
+  const [aplicandoEmMassa, setAplicandoEmMassa] = useState(false);
+
+  const aplicarEmMassa = async (campo, novoValor) => {
+    const alvos = leads.filter(l => selectedLeads.includes(l.id) && String(l[campo] ?? '') !== String(novoValor ?? ''));
+    if (alvos.length === 0) {
+      showToast('Os leads selecionados já estão com esse valor.', 'info');
+      return;
+    }
+
+    setAplicandoEmMassa(true);
+    const agora = new Date().toISOString();
+    const rotulo = ROTULOS_CAMPOS[campo] || campo;
+    const gravacoes = {};
+
+    alvos.forEach(lead => {
+      gravacoes[`${lead.id}/${campo}`] = novoValor === '' ? null : novoValor;
+      gravacoes[`${lead.id}/updatedAt`] = agora;
+      if (campo === 'status') {
+        Object.entries(carimbosDeFecho(lead.status, novoValor, agora)).forEach(([chave, valor]) => {
+          gravacoes[`${lead.id}/${chave}`] = valor;
+        });
+      }
+    });
+
+    try {
+      await update(ref(database, 'crm_data/leads'), gravacoes);
+
+      await registrarAtividadesEmLote(alvos.map(lead => ({
+        leadId: lead.id,
+        leadNome: lead.nome,
+        tipo: campo === 'status' ? 'status' : 'editado',
+        descricao: campo === 'status'
+          ? descreverStatus(lead, lead.status, novoValor)
+          : `${lead.nome}: ${rotulo} definido como "${novoValor || '—'}" (edição em massa)`,
+      })));
+
+      showToast(`${alvos.length} lead(s) atualizado(s).`, 'success');
+    } catch (e) {
+      showToast('Erro ao aplicar em massa: ' + e.message, 'error');
+    } finally {
+      setAplicandoEmMassa(false);
+    }
+  };
+
+  const exportarSelecionados = () => {
+    const selecionados = leads.filter(l => selectedLeads.includes(l.id));
+    exportarLeads(selecionados, 'leads-selecionados');
+  };
+
   const abrirModalNovo = () => { setLeadEmEdicao(null); setModalAberto(true); };
   const abrirModalEdicao = (lead) => { setLeadEmEdicao(lead); setModalAberto(true); };
 
@@ -276,7 +450,7 @@ function App() {
       remove(ref(database, 'crm_data/leads/' + id))
         .then(() => showToast('Lead excluído.', 'success'))
         .catch(e => showToast("Erro: " + e.message, 'error'));
-      if (leadDetalhe && leadDetalhe.id === id) setLeadDetalhe(null);
+      if (leadIdNaUrl === id) navegar('/leads');
     }
   };
 
@@ -284,14 +458,56 @@ function App() {
     if (window.confirm(`Tem certeza que deseja excluir ${selectedLeads.length} lead(s)? Não há como desfazer.`)) {
       selectedLeads.forEach(id => remove(ref(database, 'crm_data/leads/' + id)));
       setSelectedLeads([]);
-      setLeadDetalhe(null);
+      if (leadIdNaUrl && selectedLeads.includes(leadIdNaUrl)) navegar('/leads');
       showToast(`${selectedLeads.length} lead(s) excluído(s).`, 'success');
     }
+  };
+
+  // Dispara as automações e avisa o usuário do que a regra fez sozinha.
+  // Nunca deixa uma falha aqui derrubar a ação principal: se a automação
+  // quebrar, a mudança de status que o usuário pediu já foi gravada.
+  const dispararAutomacoes = (tipo, lead, statusAnterior) => {
+    if (!automacoes.length) return;
+
+    rodarAutomacoes({
+      regras: automacoes,
+      evento: { tipo, lead, statusAnterior },
+      empresa: empresa?.nome || 'Grupo Portel',
+      meuNome: nomeUsuario,
+      etapas,
+    })
+      .then(resumo => {
+        if (!resumo || resumo.regras.length === 0) return;
+
+        (resumo.atividades || []).forEach(registrarAtividade);
+
+        const partes = [];
+        if (resumo.tarefasCriadas > 0) partes.push(`${resumo.tarefasCriadas} tarefa(s) criada(s)`);
+        if (resumo.camposPreenchidos > 0) partes.push(`${resumo.camposPreenchidos} campo(s) preenchido(s)`);
+        showToast(`⚡ ${resumo.regras.join(', ')}: ${partes.join(' e ') || 'executada'}`, 'info');
+      })
+      .catch(e => console.warn('[automacoes]', e?.message));
   };
 
   // Descreve uma troca de status em português, para a linha do tempo
   const descreverStatus = (lead, de, para) =>
     `${lead.nome}: ${acharEtapa(etapas, de).label} → ${acharEtapa(etapas, para).label}`;
+
+  // Carimba a data em que o negócio foi ganho ou perdido. Sem isso, "receita
+  // fechada neste mês" só podia ser estimada pelo updatedAt, que muda a cada
+  // edição boba de telefone.
+  const carimbosDeFecho = (statusAntigo, statusNovo, agora) => {
+    if (statusAntigo === statusNovo) return {};
+    const eraGanho = ehGanho(etapas, statusAntigo);
+    const viraGanho = ehGanho(etapas, statusNovo);
+    const viraPerda = ehPerdido(etapas, statusNovo);
+
+    if (viraGanho && !eraGanho) return { fechadoEm: agora };
+    if (viraPerda) return { perdidoEm: agora };
+    // Voltou para uma etapa em aberto: limpa os carimbos anteriores
+    if (!viraGanho && !viraPerda) return { fechadoEm: null, perdidoEm: null };
+    return {};
+  };
 
   const salvarLead = (dados) => {
     if (!dados.nome) return showToast("O nome é obrigatório!", 'error');
@@ -305,6 +521,7 @@ function App() {
             leadId: novaRef.key, leadNome: dados.nome, tipo: 'criado',
             descricao: `Lead "${dados.nome}" cadastrado`,
           });
+          dispararAutomacoes('leadCriado', { ...dados, id: novaRef.key });
           setModalAberto(false);
           showToast('Novo lead adicionado!', 'success');
         })
@@ -316,7 +533,10 @@ function App() {
       const leadId = id || leadEmEdicao.id;
       const mudancas = descreverEdicao(leadEmEdicao, camposEditaveis, ROTULOS_CAMPOS);
 
-      update(ref(database, 'crm_data/leads/' + leadId), { ...camposEditaveis, updatedAt: agora })
+      update(ref(database, 'crm_data/leads/' + leadId), {
+        ...camposEditaveis, updatedAt: agora,
+        ...carimbosDeFecho(leadEmEdicao.status, camposEditaveis.status, agora),
+      })
         .then(() => {
           const trocaStatus = mudancas.find(m => m.campo === 'status');
           if (trocaStatus) {
@@ -324,6 +544,9 @@ function App() {
               leadId, leadNome: dados.nome, tipo: 'status',
               descricao: descreverStatus(dados, trocaStatus.de, trocaStatus.para),
             });
+          }
+          if (trocaStatus) {
+            dispararAutomacoes('statusMudou', { ...leadEmEdicao, ...camposEditaveis, id: leadId }, trocaStatus.de);
           }
           const outras = mudancas.filter(m => m.campo !== 'status');
           if (outras.length > 0) {
@@ -346,7 +569,8 @@ function App() {
 
     const gravarUm = (lead) => {
       if (!lead || String(lead[campo] ?? '') === String(novoValor ?? '')) return Promise.resolve();
-      return update(ref(database, 'crm_data/leads/' + lead.id), { [campo]: novoValor, updatedAt: agora })
+      const extras = campo === 'status' ? carimbosDeFecho(lead.status, novoValor, agora) : {};
+      return update(ref(database, 'crm_data/leads/' + lead.id), { [campo]: novoValor, updatedAt: agora, ...extras })
         .then(() => {
           registrarAtividade({
             leadId: lead.id, leadNome: lead.nome,
@@ -355,6 +579,10 @@ function App() {
               ? descreverStatus(lead, lead.status, novoValor)
               : `${lead.nome}: ${rotulo} alterado para "${novoValor || '—'}"`,
           });
+
+          const atualizado = { ...lead, [campo]: novoValor };
+          if (campo === 'status') dispararAutomacoes('statusMudou', atualizado, lead.status);
+          if (campo === 'valor' && Number(novoValor) > 0) dispararAutomacoes('valorDefinido', atualizado);
         });
     };
 
@@ -374,12 +602,17 @@ function App() {
   const atualizarStatusDragAndDrop = (leadId, novoStatus) => {
     const lead = leads.find(l => String(l.id) === String(leadId));
     if (lead && lead.status !== novoStatus) {
-      update(ref(database, 'crm_data/leads/' + lead.id), { status: novoStatus, updatedAt: new Date().toISOString() })
+      const agora = new Date().toISOString();
+      update(ref(database, 'crm_data/leads/' + lead.id), {
+        status: novoStatus, updatedAt: agora,
+        ...carimbosDeFecho(lead.status, novoStatus, agora),
+      })
         .then(() => {
           registrarAtividade({
             leadId: lead.id, leadNome: lead.nome, tipo: 'status',
             descricao: descreverStatus(lead, lead.status, novoStatus),
           });
+          dispararAutomacoes('statusMudou', { ...lead, status: novoStatus }, lead.status);
           showToast('Card movido com sucesso!', 'success');
         })
         .catch(e => showToast('Erro ao mover: ' + e.message, 'error'));
@@ -400,7 +633,18 @@ function App() {
   const renderPagina = () => {
     switch (paginaAtiva) {
       case 'dashboard':
-        return <Dashboard leads={leads} etapas={etapas} tarefas={tarefasGlobais} metas={metas} />;
+        return <Dashboard
+          leads={leads}
+          etapas={etapas}
+          tarefas={tarefasGlobais}
+          propostas={propostasGlobais}
+          metas={metas}
+          responsaveis={responsaveis}
+          onNavegar={setPaginaAtiva}
+          onAbrirLead={abrirLeadNaLista}
+          onFiltrarEtapa={filtrarPorEtapa}
+          onToggleTarefa={alternarTarefa}
+        />;
 
       case 'leads':
         return (
@@ -428,11 +672,6 @@ function App() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {selectedLeads.length > 0 && (
-                    <button className="btn btn-danger" onClick={deletarLeadsSelecionados}>
-                      🗑 Excluir ({selectedLeads.length})
-                    </button>
-                  )}
                   <div className="view-toggle">
                     <button className={`view-btn ${visaoAtual === 'table' ? 'active' : ''}`} onClick={() => setVisaoAtual('table')}>☰ Tabela</button>
                     <button className={`view-btn ${visaoAtual === 'kanban' ? 'active' : ''}`} onClick={() => setVisaoAtual('kanban')}>⊞ Kanban</button>
@@ -440,6 +679,22 @@ function App() {
                   <button className="btn btn-primary" onClick={abrirModalNovo}>+ Novo Lead</button>
                 </div>
               </div>
+
+              {selectedLeads.length > 0 && (
+                <BarraEmMassa
+                  quantidade={selectedLeads.length}
+                  etapas={etapas}
+                  responsaveis={responsaveis}
+                  nichos={nichos}
+                  estados={estados}
+                  cidades={cidades}
+                  aplicando={aplicandoEmMassa}
+                  onAplicar={aplicarEmMassa}
+                  onExportar={exportarSelecionados}
+                  onExcluir={deletarLeadsSelecionados}
+                  onLimparSelecao={() => setSelectedLeads([])}
+                />
+              )}
 
               <StatsBar leads={leadsFiltrados} etapas={etapas} />
               
@@ -536,25 +791,63 @@ function App() {
         );
 
       case 'clientes':
-        return <ClientesPage nichos={nichos} responsaveis={responsaveis} />;
+        return (
+          <ClientesPage
+            clientes={clientesGlobais}
+            leads={leads}
+            etapas={etapas}
+            nichos={nichos}
+            responsaveis={responsaveis}
+            onAvisar={showToast}
+          />
+        );
       case 'tarefas':
-        return <TarefasPage leads={leads} responsaveis={responsaveis} />;
+        return (
+          <TarefasPage
+            leads={leads}
+            tarefas={tarefasGlobais}
+            responsaveis={responsaveis}
+            onSalvarTarefa={salvarTarefa}
+            onAlternarTarefa={alternarTarefa}
+            onAbrirLead={abrirLeadNaLista}
+          />
+        );
       case 'conversas':
-        return <ConversasPage leads={leads} etapas={etapas} />;
+        return <ConversasPage leads={leads} etapas={etapas} conversas={conversasGlobais} modelos={modelos} empresa={nomeEmpresa} meuNome={nomeUsuario} />;
       case 'emails':
-        return <EmailPage />;
+        return <EmailPage leads={leads} modelos={modelos} empresa={nomeEmpresa} meuNome={nomeUsuario} />;
       case 'agenda':
-        return <AgendaPage leads={leads} tarefas={tarefasGlobais} />;
+        return (
+          <AgendaPage
+            leads={leads}
+            tarefas={tarefasGlobais}
+            responsaveis={responsaveis}
+            onSalvarTarefa={salvarTarefa}
+            onAlternarTarefa={alternarTarefa}
+            onAbrirLead={abrirLeadNaLista}
+          />
+        );
       case 'financeiro':
-        return <FinanceiroPage leads={leads} metas={metas} />;
+        return <FinanceiroPage leads={leads} propostas={propostasGlobais} metas={metas} />;
       case 'metricas':
-        return <MetricasPage leads={leads} etapas={etapas} />;
+        return <MetricasPage leads={leads} etapas={etapas} propostas={propostasGlobais} />;
       case 'relatorios':
         return <RelatoriosPage leads={leads} etapas={etapas} />;
       case 'configuracoes':
-        return <ConfigPage etapas={etapas} metas={metas} />;
+        return <ConfigPage etapas={etapas} metas={metas} leads={leads} modelos={modelos} automacoes={automacoes} />;
       default:
-        return <Dashboard leads={leads} etapas={etapas} tarefas={tarefasGlobais} metas={metas} />;
+        return <Dashboard
+          leads={leads}
+          etapas={etapas}
+          tarefas={tarefasGlobais}
+          propostas={propostasGlobais}
+          metas={metas}
+          responsaveis={responsaveis}
+          onNavegar={setPaginaAtiva}
+          onAbrirLead={abrirLeadNaLista}
+          onFiltrarEtapa={filtrarPorEtapa}
+          onToggleTarefa={alternarTarefa}
+        />;
     }
   };
 
@@ -569,6 +862,14 @@ function App() {
       {/* ══════ TOPBAR REDESENHADA ══════ */}
       <div className="topbar">
         <div className="topbar-left">
+          <button
+            className="abrir-menu"
+            onClick={() => setMenuAberto(true)}
+            aria-label="Abrir menu"
+            title="Menu"
+          >
+            ☰
+          </button>
           <button
             className="search-wrap"
             onClick={() => setBuscaGlobalAberta(true)}
@@ -653,7 +954,13 @@ function App() {
 
       {/* ══════ LAYOUT PRINCIPAL ══════ */}
       <div className="main">
+        {telaMedia && menuAberto && (
+          <div className="fundo-menu" onClick={() => setMenuAberto(false)} />
+        )}
+
         <Sidebar
+          aberta={menuAberto}
+          onFechar={() => setMenuAberto(false)}
           paginaAtiva={paginaAtiva}
           setPaginaAtiva={setPaginaAtiva}
           leads={leads}
@@ -669,24 +976,30 @@ function App() {
         
         {/* Área de conteúdo principal */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {renderPagina()}
+          <Suspense fallback={<Carregando />}>
+            {renderPagina()}
+          </Suspense>
         </div>
       </div>
 
       {/* ══════ MODAL DE LEADS (Global) ══════ */}
-      <LeadModal 
-        isOpen={modalAberto} 
-        onClose={() => setModalAberto(false)} 
-        onSave={salvarLead} 
-        leadAtual={leadEmEdicao}
-        nichos={nichos}
-        responsaveis={responsaveis}
-        estados={estados}
-        cidades={cidades}
-        etapas={etapas}
-      />
+      {modalAberto && (
+        <LeadModal
+          key={leadEmEdicao?.id || 'novo'}
+          isOpen={modalAberto} 
+          onClose={() => setModalAberto(false)} 
+          onSave={salvarLead} 
+          leadAtual={leadEmEdicao}
+          nichos={nichos}
+          responsaveis={responsaveis}
+          estados={estados}
+          cidades={cidades}
+          etapas={etapas}
+        />
+      )}
 
       {/* ══════ IMPORTAÇÃO DE LEADS ══════ */}
+      <Suspense fallback={null}>
       <ImportarLeadsModal
         isOpen={modalImportar}
         onClose={() => setModalImportar(false)}
@@ -694,21 +1007,26 @@ function App() {
         etapas={etapas}
         responsaveis={responsaveis}
       />
+      </Suspense>
 
       {/* ══════ BUSCA GLOBAL (Ctrl+K) ══════ */}
-      <BuscaGlobal
-        aberta={buscaGlobalAberta}
-        onFechar={() => setBuscaGlobalAberta(false)}
-        onNavegar={setPaginaAtiva}
-        onAbrirLead={setLeadDetalhe}
-        leads={leads}
-        clientes={clientesGlobais}
-        tarefas={tarefasGlobais}
-        propostas={propostasGlobais}
-        conversas={conversasGlobais}
-        emails={emailsGlobais}
-        etapas={etapas}
-      />
+      {buscaGlobalAberta && (
+        <Suspense fallback={null}>
+        <BuscaGlobal
+          aberta={buscaGlobalAberta}
+          onFechar={() => setBuscaGlobalAberta(false)}
+          onNavegar={setPaginaAtiva}
+          onAbrirLead={setLeadDetalhe}
+          leads={leads}
+          clientes={clientesGlobais}
+          tarefas={tarefasGlobais}
+          propostas={propostasGlobais}
+          conversas={conversasGlobais}
+          emails={emailsGlobais}
+          etapas={etapas}
+        />
+        </Suspense>
+      )}
 
       {/* ══════ TOASTS ══════ */}
       <div className="toast-container">

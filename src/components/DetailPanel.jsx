@@ -11,14 +11,27 @@ const urlIg = (ig) => {
 };
 const urlSite = (s) => s ? (s.startsWith('http') ? s : 'https://' + s) : '';
 
+// Fora do componente de propósito: definido dentro, o React tratava cada render
+// como um tipo novo e destruía/recriava as 19 linhas do painel toda vez.
+function DetailRow({ label, children }) {
+  if (!children) return null;
+  return (
+    <div className="detail-row">
+      <span className="detail-label">{label}</span>
+      <span className="detail-val">{children}</span>
+    </div>
+  );
+}
+
 // Linha do tempo do lead. Fica em um componente próprio para poder ter o seu
 // próprio listener sem que o painel inteiro precise re-renderizar.
 function LinhaDoTempo({ leadId }) {
   const [atividades, setAtividades] = useState([]);
   const [carregando, setCarregando] = useState(true);
 
+  // Sem setCarregando(true) aqui: o painel passa key={lead.id}, então trocar
+  // de lead remonta o componente e ele já nasce no estado de carregando.
   useEffect(() => {
-    setCarregando(true);
     const cancelar = escutarAtividadesDoLead(leadId, (lista) => {
       setAtividades(lista);
       setCarregando(false);
@@ -79,17 +92,6 @@ export default function DetailPanel({ lead, onClose, onEdit, onDelete, etapas = 
   const igDono = urlIg(lead.ig_dono);
   const sLink = urlSite(lead.site);
   const wppLink = lead.whatsapp ? `https://wa.me/55${limpaTel(lead.whatsapp)}` : '';
-
-  // Função auxiliar para desenhar as linhas de informação (igual ao seu dRow original)
-  const DetailRow = ({ label, children }) => {
-    if (!children) return null;
-    return (
-      <div className="detail-row">
-        <span className="detail-label">{label}</span>
-        <span className="detail-val">{children}</span>
-      </div>
-    );
-  };
 
   return (
     <div className={`detail-panel ${lead ? 'open' : ''}`}>
@@ -175,7 +177,7 @@ export default function DetailPanel({ lead, onClose, onEdit, onDelete, etapas = 
 
         <div className="detail-section">
           <div className="detail-section-title">Linha do Tempo</div>
-          <LinhaDoTempo leadId={lead.id} />
+          <LinhaDoTempo key={lead.id} leadId={lead.id} />
         </div>
 
         <div className="detail-section" style={{ border: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>

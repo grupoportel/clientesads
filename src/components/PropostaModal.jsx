@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { hojeISO } from '../periodo';
 
 const CAMPOS_INICIAIS = {
   leadId: '',
@@ -10,17 +11,14 @@ const CAMPOS_INICIAIS = {
 };
 
 export default function PropostaModal({ isOpen, onClose, onSave, propostaAtual, leads = [] }) {
-  const [formData, setFormData] = useState(CAMPOS_INICIAIS);
+  const [formData, setFormData] = useState(() => (
+    propostaAtual
+      ? { ...CAMPOS_INICIAIS, ...propostaAtual }
+      : { ...CAMPOS_INICIAIS, data: hojeISO() }
+  ));
   const [erro, setErro] = useState('');
 
-  useEffect(() => {
-    if (propostaAtual) {
-      setFormData({ ...CAMPOS_INICIAIS, ...propostaAtual });
-    } else {
-      setFormData({ ...CAMPOS_INICIAIS, data: new Date().toISOString().slice(0, 10) });
-    }
-    setErro('');
-  }, [propostaAtual, isOpen]);
+
 
   if (!isOpen) return null;
 

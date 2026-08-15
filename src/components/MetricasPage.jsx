@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { ref, onValue } from 'firebase/database';
-import { database } from '../firebase';
+import React, { useState, useMemo } from 'react';
+import { acharEtapa, etapasDoFunil, ehGanho, ehPerdido, ehAberto } from '../pipeline';
 
 // ─────────────────────────────────────────────────────────
 // Sub-componentes reutilizáveis
@@ -90,25 +89,23 @@ function BarRow({ label, value, max, color, suffix = '', pct }) {
 // Componente principal
 // ─────────────────────────────────────────────────────────
 
-export default function MetricasPage({ leads = [] }) {
+export default function MetricasPage({ leads = [], etapas = [], propostas = [] }) {
   const [abaAtiva, setAbaAtiva] = useState('pipeline');
 
-  // ── Firebase: propostas reais ──
-  const [propostas, setPropostas] = useState([]);
-  useEffect(() => {
-    const unsub = onValue(ref(database, 'crm_data/propostas'), snap => {
-      const data = snap.val();
-      setPropostas(data ? Object.entries(data).map(([id, p]) => ({ ...p, id })) : []);
-    });
-    return () => unsub();
-  }, []);
+  // Instante único da montagem. Ler o relógio a cada recálculo faria dois
+  // renders seguidos produzirem "há 15 dias" e "há 16 dias" para o mesmo lead.
+  const agoraMs = useMemo(() => new Date().getTime(), []);
+
 
   // ── Simulador Pipeline Velocity ──
-  const [simOpps, setSimOpps]     = useState(0);
-  const [simTicket, setSimTicket] = useState(3500);
-  const [simWin, setSimWin]       = useState(22);
-  const [simCiclo, setSimCiclo]   = useState(18);
-  const [optPct, setOptPct]       = useState(0);
+  // null = o usuário ainda não mexeu, então o slider segue o dado real do CRM.
+  // Antes isso era feito por um efeito que semeava os valores uma vez; se os
+  // leads chegassem depois, o simulador ficava preso no chute inicial.
+  const [simOppsUser, setSimOpps]     = useState(null);
+  const [simTicketUser, setSimTicket] = useState(null);
+  const [simWinUser, setSimWin]       = useState(null);
+  const [simCicloUser, setSimCiclo]   = useState(null);
+  const [optPct, setOptPct]           = useState(0);
 
   // ── IA Scoring ──
   const [leadId, setLeadId] = useState('');
@@ -122,18 +119,21 @@ export default function MetricasPage({ leads = [] }) {
   // ═══════════════════════════════════════════
   const crmLeads = useMemo(() => {
     const total    = leads.length || 1;
-    const ganhos   = leads.filter(l => l.status === 'venda' || l.status === 'contrato-realizado');
-    const perdidos = leads.filter(l => l.status === 'perda');
-    const emNegs   = leads.filter(l => ['contato-decisor', 'reuniao-marcada', 'contrato-realizado'].includes(l.status));
+    // Ganho, perda e "em negociação" agora vêm da configuração do funil.
+    // Esta era a última tela que decidia isso por conta própria, e por isso
+    // discordava do Dashboard sobre quantos negócios haviam sido fechados.
+    const ganhos   = leads.filter(l => ehGanho(etapas, l.status));
+    const perdidos = leads.filter(l => ehPerdido(etapas, l.status));
+    const emNegs   = leads.filter(l => ehAberto(etapas, l.status) && acharEtapa(etapas, l.status).probabilidade >= 40);
     const semEmail = leads.filter(l => !l.email || !l.email.includes('@'));
     const semWpp   = leads.filter(l => !l.telefone && !l.whatsapp);
     const semResp  = leads.filter(l => !l.responsavel);
 
     // Leads estagnados (sem atualização há mais de 15 dias e não fechados/perdidos)
-    const ativos = leads.filter(l => !['venda', 'contrato-realizado', 'perda', 'concluido'].includes(l.status));
+    const ativos = leads.filter(l => ehAberto(etapas, l.status));
     const estagnados = ativos.filter(l => {
       if (!l.updatedAt) return true;
-      const dias = (Date.now() - new Date(l.updatedAt)) / 86400000;
+      const dias = (agoraMs - new Date(l.updatedAt)) / 86400000;
       return dias > 15;
     });
 
@@ -182,7 +182,7 @@ export default function MetricasPage({ leads = [] }) {
       pctEmailOk, pctWppOk, pctRespOk,
       origemMap, nichoMap, perdaMap, perdaPorNicho, perdaPorResp,
     };
-  }, [leads]);
+  }, [leads, etapas, agoraMs]);
 
   // ═══════════════════════════════════════════
   // CÁLCULOS REAIS DAS PROPOSTAS
@@ -231,15 +231,11 @@ export default function MetricasPage({ leads = [] }) {
     };
   }, [propostas, leads]);
 
-  // Sincroniza sliders com dados reais
-  React.useEffect(() => {
-    if (crmLeads.emNegs > 0 && simOpps === 0) {
-      setSimOpps(crmLeads.emNegs);
-      setSimTicket(crmPropostas.ticketMedio > 0 ? crmPropostas.ticketMedio : 3500);
-      setSimWin(crmLeads.winRate > 0 ? crmLeads.winRate : 22);
-      setSimCiclo(crmLeads.ciclo > 0 ? crmLeads.ciclo : 18);
-    }
-  }, [crmLeads, crmPropostas, simOpps]);
+  // Valor efetivo de cada slider: o que o usuário escolheu, ou o dado real
+  const simOpps   = simOppsUser   ?? (crmLeads.emNegs || 10);
+  const simTicket = simTicketUser ?? (crmPropostas.ticketMedio || 3500);
+  const simWin    = simWinUser    ?? (crmLeads.winRate || 22);
+  const simCiclo  = simCicloUser  ?? (crmLeads.ciclo || 18);
 
   // ── Pipeline Velocity ──
   const calcVel = (o, t, w, c, opt = 0) => {
@@ -272,15 +268,20 @@ export default function MetricasPage({ leads = [] }) {
     }
 
     // 2. ESTÁGIO NO FUNIL ────────────────────────────────────
-    if (['reuniao-marcada', 'contrato-realizado'].includes(l.status)) {
-      pts += 30; sinais.push({ t: '+', cat: 'Funil', txt: `Estágio avançado: ${l.status === 'reuniao-marcada' ? 'Reunião Marcada' : 'Contrato Realizado'} [+30]` });
-    } else if (l.status === 'contato-decisor') {
-      pts += 20; sinais.push({ t: '+', cat: 'Funil', txt: 'Chegou ao decisor — grande avanço na negociação [+20]' });
-    } else if (['ligacao-feita', 'lead-qualificado'].includes(l.status)) {
-      pts += 10; sinais.push({ t: '+', cat: 'Funil', txt: `Em qualificação ativa: ${l.status === 'ligacao-feita' ? 'Ligação feita' : 'Lead qualificado'} [+10]` });
-    } else if (l.status === 'perda') {
-      pts -= 40; sinais.push({ t: '-', cat: 'Funil', txt: 'Marcado como perda [-40]' });
-    } else if (l.status === 'nenhum') {
+    // A pontuação segue a chance de fechar configurada para a etapa, então
+    // renomear ou reordenar o funil em Configurações continua valendo aqui.
+    const etapaLead = acharEtapa(etapas, l.status);
+    if (etapaLead.perdido) {
+      pts -= 40; sinais.push({ t: '-', cat: 'Funil', txt: `Marcado como ${etapaLead.label} [-40]` });
+    } else if (etapaLead.ganho) {
+      pts += 30; sinais.push({ t: '+', cat: 'Funil', txt: `Negócio fechado: ${etapaLead.label} [+30]` });
+    } else if (etapaLead.probabilidade >= 60) {
+      pts += 30; sinais.push({ t: '+', cat: 'Funil', txt: `Estágio avançado: ${etapaLead.label} — ${etapaLead.probabilidade}% de chance [+30]` });
+    } else if (etapaLead.probabilidade >= 40) {
+      pts += 20; sinais.push({ t: '+', cat: 'Funil', txt: `${etapaLead.label} — grande avanço na negociação [+20]` });
+    } else if (etapaLead.probabilidade > 0) {
+      pts += 10; sinais.push({ t: '+', cat: 'Funil', txt: `Em qualificação ativa: ${etapaLead.label} [+10]` });
+    } else {
       pts -= 10; sinais.push({ t: '-', cat: 'Funil', txt: 'Sem nenhuma ação registrada no CRM [-10]' });
     }
 
@@ -379,13 +380,13 @@ export default function MetricasPage({ leads = [] }) {
 
     // 14. ÚLTIMO CONTATO EXPLÍCITO ───────────────────────────
     if (l.ultimo_contato) {
-      const diasUlt = Math.floor((Date.now() - new Date(l.ultimo_contato)) / 86400000);
+      const diasUlt = Math.floor((agoraMs - new Date(l.ultimo_contato)) / 86400000);
       if (diasUlt <= 3)       { pts += 8;  sinais.push({ t: '+', cat: 'Engajamento', txt: `Último contato: ${diasUlt === 0 ? 'hoje' : diasUlt + ' dia(s) atrás'} — lead quente [+8]` }); }
       else if (diasUlt <= 10) { pts += 4;  sinais.push({ t: '+', cat: 'Engajamento', txt: `Último contato há ${diasUlt} dias — dentro da janela de atenção [+4]` }); }
       else if (diasUlt <= 21) { sinais.push({ t: '=', cat: 'Engajamento', txt: `Último contato há ${diasUlt} dias — próximo do limite de reengajamento [0]` }); }
       else                    { pts -= 10; sinais.push({ t: '-', cat: 'Engajamento', txt: `Último contato há ${diasUlt} dias — alto risco de esfriamento [-10]` }); }
     } else if (l.updatedAt) {
-      const dias = Math.floor((Date.now() - new Date(l.updatedAt)) / 86400000);
+      const dias = Math.floor((agoraMs - new Date(l.updatedAt)) / 86400000);
       if (dias <= 2)      { pts += 6;  sinais.push({ t: '+', cat: 'Engajamento', txt: `Registro atualizado recentemente (${dias === 0 ? 'hoje' : dias + 'd atrás'}) [+6]` }); }
       else if (dias > 14) { pts -= 10; sinais.push({ t: '-', cat: 'Engajamento', txt: `Sem atualização há ${dias} dias — lead esfriando [-10]` }); }
     } else {
@@ -398,7 +399,7 @@ export default function MetricasPage({ leads = [] }) {
     }
 
     const score = Math.max(0, Math.min(100, pts));
-    let tier = '⚪ MQL Básico', cor = 'var(--text3)', acao = 'Manter em sequência de nutrição padrão.';
+    let tier, cor, acao;
     if (score >= 80)      { tier = '🔥 SQL — Prioridade Máxima'; cor = 'var(--green)';  acao = 'Contato humano imediato (Speed-to-Lead ≤ 5 min). Não deixe esfriar!'; }
     else if (score >= 65) { tier = '⚡ MQL Quente';              cor = 'var(--accent)'; acao = 'Enviar proposta ou agendar reunião de diagnóstico nos próximos 2 dias.'; }
     else if (score >= 45) { tier = '🔵 MQL Morno';              cor = 'var(--yellow)'; acao = 'Nutrir com cases e conteúdo relevante. Ligação de acompanhamento em até 3 dias.'; }
@@ -491,11 +492,11 @@ export default function MetricasPage({ leads = [] }) {
           </div>
 
           {/* Simulador + Resultado */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <div className="grid-2">
             <Card>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                 <SectionTitle icon="🎛️" title="Simulador de Crescimento" />
-                <button onClick={() => { setSimOpps(crmLeads.emNegs || 10); setSimTicket(crmPropostas.ticketMedio || 3500); setSimWin(crmLeads.winRate || 22); setSimCiclo(crmLeads.ciclo || 18); setOptPct(0); }}
+                <button onClick={() => { setSimOpps(null); setSimTicket(null); setSimWin(null); setSimCiclo(null); setOptPct(0); }}
                   style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text3)', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer', marginTop: '-10px', flexShrink: 0 }}>
                   🔄 Dados Reais
                 </button>
@@ -559,18 +560,10 @@ export default function MetricasPage({ leads = [] }) {
               {/* Funil real */}
               <Card>
                 <SectionTitle icon="🔽" title="Funil Atual (Leads Reais)" />
-                {[
-                  { label: 'Lead Qualificado', status: 'lead-qualificado', cor: 'var(--accent)' },
-                  { label: 'Ligação Feita',    status: 'ligacao-feita',    cor: 'var(--yellow)' },
-                  { label: 'Contato Decisor',  status: 'contato-decisor',  cor: 'var(--purple)' },
-                  { label: 'Reunião Marcada',  status: 'reuniao-marcada',  cor: 'var(--green)' },
-                  { label: 'Contrato / Venda', status: ['contrato-realizado','venda'], cor: 'var(--green)' },
-                ].map((et, i) => {
-                  const count = Array.isArray(et.status)
-                    ? leads.filter(l => et.status.includes(l.status)).length
-                    : leads.filter(l => l.status === et.status).length;
+                {etapasDoFunil(etapas).map((et) => {
+                  const count = leads.filter(l => l.status === et.id).length;
                   return (
-                    <BarRow key={i} label={et.label} value={count} max={crmLeads.total} color={et.cor}
+                    <BarRow key={et.id} label={et.label} value={count} max={crmLeads.total} color={et.cor}
                       suffix={` lead${count !== 1 ? 's' : ''}`}
                       pct={crmLeads.total > 0 ? Math.round((count / crmLeads.total) * 100) : 0} />
                   );
@@ -602,7 +595,7 @@ export default function MetricasPage({ leads = [] }) {
               sub={`+ ${crmPropostas.rascunhos} em rascunho`} color="var(--yellow)" />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <div className="grid-2">
 
             {/* Gráfico de barras mensal */}
             <Card>
@@ -695,7 +688,7 @@ export default function MetricasPage({ leads = [] }) {
               warn={crmLeads.estagnados > 0} />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <div className="grid-2">
 
             {/* Análise de Perdas */}
             <Card>
@@ -779,7 +772,7 @@ export default function MetricasPage({ leads = [] }) {
       {abaAtiva === 'scoring' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <div className="grid-2">
 
             {/* Seletor com Filtros */}
             <Card>

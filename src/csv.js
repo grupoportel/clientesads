@@ -2,6 +2,11 @@
 // Escrito à mão em vez de trazer uma biblioteca: o formato que interessa aqui
 // (Excel e Google Planilhas em português) cabe em poucas dezenas de linhas.
 
+// Marca de ordem de bytes. Escrita como escape em vez do caractere literal:
+// invisível no código, ela é fácil de apagar sem querer e o Excel deixa de
+// reconhecer os acentos do arquivo exportado.
+const BOM = '﻿';
+
 // ── Exportar ────────────────────────────────────────────────────────────────
 
 const escaparCampo = (valor) => {
@@ -25,7 +30,7 @@ export function gerarCSV(linhas, colunas) {
 
 /** Dispara o download no navegador. BOM no início para o Excel ler acentos. */
 export function baixarCSV(nomeArquivo, conteudo) {
-  const blob = new Blob(['﻿' + conteudo], { type: 'text/csv;charset=utf-8;' });
+  const blob = new Blob([BOM + conteudo], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -51,7 +56,7 @@ function detectarSeparador(texto) {
  * Devolve { colunas: string[], linhas: string[][] }.
  */
 export function lerCSV(texto) {
-  const limpo = texto.replace(/^﻿/, ''); // remove BOM
+  const limpo = texto.startsWith(BOM) ? texto.slice(1) : texto;
   const sep = detectarSeparador(limpo);
 
   const linhas = [];

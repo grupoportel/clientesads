@@ -19,9 +19,19 @@ const Drawer = ({ title, icon, items, leads, field, activeFilter, setFilter, dbP
     }
   };
 
-  // Função para remover uma opção do Firebase
+  // Remove uma opção do Firebase, avisando se ela está em uso.
+  // Sem o aviso, os leads que usavam o valor ficavam com um campo órfão que
+  // nenhum filtro alcança mais.
   const handleRemove = (itemParaRemover) => {
-    if (window.confirm(`Excluir "${itemParaRemover}" da lista rápida?`)) {
+    const emUso = leads.filter(l => l[field] === itemParaRemover).length;
+
+    const aviso = emUso > 0
+      ? `"${itemParaRemover}" está em uso por ${emUso} lead(s).\n\n` +
+        `Removendo da lista, esses leads continuam com o valor gravado, mas ele ` +
+        `deixa de aparecer nos filtros e nos formulários.\n\nRemover mesmo assim?`
+      : `Excluir "${itemParaRemover}" da lista rápida?`;
+
+    if (window.confirm(aviso)) {
       const novoArray = items.filter(i => i !== itemParaRemover);
       set(ref(database, dbPath), novoArray);
       if (activeFilter === itemParaRemover) setFilter(null);

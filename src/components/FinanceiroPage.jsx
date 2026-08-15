@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
-import { ref, onValue, set, update, remove, push } from 'firebase/database';
+import { useState, useMemo } from 'react';
+import { ref, set, update, remove, push } from 'firebase/database';
 import { database } from '../firebase';
 import PropostaModal from './PropostaModal';
 import { registrarAtividade } from '../atividades';
 import { formatarBRL } from '../pipeline';
+import { iso, dentro, ultimosMeses, chaveMes } from '../periodo';
 
 
 const statusBadge = (status) => {
@@ -50,44 +51,37 @@ const KpiCard = ({ label, value, icon, color, sub, progress }) => (
   </div>
 );
 
-export default function FinanceiroPage({ leads = [], metas = {} }) {
-  const [propostas, setPropostas] = useState([]);
-  const [carregando, setCarregando] = useState(true);
+// propostas chega por prop: o App já mantém esse caminho carregado, e três
+// telas escutando crm_data/propostas era o mesmo dado baixado três vezes.
+export default function FinanceiroPage({ leads = [], propostas = [], metas = {} }) {
   const [modalAberto, setModalAberto] = useState(false);
   const [propostaEmEdicao, setPropostaEmEdicao] = useState(null);
   const [activePeriod, setActivePeriod] = useState('Este Mês');
 
-  const periods = ['Este Mês', 'Último Mês', 'Trimestre', 'Ano'];
+  const periods = ['Este Mês', 'Último Mês', 'Trimestre', 'Ano', 'Tudo'];
 
-  /* ── Firebase ── */
-  useEffect(() => {
-    const unsub = onValue(ref(database, 'crm_data/propostas'), (snap) => {
-      const data = snap.val();
-      setPropostas(
-        data ? Object.entries(data).map(([id, p]) => ({ ...p, id })) : []
-      );
-      setCarregando(false);
-    });
-    return () => unsub();
-  }, []);
+  /* ── Filtro de período ── */
+  // Duas correções: uma proposta sem data não pertence a período nenhum (antes
+  // aparecia em todos), e "Ano" agora significa o ano corrente, não "tudo o que
+  // existe desde sempre".
+  const janela = useMemo(() => {
+    const agora = new Date();
+    const ano = agora.getFullYear();
+    const mes = agora.getMonth();
 
-  /* ── Period filter ── */
-  const propostasFiltradas = useMemo(() => {
-    const now = new Date();
-    return propostas.filter((p) => {
-      if (!p.data) return true;
-      const d = new Date(p.data);
-      if (activePeriod === 'Este Mês')
-        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-      if (activePeriod === 'Último Mês') {
-        const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        return d.getMonth() === lm.getMonth() && d.getFullYear() === lm.getFullYear();
-      }
-      if (activePeriod === 'Trimestre')
-        return d >= new Date(now.getTime() - 90 * 86400000);
-      return true; // Ano
-    });
-  }, [propostas, activePeriod]);
+    if (activePeriod === 'Este Mês')    return { inicio: iso(new Date(ano, mes, 1)),      fim: iso(new Date(ano, mes + 1, 0)) };
+    if (activePeriod === 'Último Mês')  return { inicio: iso(new Date(ano, mes - 1, 1)),  fim: iso(new Date(ano, mes, 0)) };
+    if (activePeriod === 'Trimestre')   return { inicio: iso(new Date(agora.getTime() - 90 * 86400000)), fim: iso(agora) };
+    if (activePeriod === 'Ano')         return { inicio: `${ano}-01-01`,                  fim: `${ano}-12-31` };
+    return { inicio: null, fim: null }; // Tudo
+  }, [activePeriod]);
+
+  const propostasFiltradas = useMemo(
+    () => propostas.filter(p => (janela.inicio === null ? true : dentro(p.data, janela.inicio, janela.fim))),
+    [propostas, janela]
+  );
+
+  const semData = useMemo(() => propostas.filter(p => !p.data).length, [propostas]);
 
   /* ── KPI ── */
   const kpiData = useMemo(() => {
@@ -99,28 +93,17 @@ export default function FinanceiroPage({ leads = [], metas = {} }) {
     const taxaFechamento = fechadas > 0 ? Math.round((aceitas.length / fechadas) * 100) : 0;
     const ticketMedio = aceitas.length > 0 ? Math.round(receita / aceitas.length) : 0;
     const metaMensal = Number(metas.receitaMensal) || 0;
-    const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-    const now = new Date();
-    const receitaMensalMap = {};
-    
-    // Iniciar os últimos 6 meses com valor 0
-    for (let i = 5; i >= 0; i--) {
-      let m = now.getMonth() - i;
-      if (m < 0) m += 12;
-      receitaMensalMap[meses[m]] = 0;
-    }
 
-    aceitas.forEach(p => {
-      if (!p.data) return;
-      const d = new Date(p.data);
-      const m = meses[d.getMonth()];
-      if (receitaMensalMap[m] !== undefined) {
-        receitaMensalMap[m] += (Number(p.valor) || 0);
-      }
-    });
+    // O gráfico de 6 meses ignora o filtro de período de propósito: alimentado
+    // pelas propostas já filtradas, "Este Mês" deixava cinco colunas zeradas.
+    // A chave é AAAA-MM, então dezembro do ano passado não soma com o deste.
+    const chartData = ultimosMeses(6).map(m => ({
+      label: m.mes,
+      value: propostas
+        .filter(p => p.status === 'aceita' && chaveMes(p.data) === m.chave)
+        .reduce((s, p) => s + (Number(p.valor) || 0), 0),
+    }));
 
-    const chartData = Object.entries(receitaMensalMap).map(([label, value]) => ({ label, value }));
-    
     return {
       receita,
       enviadas: enviadas.length,
@@ -133,7 +116,7 @@ export default function FinanceiroPage({ leads = [], metas = {} }) {
       enviadasCount: enviadas.length,
       chartData
     };
-  }, [propostasFiltradas, metas]);
+  }, [propostasFiltradas, propostas, metas]);
 
   /* ── CRUD ── */
   const salvarProposta = (dados) => {
@@ -211,6 +194,17 @@ export default function FinanceiroPage({ leads = [], metas = {} }) {
               </button>
             ))}
           </div>
+          {semData > 0 && activePeriod !== 'Tudo' && (
+            <span
+              style={{
+                fontSize: 11.5, color: 'var(--yellow)', background: 'rgba(250,204,21,0.1)',
+                border: '1px solid rgba(250,204,21,0.3)', borderRadius: 6, padding: '4px 10px',
+              }}
+              title="Uma proposta sem data não pertence a nenhum período. Preencha a data para ela entrar nos números."
+            >
+              ⚠️ {semData} sem data — fora deste período
+            </span>
+          )}
           <button className="btn btn-primary" onClick={abrirNova}>
             + Nova Proposta
           </button>
@@ -255,7 +249,7 @@ export default function FinanceiroPage({ leads = [], metas = {} }) {
         </div>
 
         {/* Row 2 — Proposals table + Meta ring */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20, marginBottom: 20 }}>
+        <div className="grid-conteudo" style={{ marginBottom: 20 }}>
           {/* LEFT: Proposals table */}
           <div className="crm-card">
             <div className="crm-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -265,11 +259,7 @@ export default function FinanceiroPage({ leads = [], metas = {} }) {
               </button>
             </div>
 
-            {carregando ? (
-              <div style={{ textAlign: 'center', color: 'var(--text3)', padding: 30 }}>
-                Carregando...
-              </div>
-            ) : propostasOrdenadas.length === 0 ? (
+            {propostasOrdenadas.length === 0 ? (
               <div style={{ textAlign: 'center', color: 'var(--text3)', padding: 40, fontSize: 14 }}>
                 <div style={{ fontSize: 32, marginBottom: 10 }}>📋</div>
                 Nenhuma proposta cadastrada
@@ -473,6 +463,9 @@ export default function FinanceiroPage({ leads = [], metas = {} }) {
         <div className="crm-card">
           <div className="crm-card-header">
             <div className="crm-card-title">📈 Receita por Mês (Últimos 6 meses)</div>
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
+              Sempre os 6 últimos meses, independente do período escolhido acima.
+            </div>
           </div>
           <div className="bar-chart" style={{ paddingTop: 16 }}>
             {kpiData.chartData.map((m) => {
@@ -505,16 +498,19 @@ export default function FinanceiroPage({ leads = [], metas = {} }) {
       </div>
 
       {/* Modal */}
-      <PropostaModal
-        isOpen={modalAberto}
-        onClose={() => {
-          setModalAberto(false);
-          setPropostaEmEdicao(null);
-        }}
-        onSave={salvarProposta}
-        propostaAtual={propostaEmEdicao}
-        leads={leads}
-      />
+      {modalAberto && (
+        <PropostaModal
+          key={propostaEmEdicao?.id || 'nova'}
+          isOpen={modalAberto}
+          onClose={() => {
+            setModalAberto(false);
+            setPropostaEmEdicao(null);
+          }}
+          onSave={salvarProposta}
+          propostaAtual={propostaEmEdicao}
+          leads={leads}
+        />
+      )}
     </div>
   );
 }

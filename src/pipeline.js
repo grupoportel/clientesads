@@ -4,16 +4,23 @@
 // própria o que contava como "ganho", o que dava números diferentes para a
 // mesma pergunta no Dashboard e na barra de estatísticas.
 
+// As cores das sete etapas do funil foram validadas para daltonismo e para
+// contraste sobre o fundo escuro do app (script validate_palette do dataviz).
+// A paleta anterior reprovava: "Nenhum" e "Lead Qualificado" eram dois azuis
+// indistinguíveis mesmo com visão normal (ΔE 7,0), e "Venda" e "Contrato
+// Realizado" colidiam sob deuteranopia (ΔE 3,7).
+// "Nenhum" (cinza recessivo) e "Perda" (vermelho de estado) ficam fora do
+// gráfico do funil, então não entram na paleta categórica.
 export const ETAPAS_PADRAO = [
-  { id: 'nenhum',             label: 'Nenhum',              cls: 's-nenhum',             cor: '#5865f2', probabilidade: 0,   ganho: false, perdido: false, ativo: true },
-  { id: 'lead-qualificado',   label: 'Lead Qualificado',    cls: 's-lead-qualificado',   cor: '#3b82f6', probabilidade: 10,  ganho: false, perdido: false, ativo: true },
-  { id: 'ligacao-feita',      label: 'Ligação Feita',       cls: 's-ligacao-feita',      cor: '#eab308', probabilidade: 20,  ganho: false, perdido: false, ativo: true },
-  { id: 'contato-decisor',    label: 'Contato com Decisor', cls: 's-contato-decisor',    cor: '#a855f7', probabilidade: 40,  ganho: false, perdido: false, ativo: true },
-  { id: 'reuniao-marcada',    label: 'Reunião Marcada',     cls: 's-reuniao-marcada',    cor: '#22c55e', probabilidade: 60,  ganho: false, perdido: false, ativo: true },
-  { id: 'contrato-realizado', label: 'Contrato Realizado',  cls: 's-contrato-realizado', cor: '#ec4899', probabilidade: 90,  ganho: true,  perdido: false, ativo: true },
-  { id: 'venda',              label: 'Venda',               cls: 's-venda',              cor: '#14b8a6', probabilidade: 100, ganho: true,  perdido: false, ativo: true },
-  { id: 'concluido',          label: 'Concluído',           cls: 's-concluido',          cor: '#8b5cf6', probabilidade: 100, ganho: true,  perdido: false, ativo: true },
-  { id: 'perda',              label: 'Perda',               cls: 's-perda',              cor: '#ef4444', probabilidade: 0,   ganho: false, perdido: true,  ativo: true },
+  { id: 'nenhum',             label: 'Nenhum',              cls: 's-nenhum',             cor: '#64748b', probabilidade: 0,   ganho: false, perdido: false, ativo: true },
+  { id: 'lead-qualificado',   label: 'Lead Qualificado',    cls: 's-lead-qualificado',   cor: '#1791d0', probabilidade: 10,  ganho: false, perdido: false, ativo: true },
+  { id: 'ligacao-feita',      label: 'Ligação Feita',       cls: 's-ligacao-feita',      cor: '#d97706', probabilidade: 20,  ganho: false, perdido: false, ativo: true },
+  { id: 'contato-decisor',    label: 'Contato com Decisor', cls: 's-contato-decisor',    cor: '#9333ea', probabilidade: 40,  ganho: false, perdido: false, ativo: true },
+  { id: 'reuniao-marcada',    label: 'Reunião Marcada',     cls: 's-reuniao-marcada',    cor: '#0fa06f', probabilidade: 60,  ganho: false, perdido: false, ativo: true },
+  { id: 'contrato-realizado', label: 'Contrato Realizado',  cls: 's-contrato-realizado', cor: '#c026d3', probabilidade: 90,  ganho: true,  perdido: false, ativo: true },
+  { id: 'venda',              label: 'Venda',               cls: 's-venda',              cor: '#0499b3', probabilidade: 100, ganho: true,  perdido: false, ativo: true },
+  { id: 'concluido',          label: 'Concluído',           cls: 's-concluido',          cor: '#6ba30d', probabilidade: 100, ganho: true,  perdido: false, ativo: true },
+  { id: 'perda',              label: 'Perda',               cls: 's-perda',              cor: '#dc2626', probabilidade: 0,   ganho: false, perdido: true,  ativo: true },
 ];
 
 // Status antigos que ainda podem existir em registros gravados no banco

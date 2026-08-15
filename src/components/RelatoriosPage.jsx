@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { acharEtapa, etapasDoFunil, ehGanho, formatarBRL, formatarBRLCurto } from '../pipeline';
+import { etapasDoFunil, ehGanho } from '../pipeline';
 import { escutarAtividadesRecentes, tempoRelativo, TIPOS } from '../atividades';
 
 const getTaxaColor = (taxa) => {
@@ -10,15 +10,19 @@ const getTaxaColor = (taxa) => {
 
 export default function RelatoriosPage({ leads = [], etapas = [] }) {
   const [activePeriod, setActivePeriod] = useState('30 dias');
+  // Relógio lido uma vez na montagem: dentro de um useMemo com dependências,
+  // cada recálculo pegaria um instante diferente e o corte de período mudaria
+  // no meio da navegação.
+  const montadoEm = useMemo(() => new Date().getTime(), []);
   const periods = ['7 dias', '30 dias', '90 dias', 'Todos'];
 
   /* ─── Period filter ─────────────────────────────────────────────────── */
   const leadsFiltrados = useMemo(() => {
     const days = activePeriod === '7 dias' ? 7 : activePeriod === '30 dias' ? 30 : activePeriod === '90 dias' ? 90 : null;
     if (!days) return leads;
-    const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+    const cutoff = new Date(montadoEm - days * 86400000).toISOString();
     return leads.filter(l => (l.createdAt || '') >= cutoff);
-  }, [leads, activePeriod]);
+  }, [leads, activePeriod, montadoEm]);
 
   /* ─── Funnel ──────────────────────────────────────────────────────── */
   const funilData = useMemo(() => {
@@ -157,7 +161,7 @@ export default function RelatoriosPage({ leads = [], etapas = [] }) {
               {funilData.map((stage, i) => (
                 <div key={i}>
                   <div style={{
-                    display: 'grid', gridTemplateColumns: '180px 1fr 80px 90px',
+                    display: 'grid', gridTemplateColumns: 'minmax(90px, 180px) 1fr 54px 70px',
                     alignItems: 'center', gap: 16, padding: '12px 0',
                   }}>
                     <div>
@@ -200,7 +204,7 @@ export default function RelatoriosPage({ leads = [], etapas = [] }) {
         </div>
 
         {/* Row 2 — Performance + Origem */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 24 }}>
+        <div className="grid-2" style={{ marginBottom: 24 }}>
           {/* Performance por Responsável */}
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
             <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--border)' }}>
@@ -281,7 +285,7 @@ export default function RelatoriosPage({ leads = [], etapas = [] }) {
         </div>
 
         {/* Row 3 — Nichos + Atividade */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+        <div className="grid-2">
           {/* Distribuição por Nicho */}
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '24px' }}>
             <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: '1rem', marginBottom: 20 }}>🏢 Distribuição por Nicho</div>

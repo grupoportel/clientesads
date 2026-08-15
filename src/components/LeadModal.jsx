@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { hojeISO } from '../periodo';
 
 import { etapasAtivas, acharEtapa, formatarBRL } from '../pipeline';
 
@@ -12,16 +13,13 @@ const CAMPOS_INICIAIS = {
 
 // Recebemos as listas do Firebase (nichos, responsaveis, etc.)
 export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos = [], responsaveis = [], estados = [], cidades = [], etapas = [] }) {
-  const [formData, setFormData] = useState(CAMPOS_INICIAIS);
-
-  useEffect(() => {
-    if (leadAtual) {
-      setFormData({ ...CAMPOS_INICIAIS, ...leadAtual });
-    } else {
-      const hoje = new Date().toISOString().slice(0, 10);
-      setFormData({ ...CAMPOS_INICIAIS, data_entrada: hoje });
-    }
-  }, [leadAtual, isOpen]);
+  // O App remonta este modal via key a cada abertura, então o estado inicial é
+  // calculado uma vez na montagem — sem efeito que dispara um render extra.
+  const [formData, setFormData] = useState(() => (
+    leadAtual
+      ? { ...CAMPOS_INICIAIS, ...leadAtual }
+      : { ...CAMPOS_INICIAIS, data_entrada: hojeISO() }
+  ));
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -210,10 +208,35 @@ export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos =
               <label>Observação Geral</label>
               <textarea className="form-control" name="obs" value={formData.obs} onChange={handleChange} />
             </div>
-            <div className="form-group full">
-              <label>Histórico de Contatos</label>
-              <textarea className="form-control" name="historico" value={formData.historico} onChange={handleChange} placeholder="27/05 - Enviou DM..." />
-            </div>
+            {/* Campo aposentado: a linha do tempo registra tudo sozinha desde a
+                Fase 2. Só aparece quando já existe conteúdo antigo, e em modo
+                leitura — manter os dois editáveis convidava a divergirem. */}
+            {formData.historico && (
+              <div className="form-group full">
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  Histórico de Contatos
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
+                    letterSpacing: '0.06em', color: 'var(--text3)',
+                    background: 'var(--surface2)', border: '1px solid var(--border)',
+                    borderRadius: 4, padding: '2px 7px',
+                  }}>
+                    Anotação antiga
+                  </span>
+                </label>
+                <textarea
+                  className="form-control"
+                  name="historico"
+                  value={formData.historico}
+                  readOnly
+                  style={{ opacity: 0.75, cursor: 'default' }}
+                />
+                <span style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, display: 'block', lineHeight: 1.5 }}>
+                  Preservado do jeito que estava. As interações a partir de agora
+                  entram sozinhas na Linha do Tempo, no painel de detalhe do lead.
+                </span>
+              </div>
+            )}
 
             <div className="form-group full">
               <label>Motivo de Perda (se aplicável)</label>
