@@ -15,7 +15,11 @@ export function configuracaoIa(env = process.env) {
     return {
       provedor: 'gemini',
       chave: GEMINI_API_KEY,
-      modelo: GEMINI_MODELO || 'gemini-2.5-flash',
+      // Sem nome padrão de propósito. Fixar um aqui foi o que quebrou a
+      // análise: o Google aposentou "gemini-2.5-flash" para chaves novas e
+      // passou a responder 404. Nome de modelo é coisa que envelhece sozinha,
+      // então o certo é perguntar à API o que a chave aceita.
+      modelo: GEMINI_MODELO || null,
     };
   }
   if (ANTHROPIC_API_KEY) {
@@ -168,27 +172,94 @@ export function interpretarAnalise(texto = '') {
 // ── Chamada ao provedor ─────────────────────────────────────────────────────
 // Única parte que toca a rede. O resto do arquivo é puro de propósito.
 
+/**
+ * Escolhe um modelo entre os que a chave realmente tem.
+ *
+ * Pura para poder ser testada sem chamar o Google. A ordem de preferência
+ * evita as duas armadilhas: modelo que não gera texto (embedding, imagem, voz)
+ * e modelo experimental, que some sem aviso — foi assim que a análise quebrou
+ * da primeira vez.
+ */
+export function escolherModelo(modelos = []) {
+  const candidatos = modelos.filter(m =>
+    (m?.supportedGenerationMethods || []).includes('generateContent') &&
+    !/embedding|aqa|vision|image|imagen|tts|audio|video|live|veo/i.test(m.name || '')
+  );
+  if (candidatos.length === 0) return null;
+
+  const nota = (m) => {
+    const nome = String(m.name || '').replace(/^models\//, '');
+    let pontos = 0;
+    if (/flash/i.test(nome) && !/lite/i.test(nome)) pontos += 100; // rápido e barato
+    else if (/flash/i.test(nome)) pontos += 80;
+    else if (/pro/i.test(nome)) pontos += 60;
+    if (/preview|exp|experimental/i.test(nome)) pontos -= 50;      // some sem aviso
+    // Versão maior ganha: 3.0 acima de 2.5
+    const versao = /(\d+)(?:\.(\d+))?/.exec(nome);
+    if (versao) pontos += Number(versao[1]) * 10 + Number(versao[2] || 0);
+    return pontos;
+  };
+
+  const melhor = candidatos.slice().sort((a, b) => nota(b) - nota(a))[0];
+  return String(melhor.name || '').replace(/^models\//, '');
+}
+
+// Guardado no módulo: numa função serverless quente isso evita repetir a
+// consulta a cada análise. Instância nova descobre de novo, o que é barato.
+let modeloEmCache = null;
+
+export async function descobrirModelo(cfg, ms = 10000) {
+  if (modeloEmCache) return modeloEmCache;
+  const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', {
+    signal: AbortSignal.timeout(ms),
+    headers: { 'x-goog-api-key': cfg.chave },
+  });
+  if (!r.ok) throw new Error(`Gemini respondeu ${r.status} ao listar modelos`);
+  const corpo = await r.json();
+  modeloEmCache = escolherModelo(corpo.models || []);
+  return modeloEmCache;
+}
+
+async function gerarComGemini(prompt, cfg, modelo, ms) {
+  const r = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`,
+    {
+      method: 'POST',
+      signal: AbortSignal.timeout(ms),
+      // A chave vai no cabeçalho, nunca na URL: query string aparece em log
+      // de servidor e de proxy, e ali ela vazaria inteira.
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': cfg.chave },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 1200 },
+      }),
+    }
+  );
+  if (!r.ok) throw new Error(`Gemini respondeu ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  const corpo = await r.json();
+  return corpo?.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
+}
+
 export async function chamarIa(prompt, cfg, ms = 25000) {
   const parar = AbortSignal.timeout(ms);
 
   if (cfg.provedor === 'gemini') {
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${cfg.modelo}:generateContent`,
-      {
-        method: 'POST',
-        signal: parar,
-        // A chave vai no cabeçalho, nunca na URL: query string aparece em log
-        // de servidor e de proxy, e ali ela vazaria inteira.
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': cfg.chave },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 1200 },
-        }),
-      }
-    );
-    if (!r.ok) throw new Error(`Gemini respondeu ${r.status}: ${(await r.text()).slice(0, 200)}`);
-    const corpo = await r.json();
-    return corpo?.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
+    const modelo = cfg.modelo || await descobrirModelo(cfg);
+    if (!modelo) throw new Error('Nenhum modelo de geração de texto disponível para esta chave.');
+
+    try {
+      return await gerarComGemini(prompt, cfg, modelo, ms);
+    } catch (erro) {
+      // 404 aqui significa modelo aposentado, e ele não volta. Descobrir o que
+      // a chave aceita agora é melhor do que deixar a análise quebrada até
+      // alguém reparar e editar uma variável de ambiente.
+      if (!/\b404\b/.test(erro.message)) throw erro;
+      modeloEmCache = null;
+      const substituto = await descobrirModelo(cfg);
+      if (!substituto || substituto === modelo) throw erro;
+      console.warn(`[ia] Modelo ${modelo} indisponível; usando ${substituto}`);
+      return await gerarComGemini(prompt, cfg, substituto, ms);
+    }
   }
 
   if (cfg.provedor === 'anthropic') {

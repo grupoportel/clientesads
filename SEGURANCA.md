@@ -58,7 +58,7 @@ Confirme que estas variáveis existem no painel do Vercel (Settings → Environm
 | `SMTP_REMETENTE` | endereço que aparece no "de" | não, cai em `SMTP_USER` |
 | `SMTP_NOME` | nome que aparece no "de" | não, cai em `Grupo Portel` |
 | `GEMINI_API_KEY` | análise de lead por IA | sim, para a IA funcionar |
-| `GEMINI_MODELO` | modelo do Gemini | não, cai em `gemini-2.5-flash` |
+| `GEMINI_MODELO` | fixa um modelo do Gemini | não — sem ela o modelo é descoberto pela API |
 | `ANTHROPIC_API_KEY` | alternativa ao Gemini | não |
 | `GOOGLE_CALENDAR_ID` | eventos no Google Agenda | sim, para a agenda funcionar |
 | `AGENDA_FUSO` | fuso dos eventos | não, cai em `America/Cuiaba` |
@@ -241,3 +241,27 @@ Google recusar, o e-mail ainda sai; se o e-mail falhar, a tarefa ainda é criada
 O endpoint responde `200` com o estado de cada etapa em vez de um erro só —
 devolver `500` faria a tela descartar o que funcionou, e a pessoa remarcaria
 tudo achando que nada aconteceu.
+
+### Nome de modelo não se fixa no código
+
+A primeira versão trazia `gemini-2.5-flash` escrito no código. Ele foi
+aposentado para chaves novas e o Google passou a responder `404`, quebrando a
+análise para quem tivesse acabado de criar a chave — build verde, teste verde,
+quebrado em produção.
+
+Agora o modelo é descoberto: o código lista os modelos que a chave aceita e
+escolhe entre os que geram texto, preferindo `flash` estável e a versão mais
+alta, e evitando `preview`/`exp`, que somem sem aviso. Se um modelo em uso for
+aposentado no meio do caminho, o `404` dispara uma redescoberta e a chamada é
+refeita sozinha.
+
+`GEMINI_MODELO` continua existindo para fixar um nome quando houver motivo,
+mas o padrão é não fixar.
+
+### Google Agenda: a API tem que estar ativa no projeto certo
+
+O erro `Calendar API has not been used in project <número>` quer dizer que a
+API foi ativada em outro projeto do Google Cloud. O que vale é o projeto dono
+da conta de serviço — o mesmo do Firebase, `crm---grupo-portel`. O número que
+aparece na mensagem de erro é o do projeto correto; o link que o próprio erro
+traz já leva ao lugar certo.

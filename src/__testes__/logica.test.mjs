@@ -7,7 +7,7 @@ import { saudeCliente, saudeMediaDaCarteira, receitaRecorrente, clienteAPartirDo
 import { normalizarMeta, achatar, extrairCampos, extrairUtm, acharDuplicado, camposParaCompletar } from '../../api/_leadIn.js';
 import { papelDoUsuario, podeEditar, podeAdministrar, podeVer, motivoBloqueio } from '../papeis.js';
 import { configuracaoAgenda, somarMinutos, inicioDoEvento, textoDataHora, montarEvento, textoConfirmacao, explicarErroAgenda } from '../../api/_agenda.js';
-import { configuracaoIa, textoDoHtml, urlDoSite, montarPromptAnalise, interpretarAnalise, CAMPOS_ANALISE } from '../../api/_ia.js';
+import { escolherModelo, configuracaoIa, textoDoHtml, urlDoSite, montarPromptAnalise, interpretarAnalise, CAMPOS_ANALISE } from '../../api/_ia.js';
 import { configuracaoSmtp, caixaDeEntrada, explicarErroSmtp } from '../../api/_email.js';
 import { paraLixeira, deLixeira, diasNaLixeira, vencidos, planoDeDesfazer, textoTempoNaLixeira, PRAZO_DIAS } from '../lixeira.js';
 
@@ -591,6 +591,32 @@ t('404 fala da agenda', explicarErroAgenda({ message: 'respondeu 404: not found'
 t('403 fala de permissao', explicarErroAgenda({ message: 'respondeu 403: forbidden' }).includes('alterações nos eventos'));
 t('403 de api desligada e especifico', explicarErroAgenda({ message: '403 accessNotConfigured' }).includes('não está ativada'));
 t('erro estranho nao vira palpite', explicarErroAgenda({ message: 'algo diferente' }) === null);
+
+
+// ── Escolha de modelo do Gemini ──
+// Fixar um nome no codigo foi o que quebrou a analise: o Google aposentou o
+// modelo e passou a responder 404 para chaves novas.
+const M = (nome, metodos = ['generateContent']) => ({ name: 'models/' + nome, supportedGenerationMethods: metodos });
+
+t('lista vazia nao escolhe nada', escolherModelo([]) === null);
+t('tira o prefixo models/', escolherModelo([M('gemini-3-flash')]) === 'gemini-3-flash');
+
+// So serve o que gera texto
+t('ignora embedding', escolherModelo([M('text-embedding-004', ['embedContent']), M('gemini-3-flash')]) === 'gemini-3-flash');
+t('ignora quem nao gera conteudo', escolherModelo([M('gemini-x', ['countTokens'])]) === null);
+t('ignora modelo de imagem', escolherModelo([M('imagen-4-generate'), M('gemini-3-flash')]) === 'gemini-3-flash');
+t('ignora modelo de voz', escolherModelo([M('gemini-3-flash-tts'), M('gemini-3-flash')]) === 'gemini-3-flash');
+
+// Preferencias
+t('flash ganha de pro', escolherModelo([M('gemini-3-pro'), M('gemini-3-flash')]) === 'gemini-3-flash');
+t('flash cheio ganha do lite', escolherModelo([M('gemini-3-flash-lite'), M('gemini-3-flash')]) === 'gemini-3-flash');
+t('versao maior ganha', escolherModelo([M('gemini-2.5-flash'), M('gemini-3-flash')]) === 'gemini-3-flash');
+t('menor decimal perde', escolherModelo([M('gemini-2.0-flash'), M('gemini-2.5-flash')]) === 'gemini-2.5-flash');
+
+// Experimental some sem aviso: so serve se nao houver outro
+t('estavel ganha do preview', escolherModelo([M('gemini-4-flash-preview'), M('gemini-3-flash')]) === 'gemini-3-flash');
+t('preview serve se for o unico', escolherModelo([M('gemini-4-flash-preview')]) === 'gemini-4-flash-preview');
+t('pro serve se nao houver flash', escolherModelo([M('gemini-3-pro')]) === 'gemini-3-pro');
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);
