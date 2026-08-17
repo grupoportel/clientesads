@@ -51,6 +51,12 @@ Confirme que estas variáveis existem no painel do Vercel (Settings → Environm
 | `GMAIL_USER` | envio de e-mail | **não — falta** |
 | `GMAIL_APP_PASSWORD` | envio de e-mail | **não — falta** |
 | `EMAIL_WEBHOOK_SECRET` | webhook de e-mail | **não — falta** |
+| `SMTP_HOST` | envio de e-mail | sim |
+| `SMTP_PORT` | envio de e-mail — 465 (SSL) ou 587 (STARTTLS) | não, cai em 465 |
+| `SMTP_USER` | envio de e-mail | sim |
+| `SMTP_PASS` | envio de e-mail | sim |
+| `SMTP_REMETENTE` | endereço que aparece no "de" | não, cai em `SMTP_USER` |
+| `SMTP_NOME` | nome que aparece no "de" | não, cai em `Grupo Portel` |
 
 As três últimas não estão no `.env.local`, então o envio de e-mail não funciona em
 desenvolvimento. Se já estiverem configuradas no Vercel, produção segue normal —
@@ -142,3 +148,27 @@ node -e "console.log(require.resolve('jose',{paths:['./node_modules/jwks-rsa/src
 
 Tem que terminar em `jose/dist/node/cjs/index.js`. Se aparecer `webapi`, o
 override caiu e os endpoints autenticados vão quebrar no próximo deploy.
+
+---
+
+## Envio de e-mail (SMTP)
+
+O provedor é configuração, não código — `api/_email.js` monta o transporte a
+partir das variáveis. Para a Hostinger:
+
+| Variável | Valor |
+|---|---|
+| `SMTP_HOST` | `smtp.hostinger.com` |
+| `SMTP_PORT` | `465` |
+| `SMTP_USER` | o endereço completo, ex. `contato@grupoportel.com` |
+| `SMTP_PASS` | a senha da caixa de e-mail (a mesma do webmail) |
+| `SMTP_REMETENTE` | opcional, se o "de" for diferente do usuário |
+
+**Porta 465 ou 587, não misture:** a 465 fala TLS desde o primeiro byte
+(`secure: true`); a 587 começa em texto puro e sobe com STARTTLS
+(`secure: false`). O código decide isso pela porta. Configurar 587 esperando
+SSL trava a conexão sem erro legível — é o engano mais comum aqui.
+
+Enquanto `SMTP_HOST` não estiver definido, o envio continua usando
+`GMAIL_USER` / `GMAIL_APP_PASSWORD`, para a troca não derrubar o envio no meio
+do caminho. Depois que a Hostinger estiver funcionando, essas duas podem sair.

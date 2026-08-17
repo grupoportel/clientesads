@@ -6,6 +6,7 @@ import { regrasQueDisparam, regraValida, calcularPrazo, planejarAcoes } from '..
 import { saudeCliente, saudeMediaDaCarteira, receitaRecorrente, clienteAPartirDoLead, ganhosSemCliente } from '../clientes.js';
 import { normalizarMeta, achatar, extrairCampos, extrairUtm, acharDuplicado, camposParaCompletar } from '../../api/_leadIn.js';
 import { papelDoUsuario, podeEditar, podeAdministrar, podeVer, motivoBloqueio } from '../papeis.js';
+import { configuracaoSmtp, caixaDeEntrada, explicarErroSmtp } from '../../api/_email.js';
 import { paraLixeira, deLixeira, diasNaLixeira, vencidos, planoDeDesfazer, textoTempoNaLixeira, PRAZO_DIAS } from '../lixeira.js';
 
 let ok = 0, fail = 0;
@@ -429,6 +430,39 @@ t('campo que nao existia volta a null', planoVazio['L1/valor'] === null);
 t('string vazia vira null', planoVazio['L2/valor'] === null);
 t('zero nao e confundido com vazio', planoVazio['L3/valor'] === 0);
 t('nada selecionado gera plano vazio', Object.keys(planoDeDesfazer({}, 'status')).length === 0);
+
+
+// ── Configuração de e-mail ──
+const hostinger = { SMTP_HOST: 'smtp.hostinger.com', SMTP_USER: 'contato@grupoportel.com', SMTP_PASS: 'x' };
+
+t('sem credencial nenhuma devolve null', configuracaoSmtp({}) === null);
+t('host sem senha nao vale', configuracaoSmtp({ SMTP_HOST: 'a', SMTP_USER: 'b' }) === null);
+
+const cfg465 = configuracaoSmtp({ ...hostinger, SMTP_PORT: '465' });
+t('465 usa TLS direto', cfg465.secure === true && cfg465.port === 465);
+
+// 587 e STARTTLS: marcar secure aqui trava a conexao sem erro claro
+const cfg587 = configuracaoSmtp({ ...hostinger, SMTP_PORT: '587' });
+t('587 nao usa TLS direto', cfg587.secure === false && cfg587.port === 587);
+
+t('porta ausente cai em 465', configuracaoSmtp(hostinger).port === 465);
+t('porta invalida cai em 465', configuracaoSmtp({ ...hostinger, SMTP_PORT: 'abc' }).port === 465);
+t('remetente padrao e o usuario', configuracaoSmtp(hostinger).remetente === 'contato@grupoportel.com');
+t('remetente pode ser outro', configuracaoSmtp({ ...hostinger, SMTP_REMETENTE: 'nao-responda@grupoportel.com' }).remetente === 'nao-responda@grupoportel.com');
+t('nome padrao', configuracaoSmtp(hostinger).nome === 'Grupo Portel');
+
+// O formato antigo continua valendo enquanto a Vercel nao tiver as variaveis novas
+const antigo = configuracaoSmtp({ GMAIL_USER: 'a@gmail.com', GMAIL_APP_PASSWORD: 'senha' });
+t('gmail antigo ainda funciona', antigo.host === 'smtp.gmail.com' && antigo.origem === 'gmail');
+t('smtp novo tem prioridade', configuracaoSmtp({ ...hostinger, GMAIL_USER: 'a@gmail.com', GMAIL_APP_PASSWORD: 's' }).origem === 'smtp');
+
+t('caixa de entrada usa o remetente', caixaDeEntrada({ ...hostinger, SMTP_REMETENTE: 'oi@x.com' }) === 'oi@x.com');
+t('caixa de entrada cai no usuario', caixaDeEntrada(hostinger) === 'contato@grupoportel.com');
+t('caixa de entrada sem nada e vazia', caixaDeEntrada({}) === '');
+
+t('EAUTH vira aviso de senha', explicarErroSmtp({ code: 'EAUTH' }).includes('SMTP_USER'));
+t('timeout vira aviso de host', explicarErroSmtp({ code: 'ETIMEDOUT' }).includes('SMTP_HOST'));
+t('erro desconhecido nao e sequestrado', explicarErroSmtp({ code: 'XPTO', message: 'deu ruim' }) === null);
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);

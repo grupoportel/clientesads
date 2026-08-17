@@ -1,10 +1,13 @@
 // api/send-email.js
-// Vercel Serverless Function — Envio de E-mails via Gmail (SMTP)
+// Vercel Serverless Function — Envio de e-mails por SMTP.
 // Exige token de sessão do Firebase: sem isso, qualquer pessoa poderia enviar
 // e-mails assinados como Grupo Portel.
+//
+// O provedor vem das variáveis de ambiente, não do código: ver api/_email.js.
 
 import nodemailer from 'nodemailer';
 import { exigirUsuario } from './_auth.js';
+import { configuracaoSmtp, explicarErroSmtp } from './_email.js';
 
 // Escapa HTML para que o corpo digitado pelo atendente não injete marcação
 // na mensagem enviada.
@@ -31,27 +34,28 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Preencha destinatário, assunto e mensagem.' });
   }
 
-  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
-    console.error('[Email] GMAIL_USER / GMAIL_APP_PASSWORD não configurados.');
-    return res.status(500).json({ error: 'O envio de e-mail ainda não foi configurado no servidor.' });
+  const smtp = configuracaoSmtp();
+  if (!smtp) {
+    console.error('[Email] Nenhuma credencial SMTP configurada.');
+    return res.status(500).json({
+      error: 'O envio de e-mail ainda não foi configurado no servidor. '
+        + 'Defina SMTP_HOST, SMTP_USER e SMTP_PASS.',
+    });
   }
 
   const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true, // SSL
-    auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_APP_PASSWORD, // Senha de Aplicativo de 16 dígitos
-    },
+    host: smtp.host,
+    port: smtp.port,
+    secure: smtp.secure,
+    auth: smtp.auth,
   });
 
   try {
     await transporter.sendMail({
-      from: `"Grupo Portel" <${process.env.GMAIL_USER}>`,
+      from: `"${smtp.nome}" <${smtp.remetente}>`,
       to: para,
       subject: assunto,
-      replyTo: usuario.email || process.env.GMAIL_USER,
+      replyTo: usuario.email || smtp.remetente,
       text: corpo,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
@@ -69,10 +73,14 @@ export default async function handler(req, res) {
       `,
     });
 
-    console.log(`[Email] Enviado por ${usuario.email} para: ${para}`);
+    console.log(`[Email] Enviado por ${usuario.email} para ${para} via ${smtp.host}`);
     return res.status(200).json({ success: true, message: 'E-mail enviado com sucesso!' });
   } catch (error) {
-    console.error('[Email] Erro ao enviar e-mail:', error);
-    return res.status(500).json({ error: 'Não foi possível enviar o e-mail. Verifique o endereço e tente novamente.' });
+    console.error('[Email] Erro ao enviar e-mail:', error?.code, error?.message);
+    // Erro de SMTP quase sempre é configuração, não o endereço digitado. Dizer
+    // "verifique o endereço" mandava a pessoa procurar no lugar errado.
+    return res.status(500).json({
+      error: explicarErroSmtp(error) || 'Não foi possível enviar o e-mail. Tente novamente.',
+    });
   }
 }

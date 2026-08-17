@@ -3,6 +3,7 @@
 // Este endpoint é chamado pelo script do Google quando um novo e-mail chega
 // na caixa do Gmail (timeportel@gmail.com).
 
+import { caixaDeEntrada } from './_email.js';
 import { obterBanco } from './_auth.js';
 
 export default async function handler(req, res) {
@@ -98,7 +99,7 @@ export default async function handler(req, res) {
       criadoEm: agora,
       origem:   'entrada',
       de:       emailRemetente,
-      para:     process.env.GMAIL_USER || 'timeportel@gmail.com',
+      para:     caixaDeEntrada() || 'timeportel@gmail.com',
     });
 
     console.log(`[EmailWebhook] ✅ E-mail de ${emailRemetente} salvo — thread: ${threadId}`);
