@@ -105,3 +105,21 @@ export function montarHtml(corpo = '') {
   return `<div style="font-family:-apple-system,'Segoe UI',Arial,sans-serif;`
     + `font-size:15px;line-height:1.6;color:#222;">\n${paragrafos}\n</div>`;
 }
+
+/**
+ * Escolhe o "responder a" da mensagem.
+ *
+ * Só usa o e-mail de quem enviou quando ele é do mesmo domínio do remetente.
+ * Assinar como "Grupo Portel <guilherme@grupoportel.com>" e mandar a resposta
+ * para um Gmail gratuito é o padrão que golpista usa — empresa no remetente,
+ * caixa pessoal na resposta — e os filtros do Gmail pesam isso.
+ *
+ * O login do CRM é uma conta Google, então esse desencontro era o caso normal,
+ * não a exceção.
+ */
+export function responderPara(emailDeQuemEnviou = '', remetente = '') {
+  const dominio = (endereco) => String(endereco).split('@')[1]?.toLowerCase() || '';
+  const doRemetente = dominio(remetente);
+  if (!doRemetente) return String(emailDeQuemEnviou || '');
+  return dominio(emailDeQuemEnviou) === doRemetente ? String(emailDeQuemEnviou) : String(remetente);
+}

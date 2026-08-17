@@ -10,7 +10,7 @@
 
 import nodemailer from 'nodemailer';
 import { exigirUsuario, obterBanco, comPrazo, explicarErroDeCredencial } from './_auth.js';
-import { configuracaoSmtp, explicarErroSmtp, montarHtml } from './_email.js';
+import { configuracaoSmtp, explicarErroSmtp, montarHtml, responderPara } from './_email.js';
 import {
   configuracaoAgenda, montarEvento, criarEvento,
   textoConfirmacao, textoDataHora, explicarErroAgenda,
@@ -66,7 +66,7 @@ export default async function handler(req, res) {
       await transporte.sendMail({
         from: `"${smtp.nome}" <${smtp.remetente}>`,
         to: lead.email,
-        replyTo: usuario.email || smtp.remetente,
+        replyTo: responderPara(usuario.email, smtp.remetente),
         subject: assunto,
         text: corpo,
         html: montarHtml(corpo),

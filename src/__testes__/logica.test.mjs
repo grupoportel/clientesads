@@ -8,7 +8,7 @@ import { normalizarMeta, achatar, extrairCampos, extrairUtm, acharDuplicado, cam
 import { papelDoUsuario, podeEditar, podeAdministrar, podeVer, motivoBloqueio } from '../papeis.js';
 import { configuracaoAgenda, somarMinutos, inicioDoEvento, textoDataHora, montarEvento, textoConfirmacao, explicarErroAgenda } from '../../api/_agenda.js';
 import { INTENCOES, acharIntencao, resumirHistorico, montarPromptMensagem, interpretarMensagem, ehTransitorio, atrasoDaTentativa, escolherModelo, configuracaoIa, textoDoHtml, urlDoSite, montarPromptAnalise, interpretarAnalise, CAMPOS_ANALISE } from '../../api/_ia.js';
-import { montarHtml, configuracaoSmtp, caixaDeEntrada, explicarErroSmtp } from '../../api/_email.js';
+import { responderPara, montarHtml, configuracaoSmtp, caixaDeEntrada, explicarErroSmtp } from '../../api/_email.js';
 import { paraLixeira, deLixeira, diasNaLixeira, vencidos, planoDeDesfazer, textoTempoNaLixeira, PRAZO_DIAS } from '../lixeira.js';
 
 let ok = 0, fail = 0;
@@ -715,6 +715,17 @@ const perigoso = montarHtml('<script>alert(1)</script> e "aspas" & E-comercial')
 t('escapa marcacao', !perigoso.includes('<script>'));
 t('escapa aspas', perigoso.includes('&quot;'));
 t('escapa e-comercial', perigoso.includes('&amp;'));
+
+
+// ── Responder a ──
+// Remetente no dominio proprio e resposta num Gmail gratuito e padrao de golpe,
+// e o login do CRM e uma conta Google, entao o desencontro era o caso normal.
+t('mesmo dominio mantem quem enviou', responderPara('vitor@grupoportel.com', 'contato@grupoportel.com') === 'vitor@grupoportel.com');
+t('gmail nao vira responder-a', responderPara('timeportel@gmail.com', 'guilherme@grupoportel.com') === 'guilherme@grupoportel.com');
+t('dominio diferente cai no remetente', responderPara('gui@outraempresa.com', 'contato@grupoportel.com') === 'contato@grupoportel.com');
+t('ignora maiuscula no dominio', responderPara('Vitor@GrupoPortel.com', 'contato@grupoportel.com') === 'Vitor@GrupoPortel.com');
+t('sem quem enviou usa o remetente', responderPara('', 'contato@grupoportel.com') === 'contato@grupoportel.com');
+t('sem remetente nao inventa', responderPara('a@b.com', '') === 'a@b.com');
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);

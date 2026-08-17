@@ -7,7 +7,7 @@
 
 import nodemailer from 'nodemailer';
 import { exigirUsuario } from './_auth.js';
-import { configuracaoSmtp, explicarErroSmtp, montarHtml } from './_email.js';
+import { configuracaoSmtp, explicarErroSmtp, montarHtml, responderPara } from './_email.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
       from: `"${smtp.nome}" <${smtp.remetente}>`,
       to: para,
       subject: assunto,
-      replyTo: usuario.email || smtp.remetente,
+      replyTo: responderPara(usuario.email, smtp.remetente),
       text: corpo,
       html: montarHtml(corpo),
     });
