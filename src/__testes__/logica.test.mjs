@@ -7,7 +7,7 @@ import { saudeCliente, saudeMediaDaCarteira, receitaRecorrente, clienteAPartirDo
 import { normalizarMeta, achatar, extrairCampos, extrairUtm, acharDuplicado, camposParaCompletar } from '../../api/_leadIn.js';
 import { papelDoUsuario, podeEditar, podeAdministrar, podeVer, motivoBloqueio } from '../papeis.js';
 import { configuracaoAgenda, somarMinutos, inicioDoEvento, textoDataHora, montarEvento, textoConfirmacao, explicarErroAgenda } from '../../api/_agenda.js';
-import { escolherModelo, configuracaoIa, textoDoHtml, urlDoSite, montarPromptAnalise, interpretarAnalise, CAMPOS_ANALISE } from '../../api/_ia.js';
+import { ehTransitorio, atrasoDaTentativa, escolherModelo, configuracaoIa, textoDoHtml, urlDoSite, montarPromptAnalise, interpretarAnalise, CAMPOS_ANALISE } from '../../api/_ia.js';
 import { configuracaoSmtp, caixaDeEntrada, explicarErroSmtp } from '../../api/_email.js';
 import { paraLixeira, deLixeira, diasNaLixeira, vencidos, planoDeDesfazer, textoTempoNaLixeira, PRAZO_DIAS } from '../lixeira.js';
 
@@ -617,6 +617,28 @@ t('menor decimal perde', escolherModelo([M('gemini-2.0-flash'), M('gemini-2.5-fl
 t('estavel ganha do preview', escolherModelo([M('gemini-4-flash-preview'), M('gemini-3-flash')]) === 'gemini-3-flash');
 t('preview serve se for o unico', escolherModelo([M('gemini-4-flash-preview')]) === 'gemini-4-flash-preview');
 t('pro serve se nao houver flash', escolherModelo([M('gemini-3-pro')]) === 'gemini-3-pro');
+
+
+// ── Repetir quando o Gemini congestiona ──
+// A cota gratuita responde 503 quando o modelo esta cheio, e passa em segundos.
+t('503 vale repetir', ehTransitorio('Gemini respondeu 503: high demand'));
+t('429 vale repetir', ehTransitorio('Gemini respondeu 429: rate limit'));
+t('500 vale repetir', ehTransitorio('Gemini respondeu 500'));
+t('UNAVAILABLE vale repetir', ehTransitorio('status UNAVAILABLE'));
+
+// Configuracao errada nao melhora repetindo: so demora mais para dar o mesmo nao
+t('401 nao repete', !ehTransitorio('Gemini respondeu 401: chave invalida'));
+t('403 nao repete', !ehTransitorio('Gemini respondeu 403: forbidden'));
+t('404 nao repete', !ehTransitorio('Gemini respondeu 404: modelo aposentado'));
+t('400 nao repete', !ehTransitorio('Gemini respondeu 400: pedido invalido'));
+t('erro sem codigo nao repete', !ehTransitorio('deu ruim'));
+
+// Espera crescente, sem o aleatorio para o teste ser deterministico
+t('primeira espera ~700ms', atrasoDaTentativa(1, 0) === 700);
+t('segunda dobra', atrasoDaTentativa(2, 0) === 1400);
+t('terceira dobra de novo', atrasoDaTentativa(3, 0) === 2800);
+t('o aleatorio soma ate 400ms', atrasoDaTentativa(1, 1) === 1100);
+t('tres tentativas somam menos de 5s', atrasoDaTentativa(1,1) + atrasoDaTentativa(2,1) < 5000);
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);

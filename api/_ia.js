@@ -220,6 +220,42 @@ export async function descobrirModelo(cfg, ms = 10000) {
   return modeloEmCache;
 }
 
+/**
+ * Diz se vale tentar de novo.
+ *
+ * A cota gratuita do Gemini responde 503 quando o modelo está congestionado, e
+ * 429 quando o limite por minuto estoura. Os dois passam sozinhos em segundos.
+ * Já 400, 401, 403 e 404 são configuração ou pedido errado: repetir só demora
+ * mais para chegar ao mesmo não.
+ */
+export function ehTransitorio(mensagem = '') {
+  return /\b(429|500|502|503|504)\b/.test(String(mensagem))
+    || /UNAVAILABLE|high demand|overloaded|rate limit/i.test(String(mensagem));
+}
+
+/** Espera crescente com um empurrãozinho aleatório, para duas abas que
+ *  falharam juntas não voltarem no mesmo instante. */
+export function atrasoDaTentativa(tentativa, aleatorio = 0.5) {
+  const base = 700 * Math.pow(2, tentativa - 1); // 700, 1400, 2800
+  return Math.round(base + aleatorio * 400);
+}
+
+async function comTentativas(fn, tentativas = 3) {
+  let ultimo;
+  for (let n = 1; n <= tentativas; n++) {
+    try {
+      return await fn();
+    } catch (erro) {
+      ultimo = erro;
+      if (n === tentativas || !ehTransitorio(erro.message)) throw erro;
+      const espera = atrasoDaTentativa(n, Math.random());
+      console.warn(`[ia] Tentativa ${n} falhou (${erro.message.slice(0, 60)}); repetindo em ${espera}ms`);
+      await new Promise(r => setTimeout(r, espera));
+    }
+  }
+  throw ultimo;
+}
+
 async function gerarComGemini(prompt, cfg, modelo, ms) {
   const r = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`,
@@ -248,7 +284,7 @@ export async function chamarIa(prompt, cfg, ms = 25000) {
     if (!modelo) throw new Error('Nenhum modelo de geração de texto disponível para esta chave.');
 
     try {
-      return await gerarComGemini(prompt, cfg, modelo, ms);
+      return await comTentativas(() => gerarComGemini(prompt, cfg, modelo, ms));
     } catch (erro) {
       // 404 aqui significa modelo aposentado, e ele não volta. Descobrir o que
       // a chave aceita agora é melhor do que deixar a análise quebrada até
@@ -258,7 +294,7 @@ export async function chamarIa(prompt, cfg, ms = 25000) {
       const substituto = await descobrirModelo(cfg);
       if (!substituto || substituto === modelo) throw erro;
       console.warn(`[ia] Modelo ${modelo} indisponível; usando ${substituto}`);
-      return await gerarComGemini(prompt, cfg, substituto, ms);
+      return await comTentativas(() => gerarComGemini(prompt, cfg, substituto, ms));
     }
   }
 
