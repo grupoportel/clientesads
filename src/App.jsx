@@ -44,6 +44,7 @@ const BuscaGlobal = lazy(() => import('./components/BuscaGlobal'));
 const LixeiraModal = lazy(() => import('./components/LixeiraModal'));
 const AgendarReuniaoModal = lazy(() => import('./components/AgendarReuniaoModal'));
 const PainelPrioridade = lazy(() => import('./components/PainelPrioridade'));
+const BuscarLeadsPage = lazy(() => import('./components/BuscarLeadsPage'));
 import { rodarAutomacoes } from './automacoesRunner';
 
 // No topo do módulo em vez de dentro do filtro: recriada a cada lead, ela
@@ -87,6 +88,7 @@ function Carregando() {
 const PAGINAS = [
   'dashboard', 'leads', 'clientes', 'tarefas', 'conversas',
   'emails', 'agenda', 'financeiro', 'metricas', 'relatorios', 'configuracoes',
+  'buscar-leads',
 ];
 
 const ROTULOS_CAMPOS = {
@@ -508,6 +510,52 @@ function App() {
     } catch (e) {
       showToast('Erro ao desfazer: ' + e.message, 'error');
     }
+  };
+
+  /**
+   * Grava os prospectados aprovados na busca.
+   *
+   * Uma gravação multi-caminho só: com 200 empresas aprovadas de uma vez, 200
+   * chamadas separadas travariam a tela. `origemProspeccao` fica no registro
+   * para ser possível saber depois de onde veio cada lead — e desfazer a
+   * importação inteira, se ela vier ruim.
+   */
+  const importarProspectados = async (candidatos, nomeDoNicho) => {
+    if (!exigirEdicao('importar leads')) return;
+
+    const agora = new Date().toISOString();
+    const gravacoes = {};
+    const criados = [];
+
+    candidatos.forEach(c => {
+      if (!c.nome) return;
+      const refNovo = push(ref(database, 'crm_data/leads'));
+      gravacoes[refNovo.key] = {
+        ...c,
+        id: refNovo.key,
+        status: 'nenhum',
+        nicho: nomeDoNicho || c.nicho || '',
+        origem: 'outro',
+        origemProspeccao: `Receita Federal · ${nomeDoNicho || ''}`.trim(),
+        data_entrada: agora.slice(0, 10),
+        createdAt: agora,
+        updatedAt: agora,
+      };
+      criados.push({ id: refNovo.key, nome: c.nome });
+    });
+
+    if (criados.length === 0) return;
+
+    await update(ref(database, 'crm_data/leads'), gravacoes);
+
+    await registrarAtividadesEmLote(criados.map(l => ({
+      leadId: l.id,
+      leadNome: l.nome,
+      tipo: 'criado',
+      descricao: `Lead trazido da busca na base da Receita${nomeDoNicho ? ` (${nomeDoNicho})` : ''}`,
+    })));
+
+    showToast(`${criados.length} lead(s) importado(s) da busca.`, 'success');
   };
 
   const exportarSelecionados = () => {
@@ -1034,6 +1082,14 @@ function App() {
         return <MetricasPage leads={leads} etapas={etapas} propostas={propostasGlobais} />;
       case 'relatorios':
         return <RelatoriosPage leads={leads} etapas={etapas} />;
+      case 'buscar-leads':
+        return (
+          <BuscarLeadsPage
+            leads={leads}
+            podeEditar={editavel}
+            aoImportar={importarProspectados}
+          />
+        );
       case 'configuracoes':
         if (!administravel) {
           return (

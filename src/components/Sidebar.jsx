@@ -5,6 +5,7 @@ const NAV_ITEMS = [
   { id: 'dashboard',     icon: '📊', label: 'Dashboard' },
   { id: 'leads',         icon: '👥', label: 'Leads',        badgeKey: 'leads' },
   { id: 'clientes',      icon: '🏢', label: 'Clientes' },
+  { id: 'buscar-leads',  icon: '🔎', label: 'Buscar Leads' },
   { id: 'tarefas',       icon: '✅', label: 'Tarefas' },
   { id: 'conversas',     icon: '💬', label: 'Conversas' },
   { id: 'emails',        icon: '✉️', label: 'E-mails' },

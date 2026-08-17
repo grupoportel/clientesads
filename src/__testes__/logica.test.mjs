@@ -9,6 +9,7 @@ import { papelDoUsuario, podeEditar, podeAdministrar, podeVer, motivoBloqueio } 
 import { configuracaoAgenda, somarMinutos, inicioDoEvento, textoDataHora, montarEvento, textoConfirmacao, explicarErroAgenda } from '../../api/_agenda.js';
 import { INTENCOES, acharIntencao, resumirHistorico, montarPromptMensagem, interpretarMensagem, ehTransitorio, atrasoDaTentativa, escolherModelo, configuracaoIa, textoDoHtml, urlDoSite, montarPromptAnalise, interpretarAnalise, CAMPOS_ANALISE } from '../../api/_ia.js';
 import { responderPara, montarHtml, configuracaoSmtp, caixaDeEntrada, explicarErroSmtp } from '../../api/_email.js';
+import { NICHOS_UI, UFS, nomeDaFatia } from '../prospeccaoNichos.js';
 import { NICHOS, acharNicho, codigosDoNicho, codigosDeVarios, conferirCodigos } from '../../scripts/_nichos.mjs';
 import { ultimaPasta, dividirLinha, montarCnpj, montarTelefone, linhaInteressa, linhaParaLead, formatarData, leadParaCsv, COL, SITUACAO_ATIVA } from '../../scripts/_receita.mjs';
 import { acharExistente, pontuarCandidato, prepararRevisao, resumoDaRevisao, ordenarRevisao } from '../prospeccao.js';
@@ -996,6 +997,25 @@ t('tabela completa nao acusa problema', conferirCodigos(
   Object.fromEntries(NICHOS.flatMap(n => [...n.cnaes, ...n.relacionados]).map(c => [c.codigo, c.nome]))
 ).length === 0);
 t('codigo sumido e acusado', conferirCodigos({}).length > 0);
+
+
+// ── Nichos: a tela e o preparo não podem divergir ──
+// São duas listas porque o preparo roda no Node e a tela no navegador. Se uma
+// mudar sem a outra, a busca abre um arquivo que não existe e o erro só
+// aparece na cara de quem clicou.
+t('as duas listas tem o mesmo tamanho', NICHOS_UI.length === NICHOS.length);
+t('os ids batem um a um', NICHOS_UI.every(u => NICHOS.some(n => n.id === u.id)));
+t('os nomes batem um a um', NICHOS_UI.every(u => NICHOS.find(n => n.id === u.id)?.nome === u.nome));
+t('o aviso do solar esta nos dois lados',
+  Boolean(NICHOS_UI.find(u => u.id === 'energia-solar')?.aviso) &&
+  Boolean(acharNicho('energia-solar').aviso));
+
+t('tem as 27 unidades da federacao', UFS.length === 27);
+t('nao repete UF', new Set(UFS).size === UFS.length);
+
+// O nome do arquivo é o contrato entre o preparo e a tela
+t('monta o nome da fatia', nomeDaFatia('climatizacao', 'MT') === 'climatizacao__MT.csv');
+t('aceita uf minuscula', nomeDaFatia('climatizacao', 'mt') === 'climatizacao__MT.csv');
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);
