@@ -9,6 +9,21 @@
 // quem decide é quem está na tela.
 
 const digitos = (v) => String(v || '').replace(/\D/g, '');
+
+/**
+ * Telefone que serve para identificar alguém.
+ *
+ * Só dígitos não basta: a Receita preenche o campo com zeros quando não tem o
+ * número, e o CRM casa duplicados por telefone. Sem esta checagem, duas
+ * empresas sem relação nenhuma que tivessem "0000000000" eram tratadas como a
+ * mesma, e a revisão escondia lead bom dizendo que já existia.
+ */
+export function telefoneUtil(v) {
+  const d = digitos(v);
+  if (d.length < 10) return '';
+  if (/^0+$/.test(d)) return '';
+  return d;
+}
 const minusculo = (v) => String(v || '').trim().toLowerCase();
 
 const numero = (v) => {
@@ -28,7 +43,7 @@ const numero = (v) => {
 export function acharExistente(candidato, leads = []) {
   const cnpj = digitos(candidato.cnpj);
   const email = minusculo(candidato.email);
-  const tel = digitos(candidato.whatsapp || candidato.telefone);
+  const tel = telefoneUtil(candidato.whatsapp || candidato.telefone);
 
   for (const lead of leads) {
     if (cnpj && cnpj.length === 14 && digitos(lead.cnpj) === cnpj) {
@@ -37,9 +52,9 @@ export function acharExistente(candidato, leads = []) {
     if (email && minusculo(lead.email) === email) {
       return { lead, por: 'e-mail' };
     }
-    if (tel.length >= 10) {
-      const doLead = [digitos(lead.telefone), digitos(lead.whatsapp)];
-      if (doLead.some(d => d.length >= 10 && d.endsWith(tel.slice(-10)))) {
+    if (tel) {
+      const doLead = [telefoneUtil(lead.telefone), telefoneUtil(lead.whatsapp)];
+      if (doLead.some(d => d && d.endsWith(tel.slice(-10)))) {
         return { lead, por: 'telefone' };
       }
     }
@@ -90,7 +105,14 @@ export function pontuarCandidato(candidato = {}) {
  * importar mesmo assim marca à mão, e vê ao lado qual lead já existe.
  */
 export function prepararRevisao(candidatos = [], leads = []) {
-  return candidatos.map((candidato, indice) => {
+  return candidatos.map((bruto, indice) => {
+    // Limpa telefone inútil antes de qualquer coisa: as fatias já geradas
+    // carregam "(0000) 0000-0000", e importar isso encheria o CRM de contatos
+    // falsos que ainda por cima quebram o dedup mais adiante.
+    const candidato = { ...bruto };
+    if (!telefoneUtil(candidato.telefone)) delete candidato.telefone;
+    if (!telefoneUtil(candidato.whatsapp)) delete candidato.whatsapp;
+
     const existente = acharExistente(candidato, leads);
     const { pontos, motivos } = pontuarCandidato(candidato);
 

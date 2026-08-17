@@ -12,7 +12,7 @@ import { responderPara, montarHtml, configuracaoSmtp, caixaDeEntrada, explicarEr
 import { NICHOS_UI, UFS, nomeDaFatia } from '../prospeccaoNichos.js';
 import { NICHOS, acharNicho, codigosDoNicho, codigosDeVarios, conferirCodigos } from '../../scripts/_nichos.mjs';
 import { ultimaPasta, dividirLinha, montarCnpj, montarTelefone, linhaInteressa, linhaParaLead, formatarData, leadParaCsv, COL, SITUACAO_ATIVA } from '../../scripts/_receita.mjs';
-import { acharExistente, pontuarCandidato, prepararRevisao, resumoDaRevisao, ordenarRevisao } from '../prospeccao.js';
+import { telefoneUtil, acharExistente, pontuarCandidato, prepararRevisao, resumoDaRevisao, ordenarRevisao } from '../prospeccao.js';
 import { pontuarLead, ordenarPorPrioridade, resumoDaCarteira, faixaDe, FAIXAS } from '../prioridade.js';
 import { paraLixeira, deLixeira, diasNaLixeira, vencidos, planoDeDesfazer, textoTempoNaLixeira, PRAZO_DIAS } from '../lixeira.js';
 
@@ -1016,6 +1016,41 @@ t('nao repete UF', new Set(UFS).size === UFS.length);
 // O nome do arquivo é o contrato entre o preparo e a tela
 t('monta o nome da fatia', nomeDaFatia('climatizacao', 'MT') === 'climatizacao__MT.csv');
 t('aceita uf minuscula', nomeDaFatia('climatizacao', 'mt') === 'climatizacao__MT.csv');
+
+
+// ── Telefone inútil ──
+// A Receita preenche o campo com zeros quando não tem o número: 13,7% dos
+// 425.964 registros vieram assim. Como o dedup casa por telefone, duas
+// empresas sem relação nenhuma passavam a ser a mesma, e a revisão escondia
+// lead legítimo dizendo que já estava na base.
+t('zeros com formatacao nao servem', telefoneUtil('(0000) 0000-0000') === '');
+t('so zeros nao servem', telefoneUtil('0000000000') === '');
+t('numero real passa', telefoneUtil('(66) 9605-9185') === '6696059185');
+t('numero curto nao serve', telefoneUtil('99887766') === '');
+t('vazio nao serve', telefoneUtil('') === '');
+
+// O caso que motivou tudo
+const comZeros = [{ id: 'L1', nome: 'Empresa A', whatsapp: '(0000) 0000-0000' }];
+t('empresas sem relacao nao viram duplicadas',
+  acharExistente({ nome: 'Empresa B', whatsapp: '(0000) 0000-0000' }, comZeros) === null);
+
+// E o dedup de verdade continua funcionando
+const comReal = [{ id: 'L1', nome: 'Climatec', telefone: '(66) 9605-9185' }];
+t('telefone real ainda casa', acharExistente({ nome: 'Outra', telefone: '6696059185' }, comReal).por === 'telefone');
+// Lead antigo com telefone de zeros tambem nao pode casar com ninguem
+t('lead da base com zeros nao casa',
+  acharExistente({ nome: 'Nova', telefone: '(66) 3333-4444' }, [{ id: 'L9', nome: 'Velha', telefone: '0000000000' }]) === null);
+
+// A revisao limpa o que veio nas fatias ja geradas
+const revLimpa = prepararRevisao([{ nome: 'X', telefone: '(66) 9605-9185', whatsapp: '(0000) 0000-0000' }], []);
+t('telefone falso sai do candidato', revLimpa[0].candidato.whatsapp === undefined);
+t('telefone bom fica', revLimpa[0].candidato.telefone === '(66) 9605-9185');
+t('candidato sem telefone nenhum nao quebra', prepararRevisao([{ nome: 'Y' }], [])[0].candidato.nome === 'Y');
+
+// E o gerador para de produzir o problema
+t('gerador recusa ddd de zeros', montarTelefone('0000', '99887766') === '');
+t('gerador recusa numero de zeros', montarTelefone('66', '00000000') === '');
+t('gerador aceita numero real', montarTelefone('66', '96059185') === '(66) 9605-9185');
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);

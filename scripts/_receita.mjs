@@ -56,11 +56,20 @@ export function montarCnpj(basico = '', ordem = '', dv = '') {
   return `${b.slice(0, 2)}.${b.slice(2, 5)}.${b.slice(5, 8)}/${o}-${d}`;
 }
 
-/** Telefone a partir de DDD e número separados, como a Receita guarda. */
+/**
+ * Telefone a partir de DDD e número separados, como a Receita guarda.
+ *
+ * A Receita preenche com zeros quando não tem o dado — 13,7% dos registros
+ * vinham com "(0000) 0000-0000". Isso não é só sujeira: o CRM casa duplicados
+ * por telefone, então duas empresas sem relação nenhuma passavam a ser
+ * consideradas a mesma, e a revisão escondia lead legítimo dizendo que já
+ * estava na base.
+ */
 export function montarTelefone(ddd = '', numero = '') {
   const d = String(ddd).replace(/\D/g, '');
   const n = String(numero).replace(/\D/g, '');
   if (!d || n.length < 8) return '';
+  if (/^0+$/.test(d) || /^0+$/.test(n)) return '';
   return `(${d}) ${n.length === 9 ? `${n.slice(0, 5)}-${n.slice(5)}` : `${n.slice(0, 4)}-${n.slice(4)}`}`;
 }
 
