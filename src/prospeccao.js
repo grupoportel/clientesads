@@ -101,10 +101,16 @@ export function pontuarCandidato(candidato = {}) {
 /**
  * Prepara a lista de revisão.
  *
- * Duplicado nunca vem marcado para importar. O padrão é o seguro: quem quiser
- * importar mesmo assim marca à mão, e vê ao lado qual lead já existe.
+ * Duplicado nunca vem marcado. Quem quiser importar mesmo assim marca à mão, e
+ * vê ao lado qual lead já existe.
+ *
+ * `marcarPorPadrao` separa dois usos que parecem iguais e não são. Ao importar
+ * um CSV, a pessoa escolheu aquele arquivo e quer tudo dele: marcar por padrão
+ * poupa trabalho. Numa busca que devolve 1.637 empresas, marcar tudo põe um
+ * botão de "importar 1.637" a um clique de distância — e a intenção ali é
+ * escolher algumas dezenas, não levar o estado inteiro.
  */
-export function prepararRevisao(candidatos = [], leads = []) {
+export function prepararRevisao(candidatos = [], leads = [], { marcarPorPadrao = true } = {}) {
   return candidatos.map((bruto, indice) => {
     // Limpa telefone inútil antes de qualquer coisa: as fatias já geradas
     // carregam "(0000) 0000-0000", e importar isso encheria o CRM de contatos
@@ -127,7 +133,7 @@ export function prepararRevisao(candidatos = [], leads = []) {
       motivos,
       existente: existente ? { nome: existente.lead.nome, por: existente.por } : null,
       semNome,
-      importar: !existente && !semNome,
+      importar: marcarPorPadrao && !existente && !semNome,
     };
   });
 }

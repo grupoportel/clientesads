@@ -98,7 +98,8 @@ export default function BuscarLeadsPage({ leads = [], aoImportar, podeEditar = t
       return c;
     });
 
-    setRevisao(ordenarRevisao(prepararRevisao(candidatos, leads)));
+    // Sem marcar por padrão: são milhares, e a intenção é escolher dezenas
+    setRevisao(ordenarRevisao(prepararRevisao(candidatos, leads, { marcarPorPadrao: false })));
     setPagina(1);
   };
 
@@ -168,13 +169,23 @@ export default function BuscarLeadsPage({ leads = [], aoImportar, podeEditar = t
   const nichoAtual = NICHOS_UI.find(n => n.id === nicho);
 
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <h1 className="page-title">🔎 Buscar Leads</h1>
-        <p className="page-subtitle">
+    // O contêiner pai tem overflow hidden, então cada tela precisa criar a
+    // própria rolagem. Sem isto a lista aparecia cortada, sem barra e sem jeito
+    // de chegar ao segundo item.
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '18px 24px', borderBottom: '1px solid var(--border)', flexShrink: 0,
+      }}>
+        <h1 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--text)', fontWeight: 700 }}>
+          🔎 Buscar Leads
+        </h1>
+        <span style={{ fontSize: 12.5, color: 'var(--text3)' }}>
           Empresas da base pública da Receita Federal, por nicho e estado.
-        </p>
+        </span>
       </div>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: '18px 24px 80px' }}>
 
       {/* ── Onde estão os dados ── */}
       {!pasta && (
@@ -312,6 +323,7 @@ export default function BuscarLeadsPage({ leads = [], aoImportar, podeEditar = t
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

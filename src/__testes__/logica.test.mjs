@@ -1052,5 +1052,21 @@ t('gerador recusa ddd de zeros', montarTelefone('0000', '99887766') === '');
 t('gerador recusa numero de zeros', montarTelefone('66', '00000000') === '');
 t('gerador aceita numero real', montarTelefone('66', '96059185') === '(66) 9605-9185');
 
+
+// ── Marcar por padrão: dois usos que parecem iguais e não são ──
+// Importar um CSV: a pessoa escolheu aquele arquivo e quer tudo dele.
+// Buscar por nicho: voltam milhares, e a intenção é escolher dezenas.
+const tresNovos = [{ nome: 'A' }, { nome: 'B' }, { nome: 'C' }];
+t('importacao de csv marca por padrao', prepararRevisao(tresNovos, []).every(i => i.importar));
+t('busca nao marca por padrao', prepararRevisao(tresNovos, [], { marcarPorPadrao: false }).every(i => !i.importar));
+// Mas o resumo continua contando quantos sao novos, marcados ou nao
+t('resumo conta novos mesmo desmarcados',
+  resumoDaRevisao(prepararRevisao(tresNovos, [], { marcarPorPadrao: false })).novos === 3);
+t('resumo conta zero marcados',
+  resumoDaRevisao(prepararRevisao(tresNovos, [], { marcarPorPadrao: false })).marcados === 0);
+// Duplicado segue desmarcado nos dois modos
+t('duplicado desmarcado mesmo marcando por padrao',
+  prepararRevisao([{ nome: 'X', email: 'x@y.com' }], [{ id: 'L', nome: 'Velho', email: 'x@y.com' }])[0].importar === false);
+
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);
