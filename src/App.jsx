@@ -119,6 +119,10 @@ function App() {
   const [usuariosCrm, setUsuariosCrm] = useState([]);
   const [lixeira, setLixeira] = useState([]);
 
+  // Ligado quando o banco recusa uma leitura. Sem isto o CRM abria vazio e
+  // silencioso, e quem estava usando concluía que os dados tinham sumido.
+  const [acessoNegado, setAcessoNegado] = useState(false);
+
   // Etapas do funil: padrão do código sobreposto pelo que estiver configurado
   const etapas = useMemo(() => mesclarEtapas(configPipeline), [configPipeline]);
 
@@ -244,8 +248,26 @@ function App() {
       cancelarDados = [];
     };
 
+    /**
+     * Liga um listener e, o mais importante, trata o erro.
+     *
+     * onValue sem manipulador de erro falha em silêncio: quando as regras do
+     * banco recusam a leitura, o callback nunca é chamado, o estado fica vazio
+     * e a tela mostra "nenhum lead" sem dizer por quê. Foi assim que dois
+     * computadores pareceram "não sincronizar" — um deles estava logado com uma
+     * conta fora da lista de usuários, e a leitura era negada sem aviso.
+     */
     const escutar = (caminho, aoReceber) => {
-      cancelarDados.push(onValue(ref(database, caminho), aoReceber));
+      cancelarDados.push(onValue(
+        ref(database, caminho),
+        aoReceber,
+        (erro) => {
+          console.error(`[banco] Leitura de ${caminho} recusada:`, erro?.code || erro?.message);
+          if (String(erro?.code || '').includes('permission-denied')) {
+            setAcessoNegado(true);
+          }
+        }
+      ));
     };
 
     const listaDe = (snap) => {
@@ -263,6 +285,7 @@ function App() {
         setLeads([]); setTarefasGlobais([]); setConversasGlobais([]); setEmailsGlobais([]);
         setClientesGlobais([]); setPropostasGlobais([]); setModelos([]); setAutomacoes([]); setUsuariosCrm([]);
         setLixeira([]);
+        setAcessoNegado(false);
         return;
       }
 
@@ -1229,6 +1252,22 @@ function App() {
           </div>
         </div>
       </div>
+
+      {/* ══════ ACESSO NEGADO PELO BANCO ══════ */}
+      {/* Precisa aparecer acima de tudo: sem este aviso o CRM abre vazio e a
+          pessoa procura o problema nos próprios dados, não na permissão. */}
+      {acessoNegado && (
+        <div style={{
+          background: 'rgba(239,68,68,0.14)', borderBottom: '1px solid rgba(239,68,68,0.4)',
+          padding: '12px 20px', fontSize: 13, color: 'var(--text)', lineHeight: 1.6,
+        }}>
+          <strong style={{ color: 'var(--red)' }}>⚠️ Este acesso não está liberado.</strong>{' '}
+          A conta <strong>{usuario?.email}</strong> não está na lista de usuários do CRM, então o
+          banco recusa a leitura dos dados — é por isso que as telas aparecem vazias.
+          {' '}Peça a um administrador para incluir este e-mail em Configurações → Usuários, ou
+          entre com a conta que já tem acesso.
+        </div>
+      )}
 
       {/* ══════ LAYOUT PRINCIPAL ══════ */}
       <div className="main">
