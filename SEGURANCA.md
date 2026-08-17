@@ -57,6 +57,9 @@ Confirme que estas variáveis existem no painel do Vercel (Settings → Environm
 | `SMTP_PASS` | envio de e-mail | sim |
 | `SMTP_REMETENTE` | endereço que aparece no "de" | não, cai em `SMTP_USER` |
 | `SMTP_NOME` | nome que aparece no "de" | não, cai em `Grupo Portel` |
+| `GEMINI_API_KEY` | análise de lead por IA | sim, para a IA funcionar |
+| `GEMINI_MODELO` | modelo do Gemini | não, cai em `gemini-2.5-flash` |
+| `ANTHROPIC_API_KEY` | alternativa ao Gemini | não |
 
 As três últimas não estão no `.env.local`, então o envio de e-mail não funciona em
 desenvolvimento. Se já estiverem configuradas no Vercel, produção segue normal —
@@ -172,3 +175,31 @@ SSL trava a conexão sem erro legível — é o engano mais comum aqui.
 Enquanto `SMTP_HOST` não estiver definido, o envio continua usando
 `GMAIL_USER` / `GMAIL_APP_PASSWORD`, para a troca não derrubar o envio no meio
 do caminho. Depois que a Hostinger estiver funcionando, essas duas podem sair.
+
+---
+
+## Análise de lead por IA
+
+`GEMINI_API_KEY` vem do Google AI Studio (`aistudio.google.com`), que tem cota
+gratuita sem cadastro de cartão. **Na cota gratuita o Google pode usar o
+conteúdo enviado para melhorar os produtos dele.** Aqui vai dado público de
+empresa — nome, nicho, site — mas é bom saber antes de mandar qualquer coisa
+mais sensível. Ativar faturamento no mesmo projeto remove essa cláusula.
+
+Trocar de provedor é configuração: definir `ANTHROPIC_API_KEY` em vez da do
+Gemini já muda o destino, sem tocar no código.
+
+### Duas decisões que valem manter
+
+**A IA sugere, não grava.** O endpoint devolve os campos e quem aceita é quem
+está na tela, um a um. Campo vazio a pessoa vê; campo errado ela acredita.
+
+**A resposta é filtrada contra uma lista de campos permitidos**
+(`CAMPOS_ANALISE`). Sem isso, um modelo que resolvesse devolver
+`{"status": "venda", "valor": 999999}` conseguiria escrever no cadastro do lead
+o que ninguém pediu. Coberto por teste.
+
+**O endereço do site é validado antes de o servidor buscá-lo.** Só http e
+https, e nada de `localhost`, rede interna ou `169.254.169.254` — sem isso, o
+campo "site" de um lead viraria uma requisição do servidor para dentro da
+própria infraestrutura.

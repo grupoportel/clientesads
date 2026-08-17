@@ -6,6 +6,7 @@ import { regrasQueDisparam, regraValida, calcularPrazo, planejarAcoes } from '..
 import { saudeCliente, saudeMediaDaCarteira, receitaRecorrente, clienteAPartirDoLead, ganhosSemCliente } from '../clientes.js';
 import { normalizarMeta, achatar, extrairCampos, extrairUtm, acharDuplicado, camposParaCompletar } from '../../api/_leadIn.js';
 import { papelDoUsuario, podeEditar, podeAdministrar, podeVer, motivoBloqueio } from '../papeis.js';
+import { configuracaoIa, textoDoHtml, urlDoSite, montarPromptAnalise, interpretarAnalise, CAMPOS_ANALISE } from '../../api/_ia.js';
 import { configuracaoSmtp, caixaDeEntrada, explicarErroSmtp } from '../../api/_email.js';
 import { paraLixeira, deLixeira, diasNaLixeira, vencidos, planoDeDesfazer, textoTempoNaLixeira, PRAZO_DIAS } from '../lixeira.js';
 
@@ -463,6 +464,65 @@ t('caixa de entrada sem nada e vazia', caixaDeEntrada({}) === '');
 t('EAUTH vira aviso de senha', explicarErroSmtp({ code: 'EAUTH' }).includes('SMTP_USER'));
 t('timeout vira aviso de host', explicarErroSmtp({ code: 'ETIMEDOUT' }).includes('SMTP_HOST'));
 t('erro desconhecido nao e sequestrado', explicarErroSmtp({ code: 'XPTO', message: 'deu ruim' }) === null);
+
+
+// ── IA ──
+t('sem chave nenhuma devolve null', configuracaoIa({}) === null);
+t('gemini pela chave', configuracaoIa({ GEMINI_API_KEY: 'k' }).provedor === 'gemini');
+t('gemini tem prioridade sobre anthropic', configuracaoIa({ GEMINI_API_KEY: 'k', ANTHROPIC_API_KEY: 'a' }).provedor === 'gemini');
+t('anthropic sozinho vale', configuracaoIa({ ANTHROPIC_API_KEY: 'a' }).provedor === 'anthropic');
+t('modelo pode ser trocado', configuracaoIa({ GEMINI_API_KEY: 'k', GEMINI_MODELO: 'outro' }).modelo === 'outro');
+
+// Limpeza de HTML: script e style viram paredao de codigo dentro do prompt
+const html = '<html><head><style>a{color:red}</style><script>var x=1;</script></head><body><h1>Pizzaria Bella</h1><p>Massa &amp; molho</p><!-- oculto --></body></html>';
+const texto = textoDoHtml(html);
+t('tira script', !texto.includes('var x'));
+t('tira style', !texto.includes('color:red'));
+t('tira comentario', !texto.includes('oculto'));
+t('mantem o conteudo', texto.includes('Pizzaria Bella'));
+t('resolve entidade', texto.includes('Massa & molho'));
+t('corta no limite', textoDoHtml('<p>' + 'a'.repeat(500) + '</p>', 100).length <= 101);
+
+// URL: o campo site e digitado a mao, entao chega de tudo
+t('completa esquema', urlDoSite('grupoportel.com').startsWith('https://'));
+t('mantem http', urlDoSite('http://x.com').startsWith('http://'));
+t('vazio nao vira url', urlDoSite('') === null);
+t('texto solto nao vira url', urlDoSite('nao tem') === null);
+
+// Nao deixar o servidor buscar a propria rede interna a partir de um campo do lead
+t('bloqueia localhost', urlDoSite('http://localhost:8080') === null);
+t('bloqueia rede interna', urlDoSite('http://192.168.0.1') === null);
+t('bloqueia metadados da nuvem', urlDoSite('http://169.254.169.254/latest/meta-data') === null);
+t('bloqueia file://', urlDoSite('file:///etc/passwd') === null);
+
+// Prompt
+const promptCheio = montarPromptAnalise({ nome: 'Pizzaria Bella', nicho: 'Pizzaria', cidade: 'Cuiaba', estado: 'MT' }, 'texto do site');
+t('prompt leva o nome', promptCheio.includes('Pizzaria Bella'));
+t('prompt junta cidade e estado', promptCheio.includes('Cuiaba / MT'));
+t('prompt marca que leu o site', promptCheio.includes('CONTEUDO DO SITE'.replace('CONTEUDO','CONTEÚDO')));
+t('prompt avisa quando nao leu', montarPromptAnalise({ nome: 'X' }, '').includes('não pôde ser lido'));
+t('campo vazio nao entra no prompt', !montarPromptAnalise({ nome: 'X', nicho: '' }, '').includes('Nicho'));
+
+// Interpretacao da resposta
+const bom = interpretarAnalise('{"melhores":"tem instagram ativo","oportunidades":"sem trafego pago","pontos":"","escalar":"alto","confianca":"alta"}');
+t('le json limpo', bom.campos.melhores === 'tem instagram ativo');
+t('descarta campo vazio', bom.campos.pontos === undefined);
+t('le a confianca', bom.confianca === 'alta');
+
+t('le json em cerca de codigo', interpretarAnalise(['```json', '{"melhores":"ok"}', '```'].join('\n')).campos.melhores === 'ok');
+t('le json com texto em volta', interpretarAnalise('Claro! {"melhores":"ok"} espero ter ajudado').campos.melhores === 'ok');
+
+// A resposta do modelo nao pode injetar chave nenhuma no cadastro do lead
+const invasor = interpretarAnalise('{"melhores":"ok","status":"venda","valor":999999,"nome":"HACK"}');
+t('so aceita os campos previstos', Object.keys(invasor.campos).every(k => CAMPOS_ANALISE.includes(k)));
+t('ignora status vindo da ia', invasor.campos.status === undefined);
+t('ignora valor vindo da ia', invasor.campos.valor === undefined);
+
+t('confianca invalida vira baixa', interpretarAnalise('{"melhores":"ok","confianca":"altissima"}').confianca === 'baixa');
+t('json quebrado devolve null', interpretarAnalise('{isso nao e json') === null);
+t('texto sem json devolve null', interpretarAnalise('desculpe, nao consegui') === null);
+t('json sem campo util devolve null', interpretarAnalise('{"confianca":"alta"}') === null);
+t('campos so com espaco devolve null', interpretarAnalise('{"melhores":"   "}') === null);
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);

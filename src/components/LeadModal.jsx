@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import AnaliseIA from './AnaliseIA';
 import { hojeISO } from '../periodo';
 
 import { etapasAtivas, acharEtapa, formatarBRL } from '../pipeline';
@@ -187,7 +188,13 @@ export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos =
             </div>
 
             <div className="form-section-title">🎯 Análise & Estratégia</div>
-            
+
+            <AnaliseIA
+              lead={formData}
+              valoresAtuais={formData}
+              aoAceitar={(campo, texto) => setFormData(f => ({ ...f, [campo]: texto }))}
+            />
+
             <div className="form-group full">
               <label>Melhores Conteúdos</label>
               <textarea className="form-control" name="melhores" value={formData.melhores} onChange={handleChange} />
