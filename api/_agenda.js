@@ -28,7 +28,11 @@ export function configuracaoAgenda(env = process.env) {
     calendario,
     email,
     chave: chave.replace(/\\n/g, '\n'),
-    fuso: env.AGENDA_FUSO || 'America/Cuiaba',
+    // São Paulo e não Cuiabá: o que importa é o fuso em que a agenda de quem
+    // usa está configurada, não o dos leads. Com o fuso errado a reunião das
+    // 10h aparece às 11h no Google, e ninguém desconfia do CRM por causa disso
+    // — desconfia da própria memória.
+    fuso: env.AGENDA_FUSO || 'America/Sao_Paulo',
   };
 }
 
@@ -79,7 +83,7 @@ export function textoDataHora(dataHora) {
  * confirmação que o próprio CRM manda.
  */
 export function montarEvento(lead = {}, opcoes = {}) {
-  const { dataHora, duracaoMin = 60, observacao = '', fuso = 'America/Cuiaba' } = opcoes;
+  const { dataHora, duracaoMin = 60, observacao = '', fuso = 'America/Sao_Paulo' } = opcoes;
 
   const inicio = inicioDoEvento(dataHora);
   if (!inicio) return null;

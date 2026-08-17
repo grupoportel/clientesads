@@ -533,7 +533,8 @@ t('sem calendario nao configura', configuracaoAgenda(credFb) === null);
 t('sem credencial nao configura', configuracaoAgenda({ GOOGLE_CALENDAR_ID: 'a@b.com' }) === null);
 t('reaproveita a conta do firebase', configuracaoAgenda({ ...credFb, GOOGLE_CALENDAR_ID: 'a@b.com' }).email === 'sa@x.iam.gserviceaccount.com');
 t('conta dedicada tem prioridade', configuracaoAgenda({ ...credFb, GOOGLE_CALENDAR_ID: 'a@b.com', GOOGLE_CALENDAR_CLIENT_EMAIL: 'outra@x.com', GOOGLE_CALENDAR_PRIVATE_KEY: 'k' }).email === 'outra@x.com');
-t('fuso padrao e Cuiaba', configuracaoAgenda({ ...credFb, GOOGLE_CALENDAR_ID: 'a@b.com' }).fuso === 'America/Cuiaba');
+t('fuso padrao acompanha a agenda de quem usa', configuracaoAgenda({ ...credFb, GOOGLE_CALENDAR_ID: 'a@b.com' }).fuso === 'America/Sao_Paulo');
+t('fuso pode ser trocado', configuracaoAgenda({ ...credFb, GOOGLE_CALENDAR_ID: 'a@b.com', AGENDA_FUSO: 'America/Cuiaba' }).fuso === 'America/Cuiaba');
 // A chave chega do painel da Vercel com a quebra de linha escapada, e precisa
 // virar quebra de verdade antes de ir para o Google
 const BARRA_N = String.fromCharCode(92) + 'n';
@@ -565,7 +566,7 @@ const ev = montarEvento(leadAgenda, { dataHora: '2026-08-20T14:30', duracaoMin: 
 t('titulo tem o lead', ev.summary === 'Reunião — Pizzaria Bella');
 t('inicio no formato do google', ev.start.dateTime === '2026-08-20T14:30:00');
 t('fim respeita a duracao', ev.end.dateTime === '2026-08-20T15:15:00');
-t('leva o fuso', ev.start.timeZone === 'America/Cuiaba');
+t('leva o fuso', ev.start.timeZone === 'America/Sao_Paulo');
 t('descricao tem o contato', ev.description.includes('Marina') && ev.description.includes('65999'));
 t('descricao tem a observacao', ev.description.includes('levar proposta'));
 t('local junta cidade e estado', ev.location === 'Cuiaba / MT');

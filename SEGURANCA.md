@@ -61,7 +61,7 @@ Confirme que estas variáveis existem no painel do Vercel (Settings → Environm
 | `GEMINI_MODELO` | fixa um modelo do Gemini | não — sem ela o modelo é descoberto pela API |
 | `ANTHROPIC_API_KEY` | alternativa ao Gemini | não |
 | `GOOGLE_CALENDAR_ID` | eventos no Google Agenda | sim, para a agenda funcionar |
-| `AGENDA_FUSO` | fuso dos eventos | não, cai em `America/Cuiaba` |
+| `AGENDA_FUSO` | fuso dos eventos | não, cai em `America/Sao_Paulo` |
 
 As três últimas não estão no `.env.local`, então o envio de e-mail não funciona em
 desenvolvimento. Se já estiverem configuradas no Vercel, produção segue normal —
