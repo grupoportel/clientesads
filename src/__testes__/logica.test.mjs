@@ -9,6 +9,7 @@ import { papelDoUsuario, podeEditar, podeAdministrar, podeVer, motivoBloqueio } 
 import { configuracaoAgenda, somarMinutos, inicioDoEvento, textoDataHora, montarEvento, textoConfirmacao, explicarErroAgenda } from '../../api/_agenda.js';
 import { INTENCOES, acharIntencao, resumirHistorico, montarPromptMensagem, interpretarMensagem, ehTransitorio, atrasoDaTentativa, escolherModelo, configuracaoIa, textoDoHtml, urlDoSite, montarPromptAnalise, interpretarAnalise, CAMPOS_ANALISE } from '../../api/_ia.js';
 import { responderPara, montarHtml, configuracaoSmtp, caixaDeEntrada, explicarErroSmtp } from '../../api/_email.js';
+import { dividirLinha, montarCnpj, montarTelefone, linhaInteressa, linhaParaLead, formatarData, leadParaCsv, COL, SITUACAO_ATIVA } from '../../scripts/_receita.mjs';
 import { acharExistente, pontuarCandidato, prepararRevisao, resumoDaRevisao, ordenarRevisao } from '../prospeccao.js';
 import { pontuarLead, ordenarPorPrioridade, resumoDaCarteira, faixaDe, FAIXAS } from '../prioridade.js';
 import { paraLixeira, deLixeira, diasNaLixeira, vencidos, planoDeDesfazer, textoTempoNaLixeira, PRAZO_DIAS } from '../lixeira.js';
@@ -864,6 +865,84 @@ t('resumo conta marcados', resRev.marcados === 1);
 const ordenada = ordenarRevisao(rev);
 t('novo vem primeiro', ordenada[0].candidato.nome === 'Nova Pizzaria');
 t('problemas descem', Boolean(ordenada[2].existente || ordenada[2].semNome));
+
+
+// ── Dados abertos da Receita ──
+// O formato tem tres armadilhas que nao dao erro, so resultado errado: Latin-1,
+// ponto e virgula com tudo entre aspas, e municipio em codigo proprio da RF.
+
+t('divide por ponto e virgula', dividirLinha('a;b;c').length === 3);
+t('respeita aspas', dividirLinha('"a;b";c')[0] === 'a;b');
+t('aspas duplas escapam', dividirLinha('"diz ""oi""";x')[0] === 'diz "oi"');
+t('campo vazio nao some', dividirLinha('a;;c')[1] === '');
+t('tira espaco nas bordas', dividirLinha(' a ; b ')[0] === 'a');
+t('linha vazia vira um campo', dividirLinha('').length === 1);
+
+// CNPJ vem partido em tres colunas e sem zeros a esquerda
+t('monta cnpj completo', montarCnpj('11222333', '0001', '44') === '11.222.333/0001-44');
+t('completa zeros a esquerda', montarCnpj('222333', '1', '4').startsWith('00.222.333/0001-'));
+
+// Telefone tambem vem partido, e o celular tem 9 digitos
+t('celular com nove digitos', montarTelefone('66', '999887766') === '(66) 99988-7766');
+t('fixo com oito digitos', montarTelefone('66', '30150955') === '(66) 3015-0955');
+t('sem ddd nao monta', montarTelefone('', '999887766') === '');
+t('numero curto nao monta', montarTelefone('66', '1234') === '');
+
+t('data AAAAMMDD vira dd/mm/aaaa', formatarData('20180315') === '15/03/2018');
+t('data zerada fica vazia', formatarData('00000000') === '');
+t('data invalida fica vazia', formatarData('2018') === '');
+
+// Monta uma linha no layout oficial
+const linhaRF = new Array(30).fill('');
+linhaRF[COL.cnpjBasico] = '11222333';
+linhaRF[COL.cnpjOrdem] = '0001';
+linhaRF[COL.cnpjDv] = '44';
+linhaRF[COL.nomeFantasia] = 'PIZZARIA BELLA';
+linhaRF[COL.situacao] = SITUACAO_ATIVA;
+linhaRF[COL.dataInicio] = '20180315';
+linhaRF[COL.cnaePrincipal] = '5611201';
+linhaRF[COL.tipoLogradouro] = 'RUA';
+linhaRF[COL.logradouro] = 'DAS FLORES';
+linhaRF[COL.numero] = '100';
+linhaRF[COL.bairro] = 'CENTRO';
+linhaRF[COL.uf] = 'MT';
+linhaRF[COL.municipio] = '9067';
+linhaRF[COL.ddd1] = '66';
+linhaRF[COL.telefone1] = '30150955';
+linhaRF[COL.email] = 'CONTATO@BELLA.COM';
+
+t('ativa em MT no cnae certo entra', linhaInteressa(linhaRF, { cnaes: ['5611'], uf: 'MT', municipios: ['9067'] }));
+t('cnae aceita prefixo largo', linhaInteressa(linhaRF, { cnaes: ['56'] }));
+t('cnae de outro ramo nao entra', !linhaInteressa(linhaRF, { cnaes: ['4711'] }));
+t('outra uf nao entra', !linhaInteressa(linhaRF, { uf: 'SP' }));
+t('outro municipio nao entra', !linhaInteressa(linhaRF, { municipios: ['1234'] }));
+t('sem filtro tudo ativo entra', linhaInteressa(linhaRF, {}));
+
+// Baixada e o caso mais importante de excluir: empresa fechada nao e lead
+const baixada = [...linhaRF];
+baixada[COL.situacao] = '08';
+t('empresa baixada fica de fora', !linhaInteressa(baixada, {}));
+t('mas entra se pedirem todas', linhaInteressa(baixada, { somenteAtivas: false }));
+
+// Conversao para lead
+const leadRF = linhaParaLead(linhaRF, { nomesDeCidade: { '9067': 'Sinop' }, nomesDeCnae: { '5611201': 'Restaurantes' } });
+t('usa o nome fantasia', leadRF.nome === 'PIZZARIA BELLA');
+t('traduz o codigo do municipio', leadRF.cidade === 'Sinop');
+t('traduz o cnae para nicho', leadRF.nicho === 'Restaurantes');
+t('monta o telefone', leadRF.telefone === '(66) 3015-0955');
+t('email em minusculo', leadRF.email === 'contato@bella.com');
+t('monta o endereco', leadRF.endereco === 'RUA DAS FLORES, 100, CENTRO');
+
+// Sem nome fantasia o lead ficaria anonimo: cai para a razao social
+const semFantasia = [...linhaRF];
+semFantasia[COL.nomeFantasia] = '';
+t('cai para a razao social', linhaParaLead(semFantasia, { nomesPorCnpjBasico: { '11222333': 'BELLA ALIMENTOS LTDA' } }).nome === 'BELLA ALIMENTOS LTDA');
+t('sem nenhum dos dois fica vazio', linhaParaLead(semFantasia, {}).nome === '');
+
+// Saida em CSV, no formato que o importador do CRM le
+const linhaCsv = leadParaCsv({ nome: 'Bar; Restaurante', cnpj: '1', telefone: '2', whatsapp: '', email: '', cidade: 'Sinop', estado: 'MT', nicho: '', endereco: '', abertaEm: '' });
+t('escapa o ponto e virgula do nome', linhaCsv.startsWith('"Bar; Restaurante"'));
+t('campo simples nao leva aspas', leadParaCsv({ nome: 'Bella' }).startsWith('Bella;'));
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);

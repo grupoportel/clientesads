@@ -279,3 +279,54 @@ API foi ativada em outro projeto do Google Cloud. O que vale é o projeto dono
 da conta de serviço — o mesmo do Firebase, `crm---grupo-portel`. O número que
 aparece na mensagem de erro é o do projeto correto; o link que o próprio erro
 traz já leva ao lugar certo.
+
+---
+
+## Prospecção pelos dados abertos da Receita
+
+`scripts/receita-leads.mjs` filtra a base pública de CNPJ por CNAE, cidade e
+UF, e gera um CSV para importar no CRM.
+
+```bash
+node scripts/receita-leads.mjs --pasta ./dados --uf MT --cidades Sinop \
+     --cnaes 5611,5620 --saida pizzarias-sinop.csv
+```
+
+Os dados vêm de
+`https://arquivos.receitafederal.gov.br/dados/cnpj/dados_abertos_cnpj/` —
+baixe a pasta do mês e descompacte. O script roda na máquina de quem usa, não
+no servidor: são dezenas de milhões de linhas, e a leitura é linha a linha
+justamente para não carregar tudo na memória.
+
+### Por que não é raspagem do Google Maps
+
+Os Termos do Google Maps Platform proíbem guardar dados do Places numa base
+própria: `place_id` pode ser mantido, mas nome, telefone e avaliação só por 30
+dias, e montar um diretório a partir deles é vedado. Um CRM com centenas de
+leads permanentes vindos dali é exatamente o caso proibido.
+
+A base da Receita é pública e publicada para reuso, então a mesma pergunta —
+"todas as pizzarias ativas em Sinop" — tem resposta legítima.
+
+### LGPD
+
+O dado é público, mas contato de MEI costuma ser telefone e e-mail pessoais.
+Para prospecção B2B isso se sustenta em legítimo interesse, desde que quem
+recebe saiba quem está falando e consiga pedir descadastro. Em e-mail
+um-para-um, uma linha no texto resolve melhor que um cabeçalho
+`List-Unsubscribe`, que sinaliza disparo em massa.
+
+### Três armadilhas do formato
+
+Nenhuma dá erro — todas dão resultado errado em silêncio, e por isso estão
+cobertas por teste:
+
+1. O arquivo é **Latin-1**, não UTF-8. Lido como UTF-8, todo acento vira lixo.
+2. É separado por **ponto e vírgula com todo campo entre aspas**.
+3. **Município é código próprio da Receita**, não o do IBGE. O script traduz
+   pelo arquivo Municipios; sem ele, filtrar por cidade devolve lista vazia.
+
+E uma quarta, que só apareceu no teste de ponta a ponta: os ZIPs têm nome
+amigável, mas o CSV lá dentro sai como `F.K03200$Z.D50510.MUNICCSV`. Procurar
+arquivo por prefixo achava zero e o script terminava dizendo que a cidade não
+existia.
