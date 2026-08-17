@@ -4,6 +4,7 @@ import { database } from '../firebase';
 import { apiPost } from '../api';
 import { acharEtapa } from '../pipeline';
 import SeletorModelo from './SeletorModelo';
+import EscreverComIA from './EscreverComIA';
 import { useTelaEstreita } from '../useTelaEstreita';
 
 /* ── Helpers ── */
@@ -467,6 +468,15 @@ export default function ConversasPage({ leads = [], etapas = [], conversas = [],
               empresa={empresa}
               meuNome={meuNome}
               onEscolher={({ corpo }) => setNovaMensagem(corpo)}
+              compacto
+            />
+
+            <EscreverComIA
+              lead={leadAssociado}
+              canal="whatsapp"
+              empresa={empresa}
+              meuNome={meuNome}
+              aoEscolher={({ corpo }) => setNovaMensagem(corpo)}
               compacto
             />
 

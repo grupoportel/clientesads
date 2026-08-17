@@ -7,7 +7,7 @@ import { saudeCliente, saudeMediaDaCarteira, receitaRecorrente, clienteAPartirDo
 import { normalizarMeta, achatar, extrairCampos, extrairUtm, acharDuplicado, camposParaCompletar } from '../../api/_leadIn.js';
 import { papelDoUsuario, podeEditar, podeAdministrar, podeVer, motivoBloqueio } from '../papeis.js';
 import { configuracaoAgenda, somarMinutos, inicioDoEvento, textoDataHora, montarEvento, textoConfirmacao, explicarErroAgenda } from '../../api/_agenda.js';
-import { ehTransitorio, atrasoDaTentativa, escolherModelo, configuracaoIa, textoDoHtml, urlDoSite, montarPromptAnalise, interpretarAnalise, CAMPOS_ANALISE } from '../../api/_ia.js';
+import { INTENCOES, acharIntencao, resumirHistorico, montarPromptMensagem, interpretarMensagem, ehTransitorio, atrasoDaTentativa, escolherModelo, configuracaoIa, textoDoHtml, urlDoSite, montarPromptAnalise, interpretarAnalise, CAMPOS_ANALISE } from '../../api/_ia.js';
 import { configuracaoSmtp, caixaDeEntrada, explicarErroSmtp } from '../../api/_email.js';
 import { paraLixeira, deLixeira, diasNaLixeira, vencidos, planoDeDesfazer, textoTempoNaLixeira, PRAZO_DIAS } from '../lixeira.js';
 
@@ -645,6 +645,57 @@ t('segunda dobra', atrasoDaTentativa(2, 0) === 1400);
 t('terceira dobra de novo', atrasoDaTentativa(3, 0) === 2800);
 t('o aleatorio soma ate 400ms', atrasoDaTentativa(1, 1) === 1100);
 t('tres tentativas somam menos de 5s', atrasoDaTentativa(1,1) + atrasoDaTentativa(2,1) < 5000);
+
+
+// ── Redigir mensagem ──
+t('tem intencoes cadastradas', INTENCOES.length >= 5);
+t('toda intencao tem rotulo e instrucao', INTENCOES.every(i => i.id && i.rotulo && i.instrucao));
+t('acha a intencao', acharIntencao('follow-up').rotulo === 'Retomar contato');
+t('intencao desconhecida devolve null', acharIntencao('inventada') === null);
+
+// Historico: entra resumido, senao vira um paredao no prompt
+const atv = [
+  { criadoEm: '2026-08-01T10:00:00Z', descricao: 'Status mudou para Reunião Marcada' },
+  { criadoEm: '2026-08-05T10:00:00Z', descricao: 'Proposta enviada' },
+];
+const resumo = resumirHistorico(atv);
+t('resumo traz data e descricao', resumo.includes('2026-08-01') && resumo.includes('Proposta enviada'));
+t('resumo respeita o limite', resumirHistorico(new Array(30).fill(atv[0]), 5).split(String.fromCharCode(10)).length === 5);
+t('sem atividade o resumo e vazio', resumirHistorico([]) === '');
+t('linha sem descricao e descartada', resumirHistorico([{ criadoEm: '2026-08-01T10:00:00Z', descricao: '' }]) === '');
+
+// Prompt
+const leadMsg = { nome: 'Pizzaria Bella', decisor: 'Marina', nicho: 'Pizzaria', cidade: 'Sinop', estado: 'MT', oportunidades: 'sem trafego pago' };
+
+const pWpp = montarPromptMensagem(leadMsg, { canal: 'whatsapp', intencao: 'primeiro-contato', meuNome: 'Gui' });
+t('whatsapp nao pede assunto', !pWpp.includes('"assunto"'));
+t('whatsapp limita a 4 linhas', pWpp.includes('4 linhas'));
+t('prompt leva a analise ja feita', pWpp.includes('sem trafego pago'));
+t('prompt manda assinar', pWpp.includes('Assine como Gui'));
+
+const pMail = montarPromptMensagem(leadMsg, { canal: 'email', intencao: 'follow-up' });
+t('email pede assunto', pMail.includes('"assunto"'));
+t('email usa a instrucao da intencao', pMail.includes('não respondeu'));
+t('sem nome nao inventa assinatura', pMail.includes('Não assine com nome de pessoa'));
+
+// A trava que mais importa: nao inventar numero nem prometer resultado
+t('proibe inventar preco', pWpp.includes('Não invente preço'));
+t('proibe prometer resultado', pWpp.includes('Não prometa resultado'));
+
+t('instrucao livre entra no prompt', montarPromptMensagem(leadMsg, { intencao: 'follow-up', instrucao: 'citar o feriado' }).includes('citar o feriado'));
+t('sem historico o prompt avisa', pWpp.includes('Não há histórico registrado'));
+
+// Interpretacao
+const msgWpp = interpretarMensagem('{"corpo":"Oi Marina, tudo bem?"}', 'whatsapp');
+t('le o corpo', msgWpp.corpo === 'Oi Marina, tudo bem?');
+t('whatsapp ignora assunto', interpretarMensagem('{"corpo":"oi","assunto":"X"}', 'whatsapp').assunto === '');
+t('email guarda o assunto', interpretarMensagem('{"corpo":"oi","assunto":"Sobre a Bella"}', 'email').assunto === 'Sobre a Bella');
+t('le com cerca de codigo', interpretarMensagem(['```json','{"corpo":"oi"}','```'].join(String.fromCharCode(10))).corpo === 'oi');
+
+// Caixa preenchida com vazio parece que funcionou, e o erro so aparece no envio
+t('corpo vazio devolve null', interpretarMensagem('{"corpo":"   "}') === null);
+t('sem corpo devolve null', interpretarMensagem('{"assunto":"X"}', 'email') === null);
+t('json quebrado devolve null', interpretarMensagem('nao consegui') === null);
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);

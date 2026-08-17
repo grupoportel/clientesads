@@ -356,3 +356,144 @@ export function explicarErroIa(erro) {
   }
   return null;
 }
+
+// ── Redigir mensagem ────────────────────────────────────────────────────────
+
+/**
+ * Intenções que a IA sabe escrever.
+ *
+ * Lista fechada de propósito. Um campo livre de "o que você quer dizer"
+ * devolveria texto de qualidade imprevisível a cada uso; com a intenção
+ * escolhida, o pedido é sempre o mesmo e só o lead muda. A instrução livre
+ * continua existindo, mas por cima de uma base conhecida.
+ */
+export const INTENCOES = [
+  {
+    id: 'primeiro-contato',
+    rotulo: 'Primeira abordagem',
+    instrucao: 'Primeiro contato. A pessoa não conhece a agência. Puxe por algo concreto '
+      + 'do negócio dela, não por elogio genérico, e termine propondo uma conversa curta.',
+  },
+  {
+    id: 'follow-up',
+    rotulo: 'Retomar contato',
+    instrucao: 'Já houve contato e a pessoa não respondeu. Retome sem cobrar e sem soar '
+      + 'ressentido. Traga um motivo novo para a conversa em vez de só perguntar se viu a mensagem.',
+  },
+  {
+    id: 'pos-reuniao',
+    rotulo: 'Depois da reunião',
+    instrucao: 'A reunião já aconteceu. Agradeça, retome o que foi combinado e deixe claro '
+      + 'qual é o próximo passo e de quem é a vez de agir.',
+  },
+  {
+    id: 'proposta',
+    rotulo: 'Falar da proposta',
+    instrucao: 'A proposta já foi enviada ou está para ser. Trate dela sem pressionar, e '
+      + 'ofereça esclarecer dúvidas. Não invente valores nem prazos.',
+  },
+  {
+    id: 'reativar',
+    rotulo: 'Reativar lead parado',
+    instrucao: 'O contato esfriou há bastante tempo. Reabra a conversa reconhecendo o tempo '
+      + 'passado, sem constranger, e com um motivo concreto para falar agora.',
+  },
+];
+
+export const acharIntencao = (id) => INTENCOES.find(i => i.id === id) || null;
+
+/** Resume a linha do tempo para caber no prompt sem virar um paredão. */
+export function resumirHistorico(atividades = [], limite = 8) {
+  return atividades
+    .slice(0, limite)
+    .map(a => `- ${(a.criadoEm || '').slice(0, 10)}: ${a.descricao || ''}`.trim())
+    .filter(l => l.length > 14)
+    .join('\n');
+}
+
+export function montarPromptMensagem(lead = {}, opcoes = {}) {
+  const {
+    canal = 'whatsapp', intencao, instrucao = '', historico = '',
+    empresa = 'Grupo Portel', meuNome = '',
+  } = opcoes;
+
+  const ehEmail = canal === 'email';
+  const alvo = acharIntencao(intencao);
+
+  const dados = [
+    ['Empresa', lead.nome],
+    ['Pessoa de contato', lead.decisor],
+    ['Nicho', lead.nicho],
+    ['Cidade', [lead.cidade, lead.estado].filter(Boolean).join(' / ')],
+    ['Etapa no funil', lead.status],
+    ['Site', lead.site],
+    ['Nota no Google', lead.nota],
+    ['O que já faz bem', lead.melhores],
+    ['Oportunidades identificadas', lead.oportunidades],
+    ['Pontos fortes', lead.pontos],
+  ].filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== '')
+   .map(([k, v]) => `- ${k}: ${v}`)
+   .join('\n');
+
+  return `Você escreve mensagens comerciais para a ${empresa}, uma agência que vende
+gestão de tráfego e presença digital para negócios locais no Brasil.
+
+CANAL: ${ehEmail ? 'e-mail' : 'WhatsApp'}
+OBJETIVO: ${alvo ? alvo.instrucao : 'Escrever uma mensagem comercial adequada ao contexto.'}
+
+DADOS DO LEAD
+${dados || '- (quase nada preenchido)'}
+
+${historico ? `O QUE JÁ ACONTECEU\n${historico}` : 'Não há histórico registrado.'}
+${instrucao ? `\nPEDIDO DE QUEM VAI ENVIAR\n${instrucao}` : ''}
+
+Responda SOMENTE com um objeto JSON, sem texto antes ou depois e sem cercas de
+código:
+
+${ehEmail
+    ? '{ "assunto": "assunto curto e específico", "corpo": "texto do e-mail" }'
+    : '{ "corpo": "texto da mensagem" }'}
+
+Regras:
+- Português do Brasil, tratamento por "você".
+- ${ehEmail
+    ? 'No máximo 3 parágrafos curtos. Assunto sem palavra de propaganda e sem CAIXA ALTA.'
+    : 'No máximo 4 linhas. Sem saudação longa e sem emoji em excesso: no máximo um.'}
+- Não invente preço, prazo, número, resultado nem nome que não esteja acima.
+- Não prometa resultado. Nada de "vamos dobrar seu faturamento".
+- Termine com uma pergunta ou um convite claro, não com "fico à disposição".
+${meuNome ? `- Assine como ${meuNome}.` : '- Não assine com nome de pessoa.'}`;
+}
+
+/**
+ * Lê a mensagem que o modelo devolveu.
+ *
+ * Devolve null quando não há corpo: uma caixa de texto preenchida com vazio
+ * parece que funcionou, e a pessoa só descobre o problema depois de enviar.
+ */
+export function interpretarMensagem(texto = '', canal = 'whatsapp') {
+  const semCerca = String(texto)
+    .replace(/^\s*```(?:json)?\s*/i, '')
+    .replace(/\s*```\s*$/, '')
+    .trim();
+
+  const inicio = semCerca.indexOf('{');
+  const fim = semCerca.lastIndexOf('}');
+  if (inicio === -1 || fim === -1 || fim < inicio) return null;
+
+  let bruto;
+  try {
+    bruto = JSON.parse(semCerca.slice(inicio, fim + 1));
+  } catch {
+    return null;
+  }
+
+  const corpo = typeof bruto?.corpo === 'string' ? bruto.corpo.trim() : '';
+  if (!corpo) return null;
+
+  const assunto = canal === 'email' && typeof bruto.assunto === 'string'
+    ? bruto.assunto.trim()
+    : '';
+
+  return { corpo, assunto };
+}

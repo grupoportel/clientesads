@@ -258,6 +258,20 @@ refeita sozinha.
 `GEMINI_MODELO` continua existindo para fixar um nome quando houver motivo,
 mas o padrão é não fixar.
 
+### A IA escreve, quem envia é gente
+
+`/api/redigir-mensagem` devolve o rascunho para a caixa de escrita — não grava
+e não envia. Mensagem comercial saindo sozinha em nome da empresa é o tipo de
+automação que rende cliente perdido por uma frase que ninguém revisou.
+
+O objetivo da mensagem sai de uma lista fechada (`INTENCOES`) em vez de campo
+livre: assim o pedido ao modelo é sempre o mesmo e só o lead muda. O campo de
+instrução livre continua existindo, mas por cima de uma base conhecida.
+
+O prompt proíbe explicitamente inventar preço, prazo e número, e prometer
+resultado. Isso está coberto por teste — se alguém reescrever o prompt e tirar
+essas linhas, o teste reprova.
+
 ### Google Agenda: a API tem que estar ativa no projeto certo
 
 O erro `Calendar API has not been used in project <número>` quer dizer que a

@@ -3,6 +3,7 @@ import { database } from '../firebase';
 import { ref, onValue, update, push, set } from 'firebase/database';
 import { apiPost } from '../api';
 import SeletorModelo from './SeletorModelo';
+import EscreverComIA from './EscreverComIA';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const formatarData = (iso) => {
@@ -438,6 +439,13 @@ export default function EmailPage({ leads = [], modelos = [], empresa = '', meuN
               meuNome={meuNome}
               onEscolher={({ corpo: c, assunto: a }) => { setCorpo(c); if (a) setAssunto(a); }}
             />
+            <EscreverComIA
+              lead={leads.find(l => l.email && l.email.toLowerCase() === para.trim().toLowerCase()) || null}
+              canal="email"
+              empresa={empresa}
+              meuNome={meuNome}
+              aoEscolher={({ corpo: c, assunto: a }) => { setCorpo(c); if (a) setAssunto(a); }}
+            />
             <div style={{ flex: 1 }} />
             <button onClick={() => setRedigindo(false)} style={{
               background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '8px',
@@ -545,6 +553,13 @@ export default function EmailPage({ leads = [], modelos = [], empresa = '', meuN
                 empresa={empresa}
                 meuNome={meuNome}
                 onEscolher={({ corpo: c }) => setRespostaTexto(c)}
+              />
+              <EscreverComIA
+                lead={leads.find(l => l.email && l.email.toLowerCase() === (threadAtiva.email || '').toLowerCase()) || null}
+                canal="email"
+                empresa={empresa}
+                meuNome={meuNome}
+                aoEscolher={({ corpo: c }) => setRespostaTexto(c)}
               />
               <div style={{ flex: 1 }} />
               <button
