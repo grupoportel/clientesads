@@ -43,6 +43,7 @@ const ImportarLeadsModal = lazy(() => import('./components/ImportarLeadsModal'))
 const BuscaGlobal = lazy(() => import('./components/BuscaGlobal'));
 const LixeiraModal = lazy(() => import('./components/LixeiraModal'));
 const AgendarReuniaoModal = lazy(() => import('./components/AgendarReuniaoModal'));
+const PainelPrioridade = lazy(() => import('./components/PainelPrioridade'));
 import { rodarAutomacoes } from './automacoesRunner';
 
 // No topo do módulo em vez de dentro do filtro: recriada a cada lead, ela
@@ -852,6 +853,7 @@ function App() {
                   <div className="view-toggle">
                     <button className={`view-btn ${visaoAtual === 'table' ? 'active' : ''}`} onClick={() => setVisaoAtual('table')}>☰ Tabela</button>
                     <button className={`view-btn ${visaoAtual === 'kanban' ? 'active' : ''}`} onClick={() => setVisaoAtual('kanban')}>⊞ Kanban</button>
+                    <button className={`view-btn ${visaoAtual === 'prioridade' ? 'active' : ''}`} onClick={() => setVisaoAtual('prioridade')} title="A carteira ordenada por chance de fechar">🎯 Prioridade</button>
                   </div>
                   {editavel && <button className="btn btn-primary" onClick={abrirModalNovo}>+ Novo Lead</button>}
                 </div>
@@ -971,8 +973,10 @@ function App() {
                   cidades={cidades}
                   etapas={etapas}
                 />
-              ) : (
+              ) : visaoAtual === 'kanban' ? (
                 <KanbanBoard leads={leadsFiltrados} onEdit={abrirModalEdicao} onLeadDrop={atualizarStatusDragAndDrop} etapas={etapas} />
+              ) : (
+                <PainelPrioridade leads={leadsFiltrados} etapas={etapas} aoAbrir={setLeadDetalhe} />
               )}
             </div>
 

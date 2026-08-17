@@ -9,6 +9,7 @@ import { papelDoUsuario, podeEditar, podeAdministrar, podeVer, motivoBloqueio } 
 import { configuracaoAgenda, somarMinutos, inicioDoEvento, textoDataHora, montarEvento, textoConfirmacao, explicarErroAgenda } from '../../api/_agenda.js';
 import { INTENCOES, acharIntencao, resumirHistorico, montarPromptMensagem, interpretarMensagem, ehTransitorio, atrasoDaTentativa, escolherModelo, configuracaoIa, textoDoHtml, urlDoSite, montarPromptAnalise, interpretarAnalise, CAMPOS_ANALISE } from '../../api/_ia.js';
 import { responderPara, montarHtml, configuracaoSmtp, caixaDeEntrada, explicarErroSmtp } from '../../api/_email.js';
+import { pontuarLead, ordenarPorPrioridade, resumoDaCarteira, faixaDe, FAIXAS } from '../prioridade.js';
 import { paraLixeira, deLixeira, diasNaLixeira, vencidos, planoDeDesfazer, textoTempoNaLixeira, PRAZO_DIAS } from '../lixeira.js';
 
 let ok = 0, fail = 0;
@@ -726,6 +727,84 @@ t('dominio diferente cai no remetente', responderPara('gui@outraempresa.com', 'c
 t('ignora maiuscula no dominio', responderPara('Vitor@GrupoPortel.com', 'contato@grupoportel.com') === 'Vitor@GrupoPortel.com');
 t('sem quem enviou usa o remetente', responderPara('', 'contato@grupoportel.com') === 'contato@grupoportel.com');
 t('sem remetente nao inventa', responderPara('a@b.com', '') === 'a@b.com');
+
+
+// ── Prioridade da carteira ──
+const AGORA_P = new Date('2026-08-17T12:00:00').getTime();
+const diasAtrasData = (d) => new Date(AGORA_P - d * 86400000).toISOString().slice(0, 10);
+const et = mesclarEtapas(null);
+
+const leadBom = {
+  nome: 'Pizzaria Bella', status: 'contato-decisor', decisor: 'Marina',
+  whatsapp: '65999', email: 'm@bella.com', site: 'bella.com', instagram: '@bella',
+  nota: '4.7', avaliacoes: '80', valor: '3000', ultimo_contato: diasAtrasData(3),
+};
+const alvoBom = pontuarLead(leadBom, et, AGORA_P);
+t('lead completo pontua alto', alvoBom.pontos >= 62);
+t('lead completo e quente', alvoBom.faixa.id === 'quente');
+t('motivo cita a etapa', alvoBom.motivos.some(m => m.includes('Contato com Decisor')));
+t('motivo cita a nota', alvoBom.motivos.some(m => m.includes('4.7')));
+
+// Ganho e perdido saem da fila: nao sao carteira a trabalhar
+t('venda sai da fila', pontuarLead({ ...leadBom, status: 'venda' }, et, AGORA_P).foraDaFila);
+t('perda sai da fila', pontuarLead({ ...leadBom, status: 'perda' }, et, AGORA_P).foraDaFila);
+
+// O tempo sem contato e o unico sinal que piora sozinho
+const frio = pontuarLead({ ...leadBom, ultimo_contato: diasAtrasData(200) }, et, AGORA_P);
+t('tempo derruba a pontuacao', frio.pontos < alvoBom.pontos);
+t('avisa o tempo sem contato', frio.motivos.some(m => m.includes('Sem contato há 200 dias')));
+t('nunca contactado tambem cai', pontuarLead({ ...leadBom, status: 'lead-qualificado', ultimo_contato: '' }, et, AGORA_P).motivos.some(m => m.includes('Nunca teve contato')));
+
+// Etapa adiantada com o campo vazio: falta cadastro, nao falta relacionamento.
+// Antes as duas frases apareciam juntas e se contradiziam.
+const semRegistro = pontuarLead({ ...leadBom, status: 'reuniao-marcada', ultimo_contato: '' }, et, AGORA_P);
+t('etapa adiantada nao diz que nunca falou', !semRegistro.motivos.some(m => m.includes('Nunca teve contato')));
+t('aponta o cadastro incompleto', semRegistro.motivos.some(m => m.includes('não registrado no cadastro')));
+t('nao zera a nota de quem ja avancou', semRegistro.pontos > pontuarLead({ nome: 'X', status: 'nenhum' }, et, AGORA_P).pontos);
+
+// Sem canal nenhum e o pior caso: nao da para trabalhar
+const mudo = pontuarLead({ nome: 'X', status: 'lead-qualificado' }, et, AGORA_P);
+t('sem canal vira alerta', mudo.alerta === 'Sem nenhum canal de contato');
+// Nao urgente: avisa, mas nao passa na frente de quem da para trabalhar hoje
+t('sem canal nao e urgente', mudo.urgente === false);
+t('sem canal e frio', mudo.faixa.id === 'frio');
+t('lista o que falta', mudo.motivos.includes('Sem telefone') && mudo.motivos.includes('Sem e-mail'));
+
+// Alerta e separado da nota: nao muda a chance, muda o que fazer hoje
+const atrasada = pontuarLead({ ...leadBom, status: 'reuniao-marcada', reuniao: diasAtrasData(5) }, et, AGORA_P);
+t('reuniao vencida vira alerta', atrasada.alerta.includes('Reunião era há 5 dia'));
+t('reuniao vencida e urgente', atrasada.urgente === true);
+t('reuniao hoje avisa', pontuarLead({ ...leadBom, reuniao: diasAtrasData(0) }, et, AGORA_P).alerta === 'Reunião é hoje');
+t('reuniao amanha avisa', pontuarLead({ ...leadBom, reuniao: diasAtrasData(-1) }, et, AGORA_P).alerta.includes('1 dia'));
+t('reuniao distante nao alerta', pontuarLead({ ...leadBom, reuniao: diasAtrasData(-30) }, et, AGORA_P).alerta === null);
+
+// Nota baixa e sinal, nao ruido
+t('nota baixa aparece nos motivos', pontuarLead({ ...leadBom, nota: '2.8' }, et, AGORA_P).motivos.some(m => m.includes('Nota baixa')));
+
+// Limites
+t('pontuacao nunca passa de 100', pontuarLead({ ...leadBom, status: 'contrato-realizado', valor: '99999' }, et, AGORA_P).pontos <= 100);
+t('lead vazio nao quebra', pontuarLead({}, et, AGORA_P).pontos >= 0);
+t('faixa do zero e fria', faixaDe(0).id === 'frio');
+t('faixas cobrem tudo', FAIXAS[FAIXAS.length - 1].minimo === 0);
+
+// Ordenacao: alerta sobe acima da nota
+const fila = ordenarPorPrioridade([
+  { nome: 'A', status: 'lead-qualificado', ultimo_contato: diasAtrasData(300) },
+  leadBom,
+  { nome: 'C', status: 'nenhum', reuniao: diasAtrasData(0), telefone: '1' },
+  { nome: 'D', status: 'venda' },
+], et, AGORA_P);
+t('ganhos ficam de fora', fila.length === 3);
+t('urgente vem primeiro mesmo com nota menor', fila[0].lead.nome === 'C');
+// A tem alerta de cadastro incompleto, mas nao pode passar na frente do quente
+t('cadastro incompleto nao fura a fila', fila[1].lead.nome === 'Pizzaria Bella');
+t('lead morto fica por ultimo', fila[2].lead.nome === 'A');
+
+const resumoCarteira = resumoDaCarteira([leadBom, { nome: 'Z', status: 'nenhum' }, { nome: 'W', status: 'venda' }], et, AGORA_P);
+t('resumo ignora ganhos', resumoCarteira.total === 2);
+t('resumo conta quentes', resumoCarteira.quente === 1);
+t('resumo conta urgentes', resumoCarteira.urgentes === 0);
+t('resumo conta quem nao da para contatar', resumoCarteira.semContato === 1);
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);
