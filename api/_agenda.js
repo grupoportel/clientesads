@@ -106,13 +106,12 @@ export function montarEvento(lead = {}, opcoes = {}) {
     location: [lead.cidade, lead.estado].filter(Boolean).join(' / ') || undefined,
     start: { dateTime: inicio, timeZone: fuso },
     end: { dateTime: fim, timeZone: fuso },
-    reminders: {
-      useDefault: false,
-      overrides: [
-        { method: 'popup', minutes: 60 },
-        { method: 'popup', minutes: 10 },
-      ],
-    },
+    // Lembrete no Google Agenda é por pessoa, não por evento: o que a conta de
+    // serviço define vale para a cópia dela, e quem abre a agenda continua
+    // vendo o próprio padrão. Havia um override de 60 e 10 minutos aqui que
+    // simplesmente não chegava a ninguém. Melhor usar o padrão de quem usa do
+    // que manter código que promete um lembrete e não entrega.
+    reminders: { useDefault: true },
   };
 }
 

@@ -575,6 +575,11 @@ t('local junta cidade e estado', ev.location === 'Cuiaba / MT');
 // recusaria o evento inteiro. Quem avisa o lead e o e-mail do CRM.
 t('evento nao leva convidados', ev.attendees === undefined);
 
+// Lembrete no Google e por pessoa: override feito pela conta de servico nao
+// chega a quem abre a agenda. Usar o padrao de quem usa e o unico que funciona.
+t('lembrete usa o padrao de quem usa', ev.reminders.useDefault === true);
+t('nao finge definir lembrete', ev.reminders.overrides === undefined);
+
 t('duracao padrao de 60', montarEvento(leadAgenda, { dataHora: '2026-08-20T09:00' }).end.dateTime === '2026-08-20T10:00:00');
 t('sem data nao monta evento', montarEvento(leadAgenda, { dataHora: '' }) === null);
 t('lead sem nome ainda monta', montarEvento({}, { dataHora: '2026-08-20T09:00' }).summary === 'Reunião — Lead');
