@@ -41,6 +41,7 @@ function Aba({ id, rotulo, quantidade, cor, ativa, aoClicar }) {
  */
 export default function PainelPrioridade({ leads = [], etapas = [], aoAbrir }) {
   const [faixaAtiva, setFaixaAtiva] = useState('todas');
+  const [busca, setBusca] = useState('');
   const [pagina, setPagina] = useState(1);
 
   // Recalculado quando a carteira muda. São 691 leads e aritmética simples,
@@ -49,11 +50,21 @@ export default function PainelPrioridade({ leads = [], etapas = [], aoAbrir }) {
   const fila = useMemo(() => ordenarPorPrioridade(leads, etapas, agoraMs), [leads, etapas, agoraMs]);
   const resumo = useMemo(() => resumoDaCarteira(leads, etapas, agoraMs), [leads, etapas, agoraMs]);
 
-  const filtrada = faixaAtiva === 'todas'
+  const daFaixa = faixaAtiva === 'todas'
     ? fila
     : faixaAtiva === 'urgentes'
       ? fila.filter(x => x.urgente)
       : fila.filter(x => x.faixa.id === faixaAtiva);
+
+  // Procura no nome, na cidade e no responsável: com 690 leads na fila, achar
+  // um pela rolagem não é opção.
+  const filtrada = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    if (!termo) return daFaixa;
+    return daFaixa.filter(({ lead }) =>
+      `${lead.nome || ''} ${lead.cidade || ''} ${lead.responsavel || ''}`
+        .toLowerCase().includes(termo));
+  }, [daFaixa, busca]);
 
   const totalPaginas = Math.max(1, Math.ceil(filtrada.length / POR_PAGINA));
   const paginaSegura = Math.min(pagina, totalPaginas);
@@ -70,30 +81,50 @@ export default function PainelPrioridade({ leads = [], etapas = [], aoAbrir }) {
   }
 
   return (
-    <div style={{ padding: '4px 0 20px' }}>
+    // O pai (.content) tem overflow hidden, então a rolagem tem que nascer
+    // aqui. Sem isto, com 690 leads na fila só os primeiros apareciam e não
+    // havia como chegar ao resto.
+    <div style={{ flex: 1, overflowY: 'auto', padding: '18px 22px 60px' }}>
       <div style={{
-        display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center',
-        marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--border)',
+        display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center',
+        marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid var(--border)',
       }}>
         <Aba id="todas" rotulo="Toda a carteira" quantidade={resumo.total} ativa={faixaAtiva === 'todas'} aoClicar={trocarFaixa} />
         {resumo.urgentes > 0 && <Aba id="urgentes" rotulo="⏰ Precisa hoje" quantidade={resumo.urgentes} cor="var(--red)" ativa={faixaAtiva === 'urgentes'} aoClicar={trocarFaixa} />}
         {FAIXAS.map(f => <Aba key={f.id} id={f.id} rotulo={f.rotulo} quantidade={resumo[f.id]} cor={f.cor} ativa={faixaAtiva === f.id} aoClicar={trocarFaixa} />)}
 
-        {resumo.semContato > 0 && (
-          <span style={{ marginLeft: 'auto', fontSize: 11.5, color: 'var(--text3)' }}>
-            {resumo.semContato} sem telefone nem e-mail
-          </span>
-        )}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center' }}>
+          {resumo.semContato > 0 && (
+            <span style={{ fontSize: 11.5, color: 'var(--text3)', whiteSpace: 'nowrap' }}>
+              {resumo.semContato} sem telefone nem e-mail
+            </span>
+          )}
+          <input
+            className="form-control"
+            style={{ width: 210, fontSize: 12.5, padding: '6px 11px' }}
+            placeholder="Procurar na carteira…"
+            value={busca}
+            onChange={e => { setBusca(e.target.value); setPagina(1); }}
+          />
+        </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+      {busca.trim() && (
+        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12 }}>
+          {filtrada.length === 0
+            ? `Nenhum lead com "${busca.trim()}" nesta faixa.`
+            : `${filtrada.length} lead(s) com "${busca.trim()}"`}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {visiveis.map(({ lead, pontos, faixa, motivos, alerta, urgente }) => (
           <div
             key={lead.id}
             onClick={() => aoAbrir?.(lead)}
             style={{
-              display: 'flex', alignItems: 'flex-start', gap: 13, cursor: 'pointer',
-              padding: '11px 14px', borderRadius: 9,
+              display: 'flex', alignItems: 'flex-start', gap: 16, cursor: 'pointer',
+              padding: '14px 18px', borderRadius: 10,
               background: 'var(--surface2)',
               border: `1px solid ${urgente ? 'rgba(239,68,68,0.35)' : 'var(--border)'}`,
             }}
