@@ -42,6 +42,7 @@ import { gerarCSV, baixarCSV } from './csv';
 const ImportarLeadsModal = lazy(() => import('./components/ImportarLeadsModal'));
 const BuscaGlobal = lazy(() => import('./components/BuscaGlobal'));
 const LixeiraModal = lazy(() => import('./components/LixeiraModal'));
+const AgendarReuniaoModal = lazy(() => import('./components/AgendarReuniaoModal'));
 import { rodarAutomacoes } from './automacoesRunner';
 
 // No topo do módulo em vez de dentro do filtro: recriada a cada lead, ela
@@ -139,6 +140,7 @@ function App() {
   const [modalImportar, setModalImportar] = useState(false);
   const [buscaGlobalAberta, setBuscaGlobalAberta] = useState(false);
   const [lixeiraAberta, setLixeiraAberta] = useState(false);
+  const [leadParaAgendar, setLeadParaAgendar] = useState(null);
   const [menuAberto, setMenuAberto] = useState(false);
   const [leadEmEdicao, setLeadEmEdicao] = useState(null);
   const [selectedLeads, setSelectedLeads] = useState([]);
@@ -974,7 +976,14 @@ function App() {
               )}
             </div>
 
-            <DetailPanel lead={leadDetalhe} onClose={() => setLeadDetalhe(null)} onEdit={abrirModalEdicao} onDelete={deletarLead} etapas={etapas} />
+            <DetailPanel
+              lead={leadDetalhe}
+              onClose={() => setLeadDetalhe(null)}
+              onEdit={abrirModalEdicao}
+              onDelete={deletarLead}
+              onAgendar={editavel ? setLeadParaAgendar : null}
+              etapas={etapas}
+            />
           </div>
         );
 
@@ -1211,6 +1220,12 @@ function App() {
 
       {/* ══════ IMPORTAÇÃO DE LEADS ══════ */}
       <Suspense fallback={null}>
+      <AgendarReuniaoModal
+        aberto={Boolean(leadParaAgendar)}
+        aoFechar={() => setLeadParaAgendar(null)}
+        lead={leadParaAgendar}
+      />
+
       <LixeiraModal
         aberto={lixeiraAberta}
         aoFechar={() => setLixeiraAberta(false)}

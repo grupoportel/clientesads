@@ -6,6 +6,7 @@ import { regrasQueDisparam, regraValida, calcularPrazo, planejarAcoes } from '..
 import { saudeCliente, saudeMediaDaCarteira, receitaRecorrente, clienteAPartirDoLead, ganhosSemCliente } from '../clientes.js';
 import { normalizarMeta, achatar, extrairCampos, extrairUtm, acharDuplicado, camposParaCompletar } from '../../api/_leadIn.js';
 import { papelDoUsuario, podeEditar, podeAdministrar, podeVer, motivoBloqueio } from '../papeis.js';
+import { configuracaoAgenda, somarMinutos, inicioDoEvento, textoDataHora, montarEvento, textoConfirmacao, explicarErroAgenda } from '../../api/_agenda.js';
 import { configuracaoIa, textoDoHtml, urlDoSite, montarPromptAnalise, interpretarAnalise, CAMPOS_ANALISE } from '../../api/_ia.js';
 import { configuracaoSmtp, caixaDeEntrada, explicarErroSmtp } from '../../api/_email.js';
 import { paraLixeira, deLixeira, diasNaLixeira, vencidos, planoDeDesfazer, textoTempoNaLixeira, PRAZO_DIAS } from '../lixeira.js';
@@ -523,6 +524,73 @@ t('json quebrado devolve null', interpretarAnalise('{isso nao e json') === null)
 t('texto sem json devolve null', interpretarAnalise('desculpe, nao consegui') === null);
 t('json sem campo util devolve null', interpretarAnalise('{"confianca":"alta"}') === null);
 t('campos so com espaco devolve null', interpretarAnalise('{"melhores":"   "}') === null);
+
+
+// ── Google Agenda ──
+const credFb = { FIREBASE_CLIENT_EMAIL: 'sa@x.iam.gserviceaccount.com', FIREBASE_PRIVATE_KEY: 'chave' };
+
+t('sem calendario nao configura', configuracaoAgenda(credFb) === null);
+t('sem credencial nao configura', configuracaoAgenda({ GOOGLE_CALENDAR_ID: 'a@b.com' }) === null);
+t('reaproveita a conta do firebase', configuracaoAgenda({ ...credFb, GOOGLE_CALENDAR_ID: 'a@b.com' }).email === 'sa@x.iam.gserviceaccount.com');
+t('conta dedicada tem prioridade', configuracaoAgenda({ ...credFb, GOOGLE_CALENDAR_ID: 'a@b.com', GOOGLE_CALENDAR_CLIENT_EMAIL: 'outra@x.com', GOOGLE_CALENDAR_PRIVATE_KEY: 'k' }).email === 'outra@x.com');
+t('fuso padrao e Cuiaba', configuracaoAgenda({ ...credFb, GOOGLE_CALENDAR_ID: 'a@b.com' }).fuso === 'America/Cuiaba');
+// A chave chega do painel da Vercel com a quebra de linha escapada, e precisa
+// virar quebra de verdade antes de ir para o Google
+const BARRA_N = String.fromCharCode(92) + 'n';
+const QUEBRA = String.fromCharCode(10);
+t('desescapa a quebra de linha da chave',
+  configuracaoAgenda({ ...credFb, FIREBASE_PRIVATE_KEY: 'a' + BARRA_N + 'b', GOOGLE_CALENDAR_ID: 'x' }).chave === 'a' + QUEBRA + 'b');
+
+// Aritmetica de horario: precisa valer em qualquer fuso da maquina que roda
+t('soma dentro da hora', somarMinutos('2026-08-20T14:30', 30) === '2026-08-20T15:00:00');
+t('soma virando a hora', somarMinutos('2026-08-20T14:45', 30) === '2026-08-20T15:15:00');
+t('soma virando o dia', somarMinutos('2026-08-20T23:30', 60) === '2026-08-21T00:30:00');
+t('soma virando o mes', somarMinutos('2026-08-31T23:30', 60) === '2026-09-01T00:30:00');
+t('soma virando o ano', somarMinutos('2026-12-31T23:30', 60) === '2027-01-01T00:30:00');
+t('respeita ano bissexto', somarMinutos('2028-02-28T23:30', 60) === '2028-02-29T00:30:00');
+t('ano comum pula para marco', somarMinutos('2026-02-28T23:30', 60) === '2026-03-01T00:30:00');
+t('data invalida devolve null', somarMinutos('ontem', 30) === null);
+t('data vazia devolve null', somarMinutos('', 30) === null);
+
+t('inicio normaliza com segundos', inicioDoEvento('2026-08-20T14:30') === '2026-08-20T14:30:00');
+t('inicio aceita espaco no lugar do T', inicioDoEvento('2026-08-20 14:30') === '2026-08-20T14:30:00');
+t('inicio invalido devolve null', inicioDoEvento('20/08/2026') === null);
+
+t('texto em portugues', textoDataHora('2026-08-20T14:30') === '20/08/2026 às 14:30');
+t('texto de data invalida e vazio', textoDataHora('xx') === '');
+
+// Evento
+const leadAgenda = { nome: 'Pizzaria Bella', decisor: 'Marina', telefone: '65999', email: 'm@bella.com', nicho: 'Pizzaria', cidade: 'Cuiaba', estado: 'MT' };
+const ev = montarEvento(leadAgenda, { dataHora: '2026-08-20T14:30', duracaoMin: 45, observacao: 'levar proposta' });
+t('titulo tem o lead', ev.summary === 'Reunião — Pizzaria Bella');
+t('inicio no formato do google', ev.start.dateTime === '2026-08-20T14:30:00');
+t('fim respeita a duracao', ev.end.dateTime === '2026-08-20T15:15:00');
+t('leva o fuso', ev.start.timeZone === 'America/Cuiaba');
+t('descricao tem o contato', ev.description.includes('Marina') && ev.description.includes('65999'));
+t('descricao tem a observacao', ev.description.includes('levar proposta'));
+t('local junta cidade e estado', ev.location === 'Cuiaba / MT');
+
+// Conta de servico nao consegue convidar sem delegacao no dominio: o Google
+// recusaria o evento inteiro. Quem avisa o lead e o e-mail do CRM.
+t('evento nao leva convidados', ev.attendees === undefined);
+
+t('duracao padrao de 60', montarEvento(leadAgenda, { dataHora: '2026-08-20T09:00' }).end.dateTime === '2026-08-20T10:00:00');
+t('sem data nao monta evento', montarEvento(leadAgenda, { dataHora: '' }) === null);
+t('lead sem nome ainda monta', montarEvento({}, { dataHora: '2026-08-20T09:00' }).summary === 'Reunião — Lead');
+t('sem cidade nao inventa local', montarEvento({ nome: 'X' }, { dataHora: '2026-08-20T09:00' }).location === undefined);
+
+// E-mail de confirmacao
+const conf = textoConfirmacao(leadAgenda, { dataHora: '2026-08-20T14:30', duracaoMin: 45 });
+t('assunto tem a data', conf.assunto.includes('20/08/2026'));
+t('trata pelo decisor', conf.corpo.startsWith('Olá, Marina!'));
+t('corpo tem a duracao', conf.corpo.includes('45 minutos'));
+t('sem decisor trata pelo nome', textoConfirmacao({ nome: 'Bella' }, { dataHora: '2026-08-20T14:30' }).corpo.startsWith('Olá, Bella!'));
+t('sem nome nenhum nao fica quebrado', textoConfirmacao({}, { dataHora: '2026-08-20T14:30' }).corpo.startsWith('Olá!'));
+
+t('404 fala da agenda', explicarErroAgenda({ message: 'respondeu 404: not found' }).includes('GOOGLE_CALENDAR_ID'));
+t('403 fala de permissao', explicarErroAgenda({ message: 'respondeu 403: forbidden' }).includes('alterações nos eventos'));
+t('403 de api desligada e especifico', explicarErroAgenda({ message: '403 accessNotConfigured' }).includes('não está ativada'));
+t('erro estranho nao vira palpite', explicarErroAgenda({ message: 'algo diferente' }) === null);
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);

@@ -60,6 +60,8 @@ Confirme que estas variáveis existem no painel do Vercel (Settings → Environm
 | `GEMINI_API_KEY` | análise de lead por IA | sim, para a IA funcionar |
 | `GEMINI_MODELO` | modelo do Gemini | não, cai em `gemini-2.5-flash` |
 | `ANTHROPIC_API_KEY` | alternativa ao Gemini | não |
+| `GOOGLE_CALENDAR_ID` | eventos no Google Agenda | sim, para a agenda funcionar |
+| `AGENDA_FUSO` | fuso dos eventos | não, cai em `America/Cuiaba` |
 
 As três últimas não estão no `.env.local`, então o envio de e-mail não funciona em
 desenvolvimento. Se já estiverem configuradas no Vercel, produção segue normal —
@@ -203,3 +205,39 @@ o que ninguém pediu. Coberto por teste.
 https, e nada de `localhost`, rede interna ou `169.254.169.254` — sem isso, o
 campo "site" de um lead viraria uma requisição do servidor para dentro da
 própria infraestrutura.
+
+---
+
+## Google Agenda
+
+Mão única: o CRM cria o evento no Google, e não o contrário. Sincronizar os
+dois lados exigiria webhook, token de atualização e uma regra de conflito para
+quando a mesma reunião mudar nos dois lugares — trabalho grande para um
+problema que ainda não existe.
+
+**Não precisa de OAuth.** A autenticação reaproveita a conta de serviço que já
+existe para o Firebase, o que evita tela de consentimento e guarda de refresh
+token. Dois passos, uma vez só:
+
+1. No Google Cloud do projeto, ative a **Google Calendar API**.
+2. No Google Agenda, abra as configurações da agenda → **Compartilhar com
+   pessoas específicas** → adicione o e-mail da conta de serviço (o mesmo de
+   `FIREBASE_CLIENT_EMAIL`) com permissão **"Fazer alterações nos eventos"**.
+
+Depois defina `GOOGLE_CALENDAR_ID` com o endereço da agenda — normalmente o seu
+próprio e-mail do Google.
+
+### Por que o evento não tem convidados
+
+Uma conta de serviço não consegue convidar ninguém sem *domain-wide delegation*,
+que só existe no Google Workspace. Tentar incluir `attendees` faria o Google
+recusar o evento inteiro. Quem avisa o lead é o e-mail de confirmação que o
+próprio CRM envia por SMTP.
+
+### Falha parcial é resultado, não erro
+
+Marcar reunião faz três coisas independentes: evento, e-mail e tarefa. Se o
+Google recusar, o e-mail ainda sai; se o e-mail falhar, a tarefa ainda é criada.
+O endpoint responde `200` com o estado de cada etapa em vez de um erro só —
+devolver `500` faria a tela descartar o que funcionou, e a pessoa remarcaria
+tudo achando que nada aconteceu.
