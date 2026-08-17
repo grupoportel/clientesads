@@ -8,7 +8,7 @@ import { normalizarMeta, achatar, extrairCampos, extrairUtm, acharDuplicado, cam
 import { papelDoUsuario, podeEditar, podeAdministrar, podeVer, motivoBloqueio } from '../papeis.js';
 import { configuracaoAgenda, somarMinutos, inicioDoEvento, textoDataHora, montarEvento, textoConfirmacao, explicarErroAgenda } from '../../api/_agenda.js';
 import { INTENCOES, acharIntencao, resumirHistorico, montarPromptMensagem, interpretarMensagem, ehTransitorio, atrasoDaTentativa, escolherModelo, configuracaoIa, textoDoHtml, urlDoSite, montarPromptAnalise, interpretarAnalise, CAMPOS_ANALISE } from '../../api/_ia.js';
-import { configuracaoSmtp, caixaDeEntrada, explicarErroSmtp } from '../../api/_email.js';
+import { montarHtml, configuracaoSmtp, caixaDeEntrada, explicarErroSmtp } from '../../api/_email.js';
 import { paraLixeira, deLixeira, diasNaLixeira, vencidos, planoDeDesfazer, textoTempoNaLixeira, PRAZO_DIAS } from '../lixeira.js';
 
 let ok = 0, fail = 0;
@@ -696,6 +696,25 @@ t('le com cerca de codigo', interpretarMensagem(['```json','{"corpo":"oi"}','```
 t('corpo vazio devolve null', interpretarMensagem('{"corpo":"   "}') === null);
 t('sem corpo devolve null', interpretarMensagem('{"assunto":"X"}', 'email') === null);
 t('json quebrado devolve null', interpretarMensagem('nao consegui') === null);
+
+
+// ── Corpo do e-mail ──
+// A versao anterior tinha faixa com gradiente e rodape "enviada pelo CRM":
+// visual de disparo em massa num e-mail que e um-para-um.
+const QL = String.fromCharCode(10);
+const htmlEmail = montarHtml('Primeiro paragrafo.' + QL + QL + 'Segundo paragrafo.');
+t('separa paragrafos', (htmlEmail.match(/<p /g) || []).length === 2);
+t('quebra simples vira br', montarHtml('linha 1' + QL + 'linha 2').includes('<br>'));
+t('nao tem faixa colorida', !/gradient|background:/i.test(htmlEmail));
+t('nao se anuncia como CRM', !/CRM/i.test(htmlEmail));
+t('corpo vazio nao gera paragrafo', (montarHtml('').match(/<p /g) || []) . length === 0);
+t('linha em branco extra nao vira paragrafo vazio', (montarHtml('a' + QL + QL + QL + QL + 'b').match(/<p /g) || []).length === 2);
+
+// O texto vem de campo livre: nao pode injetar marcacao na mensagem enviada
+const perigoso = montarHtml('<script>alert(1)</script> e "aspas" & E-comercial');
+t('escapa marcacao', !perigoso.includes('<script>'));
+t('escapa aspas', perigoso.includes('&quot;'));
+t('escapa e-comercial', perigoso.includes('&amp;'));
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);

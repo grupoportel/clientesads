@@ -10,16 +10,11 @@
 
 import nodemailer from 'nodemailer';
 import { exigirUsuario, obterBanco, comPrazo, explicarErroDeCredencial } from './_auth.js';
-import { configuracaoSmtp, explicarErroSmtp } from './_email.js';
+import { configuracaoSmtp, explicarErroSmtp, montarHtml } from './_email.js';
 import {
   configuracaoAgenda, montarEvento, criarEvento,
   textoConfirmacao, textoDataHora, explicarErroAgenda,
 } from './_agenda.js';
-
-const escaparHtml = (texto = '') =>
-  String(texto)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' });
@@ -74,9 +69,7 @@ export default async function handler(req, res) {
         replyTo: usuario.email || smtp.remetente,
         subject: assunto,
         text: corpo,
-        html: `<div style="font-family:Arial,sans-serif;max-width:600px;color:#333;line-height:1.7;font-size:14px;">
-          <p style="white-space:pre-wrap;">${escaparHtml(corpo)}</p>
-        </div>`,
+        html: montarHtml(corpo),
       });
       resultado.email.feito = true;
     } catch (erro) {

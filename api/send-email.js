@@ -7,17 +7,7 @@
 
 import nodemailer from 'nodemailer';
 import { exigirUsuario } from './_auth.js';
-import { configuracaoSmtp, explicarErroSmtp } from './_email.js';
-
-// Escapa HTML para que o corpo digitado pelo atendente não injete marcação
-// na mensagem enviada.
-const escaparHtml = (texto = '') =>
-  String(texto)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+import { configuracaoSmtp, explicarErroSmtp, montarHtml } from './_email.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -57,20 +47,7 @@ export default async function handler(req, res) {
       subject: assunto,
       replyTo: usuario.email || smtp.remetente,
       text: corpo,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
-          <div style="background: linear-gradient(135deg, #00d2df, #6366f1); padding: 20px; border-radius: 8px 8px 0 0;">
-            <h2 style="color: white; margin: 0; font-size: 18px;">Grupo Portel</h2>
-          </div>
-          <div style="padding: 24px; background: #f9f9f9; border: 1px solid #eee; border-top: none; border-radius: 0 0 8px 8px;">
-            <p style="white-space: pre-wrap; line-height: 1.7; font-size: 14px;">${escaparHtml(corpo)}</p>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-            <p style="font-size: 12px; color: #888; margin: 0;">
-              Esta mensagem foi enviada pelo CRM Grupo Portel.
-            </p>
-          </div>
-        </div>
-      `,
+      html: montarHtml(corpo),
     });
 
     console.log(`[Email] Enviado por ${usuario.email} para ${para} via ${smtp.host}`);

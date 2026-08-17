@@ -74,3 +74,34 @@ export function explicarErroSmtp(erro) {
   }
   return null;
 }
+
+// ── Corpo do e-mail ─────────────────────────────────────────────────────────
+
+const escapar = (texto = '') =>
+  String(texto)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+/**
+ * Monta o HTML da mensagem.
+ *
+ * De propósito simples. A versão anterior tinha faixa colorida com gradiente no
+ * topo e um rodapé dizendo "enviada pelo CRM" — visual de disparo em massa num
+ * e-mail que é um-para-um. O Gmail lê isso como marketing e manda para o spam,
+ * e quem recebe também percebe que não foi uma pessoa que escreveu.
+ *
+ * Aqui o HTML só preserva os parágrafos. É o que um cliente de e-mail comum
+ * produziria se a pessoa tivesse digitado a mensagem à mão — que é o que
+ * aconteceu, já que ninguém envia sem revisar.
+ */
+export function montarHtml(corpo = '') {
+  const paragrafos = String(corpo)
+    .split(/\n{2,}/)
+    .map(p => p.trim())
+    .filter(Boolean)
+    .map(p => `<p style="margin:0 0 14px;">${escapar(p).replace(/\n/g, '<br>')}</p>`)
+    .join('\n');
+
+  return `<div style="font-family:-apple-system,'Segoe UI',Arial,sans-serif;`
+    + `font-size:15px;line-height:1.6;color:#222;">\n${paragrafos}\n</div>`;
+}
