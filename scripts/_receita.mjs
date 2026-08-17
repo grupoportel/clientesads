@@ -141,3 +141,17 @@ export function leadParaCsv(lead) {
     lead.cidade, lead.estado, lead.nicho, lead.endereco, lead.abertaEm,
   ].map(escapar).join(';');
 }
+
+/**
+ * Acha a pasta mais recente numa listagem de diretório.
+ *
+ * O padrão precisa casar com link de pasta, não com qualquer data na página.
+ * A listagem traz também a data de modificação de cada arquivo, e pegá-la
+ * fazia o script montar a URL de uma pasta que não existe — anunciava a versão
+ * "2026-07-20", que era só quando o arquivo foi mexido, e o download morria
+ * com 404.
+ */
+export function ultimaPasta(html = '', padrao) {
+  const achados = [...String(html).matchAll(padrao)].map(m => m[1]);
+  return [...new Set(achados)].sort().pop() || null;
+}

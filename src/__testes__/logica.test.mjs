@@ -9,7 +9,8 @@ import { papelDoUsuario, podeEditar, podeAdministrar, podeVer, motivoBloqueio } 
 import { configuracaoAgenda, somarMinutos, inicioDoEvento, textoDataHora, montarEvento, textoConfirmacao, explicarErroAgenda } from '../../api/_agenda.js';
 import { INTENCOES, acharIntencao, resumirHistorico, montarPromptMensagem, interpretarMensagem, ehTransitorio, atrasoDaTentativa, escolherModelo, configuracaoIa, textoDoHtml, urlDoSite, montarPromptAnalise, interpretarAnalise, CAMPOS_ANALISE } from '../../api/_ia.js';
 import { responderPara, montarHtml, configuracaoSmtp, caixaDeEntrada, explicarErroSmtp } from '../../api/_email.js';
-import { dividirLinha, montarCnpj, montarTelefone, linhaInteressa, linhaParaLead, formatarData, leadParaCsv, COL, SITUACAO_ATIVA } from '../../scripts/_receita.mjs';
+import { NICHOS, acharNicho, codigosDoNicho, codigosDeVarios, conferirCodigos } from '../../scripts/_nichos.mjs';
+import { ultimaPasta, dividirLinha, montarCnpj, montarTelefone, linhaInteressa, linhaParaLead, formatarData, leadParaCsv, COL, SITUACAO_ATIVA } from '../../scripts/_receita.mjs';
 import { acharExistente, pontuarCandidato, prepararRevisao, resumoDaRevisao, ordenarRevisao } from '../prospeccao.js';
 import { pontuarLead, ordenarPorPrioridade, resumoDaCarteira, faixaDe, FAIXAS } from '../prioridade.js';
 import { paraLixeira, deLixeira, diasNaLixeira, vencidos, planoDeDesfazer, textoTempoNaLixeira, PRAZO_DIAS } from '../lixeira.js';
@@ -943,6 +944,58 @@ t('sem nenhum dos dois fica vazio', linhaParaLead(semFantasia, {}).nome === '');
 const linhaCsv = leadParaCsv({ nome: 'Bar; Restaurante', cnpj: '1', telefone: '2', whatsapp: '', email: '', cidade: 'Sinop', estado: 'MT', nicho: '', endereco: '', abertaEm: '' });
 t('escapa o ponto e virgula do nome', linhaCsv.startsWith('"Bar; Restaurante"'));
 t('campo simples nao leva aspas', leadParaCsv({ nome: 'Bella' }).startsWith('Bella;'));
+
+
+// ── Descoberta da versão mais recente ──
+// A listagem traz a data de modificação junto do nome da pasta. Pegar a data
+// errada montava a URL de uma pasta inexistente e o download morria com 404.
+const listaEspelho = [
+  '<a href="2026-06-14/">2026-06-14/</a>  2026-06-22 10:00',
+  '<a href="2026-07-12/">2026-07-12/</a>  2026-07-20 08:30',
+].join(String.fromCharCode(10));
+
+t('pega a pasta, nao a data de modificacao',
+  ultimaPasta(listaEspelho, /href="(\d{4}-\d{2}-\d{2})\/"/g) === '2026-07-12');
+t('ignora data solta na pagina',
+  ultimaPasta(listaEspelho, /href="(\d{4}-\d{2}-\d{2})\/"/g) !== '2026-07-20');
+
+const listaWebdav = '<d:href>/public.php/webdav/2026-07/</d:href><d:href>/public.php/webdav/2026-08/</d:href>';
+t('le o formato webdav', ultimaPasta(listaWebdav, /webdav\/(\d{4}-\d{2})\//g) === '2026-08');
+t('listagem vazia devolve null', ultimaPasta('', /href="(\d{4})"/g) === null);
+t('sem casar nada devolve null', ultimaPasta('<a href="outra-coisa/">', /href="(\d{4}-\d{2}-\d{2})\/"/g) === null);
+
+// ── Nichos de prospecção ──
+t('tem os seis nichos', NICHOS.length === 6);
+t('todo nicho tem id, nome e cnaes', NICHOS.every(n => n.id && n.nome && Array.isArray(n.cnaes) && n.cnaes.length > 0));
+t('todo cnae tem codigo de 7 digitos', NICHOS.every(n => n.cnaes.every(c => /^\d{7}$/.test(c.codigo))));
+t('todo cnae tem nome para auditoria', NICHOS.every(n => n.cnaes.every(c => c.nome && c.nome.length > 5)));
+
+t('acha por id', acharNicho('energia-solar').nome === 'Energia solar');
+t('id inventado devolve null', acharNicho('nao-existe') === null);
+
+t('climatizacao traz o codigo de instalacao de ar', codigosDoNicho('climatizacao').includes('4322302'));
+t('software traz desenvolvimento sob encomenda', codigosDoNicho('software-automacao').includes('6201500'));
+
+// Relacionados ficam de fora por padrão: vigilância com pessoas não é
+// segurança eletrônica, e loja de móveis pronta não é planejado.
+t('relacionados ficam de fora por padrao', !codigosDoNicho('seguranca-eletronica').includes('8011101'));
+t('relacionados entram quando pedidos', codigosDoNicho('seguranca-eletronica', { incluirRelacionados: true }).includes('8011101'));
+
+// Instalação elétrica traz todo eletricista junto: dá para excluir
+t('codigo amplo entra por padrao', codigosDoNicho('energia-solar').includes('4321500'));
+t('codigo amplo pode ser excluido', !codigosDoNicho('energia-solar', { incluirAmplos: false }).includes('4321500'));
+t('solar avisa que vem sujo', acharNicho('energia-solar').aviso.includes('Não existe CNAE de energia solar'));
+
+t('varios nichos nao repetem codigo', codigosDeVarios(['software-automacao', 'tecnologia-b2b']).length ===
+  new Set(codigosDeVarios(['software-automacao', 'tecnologia-b2b'])).size);
+t('nicho inexistente nao quebra', codigosDoNicho('inventado').length === 0);
+
+// A Receita mexe na tabela de CNAE. Código aposentado não dá erro: devolve
+// zero empresas, e a pessoa conclui que o nicho não existe na cidade dela.
+t('tabela completa nao acusa problema', conferirCodigos(
+  Object.fromEntries(NICHOS.flatMap(n => [...n.cnaes, ...n.relacionados]).map(c => [c.codigo, c.nome]))
+).length === 0);
+t('codigo sumido e acusado', conferirCodigos({}).length > 0);
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);

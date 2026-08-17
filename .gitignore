@@ -31,3 +31,8 @@ dist-ssr
 .env.test.local
 .env.production.local
 *.env
+
+# Dados da Receita: gigabytes temporários e as fatias geradas a partir deles.
+# Nada disso é código, e o script reconstrói tudo.
+.dados-receita/
+dados-prospeccao/
