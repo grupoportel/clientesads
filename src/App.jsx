@@ -1240,6 +1240,7 @@ function App() {
       />
 
       <ImportarLeadsModal
+        leadsExistentes={leads}
         isOpen={modalImportar}
         onClose={() => setModalImportar(false)}
         onConcluido={(qtd) => showToast(`${qtd} lead(s) importado(s)!`, 'success')}

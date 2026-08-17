@@ -9,6 +9,7 @@ import { papelDoUsuario, podeEditar, podeAdministrar, podeVer, motivoBloqueio } 
 import { configuracaoAgenda, somarMinutos, inicioDoEvento, textoDataHora, montarEvento, textoConfirmacao, explicarErroAgenda } from '../../api/_agenda.js';
 import { INTENCOES, acharIntencao, resumirHistorico, montarPromptMensagem, interpretarMensagem, ehTransitorio, atrasoDaTentativa, escolherModelo, configuracaoIa, textoDoHtml, urlDoSite, montarPromptAnalise, interpretarAnalise, CAMPOS_ANALISE } from '../../api/_ia.js';
 import { responderPara, montarHtml, configuracaoSmtp, caixaDeEntrada, explicarErroSmtp } from '../../api/_email.js';
+import { acharExistente, pontuarCandidato, prepararRevisao, resumoDaRevisao, ordenarRevisao } from '../prospeccao.js';
 import { pontuarLead, ordenarPorPrioridade, resumoDaCarteira, faixaDe, FAIXAS } from '../prioridade.js';
 import { paraLixeira, deLixeira, diasNaLixeira, vencidos, planoDeDesfazer, textoTempoNaLixeira, PRAZO_DIAS } from '../lixeira.js';
 
@@ -805,6 +806,64 @@ t('resumo ignora ganhos', resumoCarteira.total === 2);
 t('resumo conta quentes', resumoCarteira.quente === 1);
 t('resumo conta urgentes', resumoCarteira.urgentes === 0);
 t('resumo conta quem nao da para contatar', resumoCarteira.semContato === 1);
+
+
+// ── Revisão antes de importar ──
+const jaTenho = [
+  { id: 'L1', nome: 'Pizzaria Bella', cnpj: '11.222.333/0001-44', email: 'bella@x.com', telefone: '(66) 3015-0955' },
+  { id: 'L2', nome: 'Salao Lu', whatsapp: '65999887766' },
+];
+
+t('acha por cnpj com pontuacao diferente', acharExistente({ cnpj: '11222333000144' }, jaTenho).por === 'CNPJ');
+t('acha por email ignorando caixa', acharExistente({ email: 'BELLA@X.COM' }, jaTenho).por === 'e-mail');
+t('acha por telefone com formatacao diferente', acharExistente({ telefone: '6630150955' }, jaTenho).por === 'telefone');
+t('acha whatsapp do lead', acharExistente({ whatsapp: '65 99988-7766' }, jaTenho).por === 'telefone');
+t('candidato novo nao casa', acharExistente({ nome: 'Nova', email: 'n@x.com', telefone: '6633334444' }, jaTenho) === null);
+
+// Telefone curto e fragmento de cadastro velho: casaria com qualquer um
+t('telefone curto nao casa', acharExistente({ telefone: '30955' }, jaTenho) === null);
+// CNPJ incompleto tambem nao serve de chave
+t('cnpj incompleto nao casa', acharExistente({ cnpj: '11222333' }, jaTenho) === null);
+// Nome de propriedade fica de fora: existe uma "Pizzaria do Joao" em toda cidade
+t('nome igual nao e duplicado', acharExistente({ nome: 'Pizzaria Bella' }, jaTenho) === null);
+t('base vazia nao quebra', acharExistente({ email: 'a@b.com' }, []) === null);
+
+// Pontuacao do candidato
+const forte = pontuarCandidato({ nome: 'A', nota: '4.8', avaliacoes: '150', telefone: '1', email: 'a@x.com', site: 'a.com' });
+t('candidato forte pontua alto', forte.pontos >= 70);
+t('cita a nota', forte.motivos.some(m => m.includes('4.8')));
+t('sem telefone aparece', pontuarCandidato({ nome: 'B' }).motivos.includes('Sem telefone'));
+
+// Sem presenca digital e oportunidade, nao defeito: e o que a agencia vende
+const semPresenca = pontuarCandidato({ nome: 'C', telefone: '1', nota: '4.6', avaliacoes: '40' });
+t('ausencia de site vira oportunidade', semPresenca.motivos.some(m => m.includes('oportunidade clara')));
+t('nota nunca passa de 100', pontuarCandidato({ nota: '5', avaliacoes: '999', telefone: '1', email: 'a', site: 's', instagram: 'i' }).pontos <= 100);
+
+// Revisao
+const candidatos = [
+  { nome: 'Nova Pizzaria', telefone: '6633334444', nota: '4.7', avaliacoes: '60' },
+  { nome: 'Pizzaria Bella', email: 'bella@x.com' },
+  { nome: '', telefone: '6699998888' },
+];
+const rev = prepararRevisao(candidatos, jaTenho);
+
+t('novo vem marcado para importar', rev[0].importar === true);
+// Duplicado nunca vem marcado: o padrao e o seguro
+t('duplicado nao vem marcado', rev[1].importar === false);
+t('duplicado diz qual lead e', rev[1].existente.nome === 'Pizzaria Bella' && rev[1].existente.por === 'e-mail');
+t('sem nome nao vem marcado', rev[2].importar === false);
+t('sem nome e sinalizado', rev[2].semNome === true);
+
+const resRev = resumoDaRevisao(rev);
+t('resumo conta novos', resRev.novos === 1);
+t('resumo conta duplicados', resRev.duplicados === 1);
+t('resumo conta sem nome', resRev.semNome === 1);
+t('resumo conta marcados', resRev.marcados === 1);
+
+// Ordem: problema desce, porque nao e decisao, e descarte
+const ordenada = ordenarRevisao(rev);
+t('novo vem primeiro', ordenada[0].candidato.nome === 'Nova Pizzaria');
+t('problemas descem', Boolean(ordenada[2].existente || ordenada[2].semNome));
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);

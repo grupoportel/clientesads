@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ref, push, update } from 'firebase/database';
 import { database } from '../firebase';
 import { lerCSV, sugerirMapeamento } from '../csv';
+import { prepararRevisao, resumoDaRevisao, ordenarRevisao } from '../prospeccao';
 import { registrarAtividade } from '../atividades';
 import { etapasAtivas } from '../pipeline';
 
@@ -43,8 +44,9 @@ function lerNumero(texto) {
   return Number.isFinite(n) ? n : '';
 }
 
-export default function ImportarLeadsModal({ isOpen, onClose, onConcluido, etapas = [], responsaveis = [] }) {
-  const [etapaAtual, setEtapaAtual] = useState('arquivo'); // arquivo | mapear | importando | fim
+export default function ImportarLeadsModal({ isOpen, onClose, onConcluido, etapas = [], responsaveis = [], leadsExistentes = [] }) {
+  const [etapaAtual, setEtapaAtual] = useState('arquivo'); // arquivo | mapear | revisar | importando | fim
+  const [revisao, setRevisao] = useState([]);
   const [nomeArquivo, setNomeArquivo] = useState('');
   const [colunas, setColunas] = useState([]);
   const [linhas, setLinhas] = useState([]);
@@ -93,15 +95,41 @@ export default function ImportarLeadsModal({ isOpen, onClose, onConcluido, etapa
     return (linha[indice] ?? '').trim();
   };
 
-  const importar = async () => {
+  // Converte cada linha do arquivo num candidato, para a revisão poder comparar
+  // com quem já está na base antes de gravar qualquer coisa.
+  const candidatoDaLinha = (linha) => {
+    const c = {};
+    CAMPOS_IMPORTAVEIS.forEach(({ campo }) => {
+      const bruto = valorDaLinha(linha, campo);
+      if (bruto) c[campo] = bruto;
+    });
+    return c;
+  };
+
+  const irParaRevisao = () => {
     const indiceNome = mapa.nome;
     if (indiceNome === undefined || indiceNome === IGNORAR) {
       setErro('Escolha qual coluna do arquivo contém o nome. Sem isso não dá para criar o lead.');
       return;
     }
+    setErro('');
+    setRevisao(ordenarRevisao(prepararRevisao(linhas.map(candidatoDaLinha), leadsExistentes)));
+    setEtapaAtual('revisar');
+  };
 
+  const alternarItem = (indice) =>
+    setRevisao(r => r.map(i => (i.indice === indice ? { ...i, importar: !i.importar } : i)));
+
+  const marcarTodos = (valor) =>
+    setRevisao(r => r.map(i => ({ ...i, importar: valor && !i.semNome })));
+
+  const importar = async () => {
     setEtapaAtual('importando');
     setErro('');
+
+    // Só o que ficou marcado na revisão. Duplicado e sem nome já vêm
+    // desmarcados; quem quiser importar assim mesmo marcou à mão.
+    const aprovados = new Set(revisao.filter(i => i.importar).map(i => i.indice));
 
     const agora = new Date().toISOString();
     let feitos = 0;
@@ -109,7 +137,8 @@ export default function ImportarLeadsModal({ isOpen, onClose, onConcluido, etapa
     const gravacoes = {};
     const paraHistorico = [];
 
-    linhas.forEach(linha => {
+    linhas.forEach((linha, indice) => {
+      if (!aprovados.has(indice)) { ignorados++; return; }
       const nome = valorDaLinha(linha, 'nome');
       if (!nome) { ignorados++; return; }
 
@@ -302,6 +331,98 @@ export default function ImportarLeadsModal({ isOpen, onClose, onConcluido, etapa
           )}
 
           {/* ── Passo 3: importando ── */}
+
+          {etapaAtual === 'revisar' && (() => {
+            const r = resumoDaRevisao(revisao);
+            return (
+              <div>
+                <div style={{
+                  display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center',
+                  padding: '11px 14px', marginBottom: 13, borderRadius: 9,
+                  background: 'var(--surface2)', border: '1px solid var(--border)', fontSize: 12.5,
+                }}>
+                  <span style={{ color: 'var(--green)' }}><strong>{r.novos}</strong> novos</span>
+                  {r.duplicados > 0 && (
+                    <span style={{ color: 'var(--yellow)' }}>
+                      <strong>{r.duplicados}</strong> já estão na base
+                    </span>
+                  )}
+                  {r.semNome > 0 && (
+                    <span style={{ color: 'var(--text3)' }}><strong>{r.semNome}</strong> sem nome</span>
+                  )}
+                  <span style={{ marginLeft: 'auto', display: 'flex', gap: 7 }}>
+                    <button className="btn btn-ghost" style={{ fontSize: 11.5, padding: '3px 10px' }} onClick={() => marcarTodos(true)}>
+                      Marcar todos
+                    </button>
+                    <button className="btn btn-ghost" style={{ fontSize: 11.5, padding: '3px 10px' }} onClick={() => marcarTodos(false)}>
+                      Desmarcar
+                    </button>
+                  </span>
+                </div>
+
+                {r.duplicados > 0 && (
+                  <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 11, lineHeight: 1.55 }}>
+                    Quem já está na base vem desmarcado. Marcar de novo cria um segundo cadastro
+                    para a mesma empresa, com o histórico dividido entre os dois.
+                  </div>
+                )}
+
+                <div style={{ maxHeight: '46vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {revisao.map(item => (
+                    <label
+                      key={item.indice}
+                      style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 10,
+                        cursor: item.semNome ? 'not-allowed' : 'pointer',
+                        padding: '9px 12px', borderRadius: 8,
+                        opacity: item.semNome ? 0.5 : 1,
+                        background: item.importar ? 'rgba(0,208,223,0.06)' : 'var(--surface2)',
+                        border: `1px solid ${item.importar ? 'rgba(0,208,223,0.28)' : 'var(--border)'}`,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={item.importar}
+                        disabled={item.semNome}
+                        onChange={() => alternarItem(item.indice)}
+                        style={{ marginTop: 3, flexShrink: 0, cursor: 'inherit' }}
+                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+                            {item.candidato.nome || '(sem nome)'}
+                          </span>
+                          {item.candidato.cidade && (
+                            <span style={{ fontSize: 11, color: 'var(--text3)' }}>· {item.candidato.cidade}</span>
+                          )}
+                          {!item.existente && !item.semNome && (
+                            <span style={{ fontSize: 11, color: 'var(--accent)' }}>{item.pontos} pts</span>
+                          )}
+                        </div>
+
+                        {item.existente && (
+                          <div style={{ fontSize: 11.5, color: 'var(--yellow)', marginTop: 2 }}>
+                            ⚠️ Já existe como "{item.existente.nome}" — mesmo {item.existente.por}
+                          </div>
+                        )}
+                        {item.semNome && (
+                          <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 2 }}>
+                            Sem nome, não dá para criar o lead
+                          </div>
+                        )}
+                        {!item.existente && !item.semNome && item.motivos.length > 0 && (
+                          <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 2, lineHeight: 1.45 }}>
+                            {item.motivos.join(' · ')}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           {etapaAtual === 'importando' && (
             <div style={{ textAlign: 'center', padding: '60px 20px' }}>
               <div style={{ fontSize: 40, marginBottom: 14 }}>⏳</div>
@@ -348,8 +469,17 @@ export default function ImportarLeadsModal({ isOpen, onClose, onConcluido, etapa
             <>
               <button className="btn btn-ghost" onClick={fechar}>Cancelar</button>
               {etapaAtual === 'mapear' && (
-                <button className="btn btn-primary" onClick={importar}>
-                  📥 Importar {linhas.length} lead{linhas.length !== 1 ? 's' : ''}
+                <button className="btn btn-primary" onClick={irParaRevisao}>
+                  Revisar {linhas.length} linha{linhas.length !== 1 ? 's' : ''} →
+                </button>
+              )}
+              {etapaAtual === 'revisar' && (
+                <button
+                  className="btn btn-primary"
+                  onClick={importar}
+                  disabled={revisao.filter(i => i.importar).length === 0}
+                >
+                  📥 Importar {revisao.filter(i => i.importar).length} lead(s)
                 </button>
               )}
             </>
