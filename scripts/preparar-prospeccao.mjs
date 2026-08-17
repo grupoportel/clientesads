@@ -46,6 +46,11 @@ const ufsPedidas = args.uf ? String(args.uf).toUpperCase().split(',').map(s => s
 const usarOficial = Boolean(args.oficial);
 const limparNoFim = Boolean(args.limpar);
 
+// Modo de teste: percorre as mesmas etapas, mas sem baixar nada. Serve para
+// conferir que a fonte está no ar e que os nichos batem com a tabela atual
+// antes de comprometer 5 GB de internet.
+const simular = Boolean(args.simular);
+
 const log = (msg = '') => console.log(msg);
 const passo = (n, txt) => log(`\n${'━'.repeat(58)}\n  ETAPA ${n} — ${txt}\n${'━'.repeat(58)}`);
 
@@ -97,9 +102,10 @@ if (!pasta) {
 
 // ── Etapa 2: baixar ─────────────────────────────────────────────────────────
 
-passo(2, 'Baixando');
+passo(2, simular ? 'Baixando (SIMULAÇÃO — nada será baixado)' : 'Baixando');
 mkdirSync(BRUTO, { recursive: true });
 
+let totalSimulado = 0;
 const arquivos = [
   'Cnaes.zip', 'Municipios.zip',
   ...Array.from({ length: 10 }, (_, i) => `Estabelecimentos${i}.zip`),
@@ -122,7 +128,19 @@ for (const arquivo of arquivos) {
     continue;
   }
 
-  log(`   ↓ ${arquivo} (${mb(esperado)} MB)`);
+  // Na simulação os dois arquivos de apoio são baixados mesmo: juntos não
+  // chegam a 100 KB e são o que permite conferir os nichos de verdade. Pular
+  // os dois fazia a conferência comparar contra o vazio e acusar que os 30
+  // códigos tinham sumido — susto sem motivo, logo antes de a pessoa decidir
+  // se compromete 5 GB de internet.
+  if (simular && arquivo.startsWith('Estabelecimentos')) {
+    log(`   ○ ${arquivo} (${mb(esperado)} MB) — baixaria agora`);
+    totalSimulado += esperado;
+    continue;
+  }
+  log(simular
+    ? `   ↓ ${arquivo} — pequeno, baixando para conferir os nichos de verdade`
+    : `   ↓ ${arquivo} (${mb(esperado)} MB)`);
   curl([
     '-L', '--fail', '--retry', '3', '--retry-delay', '5',
     '-C', '-',                       // continua de onde parou
@@ -134,11 +152,11 @@ for (const arquivo of arquivos) {
 
 // ── Etapa 3: descompactar ───────────────────────────────────────────────────
 
-passo(3, 'Descompactando');
+passo(3, simular ? 'Descompactando (só as tabelas de apoio)' : 'Descompactando');
 
 const jaTem = (marca) => readdirSync(BRUTO).some(n => n.toUpperCase().includes(marca) && !n.toLowerCase().endsWith('.zip'));
 
-for (const arquivo of arquivos) {
+for (const arquivo of (simular ? arquivos.filter(a => !a.startsWith('Estabelecimentos')) : arquivos)) {
   const marca = arquivo.startsWith('Estabelecimentos')
     ? `ESTABELE${arquivo.match(/\d/)[0]}`
     : arquivo.replace('.zip', '').slice(0, 5).toUpperCase();
@@ -175,6 +193,21 @@ if (problemas.length > 0) {
   log('      A Receita mexeu na tabela. Esses nichos vão trazer menos empresas.');
 } else {
   log('   ✓ Todos os códigos dos nichos existem na tabela atual');
+}
+
+if (simular) {
+  log(`
+${'━'.repeat(58)}
+  SIMULAÇÃO CONCLUÍDA
+${'━'.repeat(58)}`);
+  log(`   Fonte no ar: sim (versão ${pasta})`);
+  log(`   Baixaria ${(totalSimulado / 1073741824).toFixed(1)} GB em ${arquivos.length} arquivos`);
+  log(`   Descompactado ocuparia mais ou menos ${(totalSimulado * 3.4 / 1073741824).toFixed(0)} GB temporários`);
+  log(`   ${NICHOS.length} nichos, ${new Set(NICHOS.flatMap(n => codigosDoNicho(n.id, { incluirRelacionados: true }))).size} códigos CNAE`);
+  log('');
+  log('   Nada foi baixado. Para valer, rode sem --simular.');
+  log('');
+  process.exit(0);
 }
 
 // ── Etapa 5: fatiar ─────────────────────────────────────────────────────────

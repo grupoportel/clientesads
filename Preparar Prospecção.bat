@@ -3,20 +3,14 @@ chcp 65001 >nul
 title Preparar Prospeccao - CRM Grupo Portel
 cd /d "%~dp0"
 
+:menu
+cls
 echo.
 echo  ============================================================
 echo    PREPARAR PROSPECCAO
 echo    Baixa a base de empresas da Receita Federal e separa
 echo    por nicho e estado, para buscar leads dentro do CRM.
 echo  ============================================================
-echo.
-echo    Isso vai baixar cerca de 5 GB e pode levar de 30 minutos
-echo    a algumas horas, dependendo da sua internet.
-echo.
-echo    Voce pode fechar esta janela a qualquer momento e rodar
-echo    de novo depois: ele continua de onde parou.
-echo.
-echo  ------------------------------------------------------------
 echo.
 
 where node >nul 2>nul
@@ -30,24 +24,55 @@ if errorlevel 1 (
     exit /b 1
 )
 
-set /p LIMPAR="  Apagar os arquivos brutos no final? (S/N, padrao S): "
-if /i "%LIMPAR%"=="N" (
-    set FLAG=
-) else (
-    set FLAG=--limpar
-)
+echo    [1] Testar    - confere se a fonte esta no ar e se os nichos
+echo                    batem. Baixa menos de 100 KB. Leva segundos.
+echo.
+echo    [2] Preparar  - baixa cerca de 5 GB, usa ate 17 GB temporarios
+echo                    e gera as fatias. Pode levar horas.
+echo.
+echo    [3] Sair
+echo.
+
+set ESCOLHA=
+set /p ESCOLHA="  O que voce quer fazer? (1, 2 ou 3): "
+
+if "%ESCOLHA%"=="1" goto testar
+if "%ESCOLHA%"=="2" goto preparar
+if "%ESCOLHA%"=="3" exit /b 0
+goto menu
+
+:testar
+echo.
+node scripts\preparar-prospeccao.mjs --simular
+echo.
+echo  ------------------------------------------------------------
+echo    Nada foi baixado de verdade. Se estiver tudo verde acima,
+echo    rode a opcao 2 quando tiver tempo.
+echo  ------------------------------------------------------------
+echo.
+pause
+goto menu
+
+:preparar
+echo.
+echo    Voce pode fechar esta janela a qualquer momento e clicar
+echo    aqui de novo depois: o download continua de onde parou.
+echo.
+set LIMPAR=
+set /p LIMPAR="  Apagar os 17 GB brutos no final? (S/N, padrao S): "
+if /i "%LIMPAR%"=="N" (set FLAG=) else (set FLAG=--limpar)
 
 echo.
 node scripts\preparar-prospeccao.mjs %FLAG%
 
 if errorlevel 1 (
     echo.
-    echo  [X] Algo deu errado. Se foi queda de conexao, rode de novo:
-    echo      o download continua de onde parou.
+    echo  [X] Algo deu errado. Se foi queda de conexao, clique aqui
+    echo      de novo: o download continua de onde parou.
 ) else (
     echo.
     echo  [OK] Pronto. Abra o CRM em Buscar Leads.
 )
-
 echo.
 pause
+exit /b 0
