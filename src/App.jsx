@@ -756,13 +756,16 @@ function App() {
   };
 
   const salvarLead = (dados) => {
-    if (!exigirEdicao('salvar leads')) return;
-    if (!dados.nome) return showToast("O nome é obrigatório!", 'error');
+    if (!exigirEdicao('salvar leads')) return Promise.resolve(false);
+    if (!dados.nome) {
+      showToast("O nome é obrigatório!", 'error');
+      return Promise.resolve(false);
+    }
     const agora = new Date().toISOString();
 
     if (!leadEmEdicao) {
       const novaRef = push(ref(database, 'crm_data/leads'));
-      set(novaRef, { ...dados, id: novaRef.key, createdAt: agora, updatedAt: agora })
+      return set(novaRef, { ...dados, id: novaRef.key, createdAt: agora, updatedAt: agora })
         .then(() => {
           registrarAtividade({
             leadId: novaRef.key, leadNome: dados.nome, tipo: 'criado',
@@ -771,8 +774,12 @@ function App() {
           dispararAutomacoes('leadCriado', { ...dados, id: novaRef.key });
           setModalAberto(false);
           showToast('Novo lead adicionado!', 'success');
+          return true;
         })
-        .catch(e => showToast('Erro ao salvar: ' + e.message, 'error'));
+        .catch(e => {
+          showToast('Erro ao salvar: ' + e.message, 'error');
+          return false;
+        });
     } else {
       // update() grava só o que veio do formulário: não apaga campos que outro
       // usuário tenha alterado enquanto este modal estava aberto.
@@ -780,7 +787,7 @@ function App() {
       const leadId = id || leadEmEdicao.id;
       const mudancas = descreverEdicao(leadEmEdicao, camposEditaveis, ROTULOS_CAMPOS);
 
-      update(ref(database, 'crm_data/leads/' + leadId), {
+      return update(ref(database, 'crm_data/leads/' + leadId), {
         ...camposEditaveis, updatedAt: agora,
         ...carimbosDeFecho(leadEmEdicao.status, camposEditaveis.status, agora),
       })
@@ -805,8 +812,12 @@ function App() {
           }
           setModalAberto(false);
           showToast('Lead atualizado!', 'success');
+          return true;
         })
-        .catch(e => showToast('Erro ao salvar: ' + e.message, 'error'));
+        .catch(e => {
+          showToast('Erro ao salvar: ' + e.message, 'error');
+          return false;
+        });
     }
   };
 
