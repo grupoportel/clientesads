@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import AnaliseIA from './AnaliseIA';
 import { hojeISO } from '../periodo';
 
@@ -12,18 +12,89 @@ const CAMPOS_INICIAIS = {
   escalar: '', obs: '', motivoPerda: '', historico: ''
 };
 
+const PREFIXO_RASCUNHO = 'clientesads:rascunho-lead:';
+
+function carregarRascunho(chave, dadosIniciais) {
+  try {
+    const salvo = window.localStorage.getItem(chave);
+    return salvo ? { ...dadosIniciais, ...JSON.parse(salvo) } : dadosIniciais;
+  } catch {
+    return dadosIniciais;
+  }
+}
+
+function guardarRascunho(chave, dados) {
+  try {
+    window.localStorage.setItem(chave, JSON.stringify(dados));
+  } catch {
+    // O formulário continua funcionando mesmo se o navegador bloquear storage.
+  }
+}
+
+function removerRascunho(chave) {
+  try {
+    window.localStorage.removeItem(chave);
+  } catch {
+    // Sem ação: o salvamento no banco continua sendo a fonte de verdade.
+  }
+}
+
 // Recebemos as listas do Firebase (nichos, responsaveis, etc.)
 export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos = [], responsaveis = [], estados = [], cidades = [], etapas = [] }) {
   // O App remonta este modal via key a cada abertura, então o estado inicial é
   // calculado uma vez na montagem — sem efeito que dispara um render extra.
-  const [formData, setFormData] = useState(() => (
-    leadAtual
+  const [configRascunho] = useState(() => {
+    const dadosIniciais = leadAtual
       ? { ...CAMPOS_INICIAIS, ...leadAtual }
-      : { ...CAMPOS_INICIAIS, data_entrada: hojeISO() }
-  ));
+      : { ...CAMPOS_INICIAIS, data_entrada: hojeISO() };
+    const chave = `${PREFIXO_RASCUNHO}${leadAtual?.id || 'novo'}`;
+    return { chave, dadosIniciais, dados: carregarRascunho(chave, dadosIniciais) };
+  });
+  const [formData, setFormData] = useState(configRascunho.dados);
+  const [salvando, setSalvando] = useState(false);
+
+  const alterado = JSON.stringify(formData) !== JSON.stringify(configRascunho.dadosIniciais);
+
+  useEffect(() => {
+    if (!alterado) return undefined;
+    const timer = window.setTimeout(() => {
+      guardarRascunho(configRascunho.chave, formData);
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [alterado, configRascunho.chave, formData]);
+
+  useEffect(() => {
+    if (!alterado) return undefined;
+    const avisarSaida = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', avisarSaida);
+    return () => window.removeEventListener('beforeunload', avisarSaida);
+  }, [alterado]);
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setFormData(atual => ({ ...atual, [e.target.name]: e.target.value }));
+  };
+
+  const handleClose = () => {
+    if (alterado && !window.confirm('As alterações ainda não foram salvas no cadastro. O rascunho ficará guardado para você continuar depois. Deseja fechar?')) {
+      return;
+    }
+    guardarRascunho(configRascunho.chave, formData);
+    onClose();
+  };
+
+  const handleSave = async () => {
+    if (salvando) return;
+    setSalvando(true);
+    try {
+      const salvo = await onSave(formData);
+      if (salvo) removerRascunho(configRascunho.chave);
+    } finally {
+      setSalvando(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -31,12 +102,12 @@ export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos =
   const etapaAtual = acharEtapa(etapas, formData.status);
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         
         <div className="modal-header">
           <div className="modal-title">{leadAtual ? 'Editar Lead' : 'Novo Lead'}</div>
-          <button className="btn-icon" onClick={onClose}>✕</button>
+          <button className="btn-icon" onClick={handleClose}>✕</button>
         </div>
 
         <div className="modal-body">
@@ -263,8 +334,13 @@ export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos =
         </div>
 
         <div className="modal-footer">
-          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={() => onSave(formData)}>💾 Salvar Lead</button>
+          <span className="draft-status" aria-live="polite">
+            Rascunho salvo automaticamente
+          </span>
+          <button className="btn btn-ghost" onClick={handleClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={salvando}>
+            {salvando ? 'Salvando…' : '💾 Salvar Lead'}
+          </button>
         </div>
       </div>
     </div>
