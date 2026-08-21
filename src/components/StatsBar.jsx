@@ -33,7 +33,7 @@ export default function StatsBar({ leads = [], etapas = [] }) {
 
   return (
     <div className="stats-bar">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 10px', background: 'rgba(88,101,242,.08)', border: '1px solid rgba(88,101,242,.2)', borderRadius: '8px', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 10px', background: 'rgba(5,219,233,.08)', border: '1px solid rgba(5,219,233,.2)', borderRadius: '8px', flexShrink: 0 }}>
         <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--accent2)', textTransform: 'uppercase', letterSpacing: '.5px' }}>
           📊 Visão Geral
         </span>

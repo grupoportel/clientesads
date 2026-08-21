@@ -26,7 +26,7 @@ const getInitials = (nome = '') =>
   nome.split(' ').slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';
 
 const AVATAR_COLORS = [
-  'linear-gradient(135deg,#5865f2,#3b82f6)',
+  'linear-gradient(135deg,#05dbe9,#00b1c9)',
   'linear-gradient(135deg,#22c55e,#06b6d4)',
   'linear-gradient(135deg,#a855f7,#ec4899)',
   'linear-gradient(135deg,#f97316,#facc15)',
