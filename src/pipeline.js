@@ -64,7 +64,7 @@ export function mesclarEtapas(configSalva) {
   const extras = salvas
     .filter(e => e && e.id && !ETAPAS_PADRAO.some(p => p.id === e.id))
     .map(e => ({
-      cls: 's-nenhum', cor: '#5865f2', probabilidade: 0,
+      cls: 's-nenhum', cor: '#05dbe9', probabilidade: 0,
       ganho: false, perdido: false, ativo: true,
       ...e,
     }));
