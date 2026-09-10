@@ -3,16 +3,21 @@ import AnaliseIA from './AnaliseIA';
 import { hojeISO } from '../periodo';
 
 import { etapasAtivas, acharEtapa, formatarBRL } from '../pipeline';
+import {
+  CADENCIAS, CAMPOS_PROSPECCAO_INICIAIS, pendenciasParaStatus,
+} from '../processoProspeccao';
 
 const CAMPOS_INICIAIS = {
   nome: '', status: 'nenhum', valor: '', nicho: '', estado: '', cidade: '', origem: '',
   responsavel: '', decisor: '', cnpj: '', telefone: '', whatsapp: '', email: '',
   instagram: '', ig_dono: '', site: '', nota: '', avaliacoes: '', data_entrada: '',
   ultimo_contato: '', reuniao: '', melhores: '', oportunidades: '', pontos: '',
-  escalar: '', obs: '', motivoPerda: '', historico: ''
+  escalar: '', obs: '', motivoPerda: '', historico: '',
+  ...CAMPOS_PROSPECCAO_INICIAIS,
 };
 
 const PREFIXO_RASCUNHO = 'clientesads:rascunho-lead:';
+const marcado = (valor) => valor === true || valor === 'true';
 
 function carregarRascunho(chave, dadosIniciais) {
   try {
@@ -75,7 +80,15 @@ export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos =
   }, [alterado]);
 
   const handleChange = (e) => {
-    setFormData(atual => ({ ...atual, [e.target.name]: e.target.value }));
+    const { name, type, checked, value } = e.target;
+    setFormData(atual => {
+      const proximo = { ...atual, [name]: type === 'checkbox' ? checked : value };
+      if (name === 'reuniaoDataHora') proximo.reuniao = value.slice(0, 10);
+      if (name === 'confirmacaoExplicita') {
+        proximo.confirmadoEm = checked ? (atual.confirmadoEm || new Date().toISOString()) : '';
+      }
+      return proximo;
+    });
   };
 
   const handleClose = () => {
@@ -100,6 +113,7 @@ export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos =
   if (!isOpen) return null;
 
   const etapaAtual = acharEtapa(etapas, formData.status);
+  const pendenciasEtapa = pendenciasParaStatus(formData, formData.status);
 
   return (
     <div className="modal-overlay">
@@ -107,7 +121,7 @@ export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos =
         
         <div className="modal-header">
           <div className="modal-title">{leadAtual ? 'Editar Lead' : 'Novo Lead'}</div>
-          <button className="btn-icon" onClick={handleClose}>✕</button>
+          <button className="btn-icon" onClick={handleClose} aria-label="Fechar cadastro do lead">✕</button>
         </div>
 
         <div className="modal-body">
@@ -127,6 +141,11 @@ export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos =
                   <option key={e.id} value={e.id}>{e.label}</option>
                 ))}
               </select>
+              {pendenciasEtapa.length > 0 && formData.status !== 'nenhum' && (
+                <span className="playbook-pendencias" role="status">
+                  Falta para esta etapa: {pendenciasEtapa.join(', ')}.
+                </span>
+              )}
             </div>
 
             <div className="form-group">
@@ -186,6 +205,11 @@ export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos =
               <input className="form-control" name="decisor" value={formData.decisor} onChange={handleChange} placeholder="Dra. Marina" />
             </div>
 
+            <div className="form-group">
+              <label>Papel do decisor</label>
+              <input className="form-control" name="decisorPapel" value={formData.decisorPapel} onChange={handleChange} placeholder="Ex: sócia e responsável pela decisão" />
+            </div>
+
             {/* ESTADO E CIDADE MUDARAM PARA DROPDOWN */}
             <div className="form-group">
               <label>Estado</label>
@@ -207,6 +231,57 @@ export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos =
               <input className="form-control" name="cnpj" value={formData.cnpj} onChange={handleChange} placeholder="00.000.000/0001-00" />
             </div>
 
+            <div className="form-section-title">🧭 Preparação da prospecção</div>
+
+            <div className="form-group">
+              <label>Cadência A, B ou C</label>
+              <select className="form-control" name="prioridadeProspeccao" value={formData.prioridadeProspeccao} onChange={handleChange}>
+                <option value="">— classifique a conta —</option>
+                {Object.entries(CADENCIAS).map(([id, c]) => (
+                  <option key={id} value={id}>{c.rotulo} · até {c.contatos} contatos/{c.diasUteis} dias úteis</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Objetivo deste contato</label>
+              <input className="form-control" name="objetivoContato" value={formData.objetivoContato} onChange={handleChange} placeholder="Ex: validar como os pedidos são atendidos" />
+            </div>
+
+            <div className="form-group full">
+              <label>Evidência observável</label>
+              <textarea className="form-control" name="evidencia" value={formData.evidencia} onChange={handleChange} placeholder="Fato verificável, sem inventar dor: ex. site sem botão de contato e avaliações sem resposta." />
+            </div>
+
+            <div className="form-group full">
+              <label>Hipótese a validar</label>
+              <textarea className="form-control" name="hipotese" value={formData.hipotese} onChange={handleChange} placeholder="Ex: talvez oportunidades sejam perdidas por demora no primeiro retorno." />
+            </div>
+
+            <div className="form-group">
+              <label>Processo atual</label>
+              <input className="form-control" name="processoAtual" value={formData.processoAtual} onChange={handleChange} placeholder="Como fazem hoje?" />
+            </div>
+
+            <div className="form-group">
+              <label>Problema confirmado?</label>
+              <select className="form-control" name="problemaConfirmado" value={formData.problemaConfirmado} onChange={handleChange}>
+                <option value="">— ainda não validado —</option>
+                <option value="sim">Sim, confirmado pelo contato</option>
+                <option value="nao">Não</option>
+              </select>
+            </div>
+
+            <div className="form-group full">
+              <label>Impacto percebido</label>
+              <textarea className="form-control" name="impacto" value={formData.impacto} onChange={handleChange} placeholder="Tempo, receita, retrabalho ou risco citado pelo prospect." />
+            </div>
+
+            <div className="form-group full">
+              <label>Momento e prioridade do prospect</label>
+              <textarea className="form-control" name="momento" value={formData.momento} onChange={handleChange} placeholder="Por que resolver agora — ou por que ainda não?" />
+            </div>
+
             <div className="form-section-title">📞 Contato</div>
 
             <div className="form-group">
@@ -217,6 +292,20 @@ export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos =
               <label>WhatsApp</label>
               <input className="form-control" name="whatsapp" type="tel" value={formData.whatsapp} onChange={handleChange} placeholder="(66) 99886-2626" />
             </div>
+            <label className="form-check full">
+              <input type="checkbox" name="permissaoWhatsApp" checked={marcado(formData.permissaoWhatsApp)} onChange={handleChange} />
+              <span><strong>WhatsApp autorizado</strong><small>Marque apenas quando o prospect permitiu, iniciou o contato ou já havia relacionamento.</small></span>
+            </label>
+            {marcado(formData.permissaoWhatsApp) && (
+              <div className="form-group full">
+                <label>Como a permissão foi obtida?</label>
+                <input className="form-control" name="origemPermissaoWhatsApp" value={formData.origemPermissaoWhatsApp} onChange={handleChange} placeholder="Ex: autorizou na ligação de 10/09" />
+              </div>
+            )}
+            <label className="form-check full form-check-danger">
+              <input type="checkbox" name="optOut" checked={marcado(formData.optOut)} onChange={handleChange} />
+              <span><strong>Não quer mais contato (opt-out)</strong><small>Bloqueia novas abordagens e o avanço na prospecção.</small></span>
+            </label>
             <div className="form-group">
               <label>E-mail</label>
               <input className="form-control" name="email" type="email" value={formData.email} onChange={handleChange} placeholder="contato@empresa.com" />
@@ -244,7 +333,39 @@ export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos =
               <input className="form-control" name="avaliacoes" type="number" value={formData.avaliacoes} onChange={handleChange} placeholder="67" />
             </div>
 
-            <div className="form-section-title">📅 Datas</div>
+            <div className="form-section-title">✅ Próxima ação obrigatória</div>
+            <div className="form-group">
+              <label>Ação concreta</label>
+              <input className="form-control" name="proximaAcao" value={formData.proximaAcao} onChange={handleChange} placeholder="Ex: ligar para Marina" />
+            </div>
+            <div className="form-group">
+              <label>Data e hora</label>
+              <input className="form-control" name="proximaAcaoDataHora" type="datetime-local" value={formData.proximaAcaoDataHora} onChange={handleChange} />
+            </div>
+            <div className="form-group">
+              <label>Canal</label>
+              <select className="form-control" name="proximaAcaoCanal" value={formData.proximaAcaoCanal} onChange={handleChange}>
+                <option value="">— selecione —</option>
+                <option value="telefone">Ligação</option>
+                <option value="email">E-mail</option>
+                <option value="whatsapp">WhatsApp (somente com permissão)</option>
+                <option value="instagram">Instagram</option>
+                <option value="reuniao">Reunião</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Responsável pela ação</label>
+              <select className="form-control" name="proximaAcaoResponsavel" value={formData.proximaAcaoResponsavel} onChange={handleChange}>
+                <option value="">— usa o responsável do lead —</option>
+                {responsaveis.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            <div className="form-group full">
+              <label>Objetivo da próxima ação</label>
+              <input className="form-control" name="proximaAcaoObjetivo" value={formData.proximaAcaoObjetivo} onChange={handleChange} placeholder="O que precisa acontecer neste contato?" />
+            </div>
+
+            <div className="form-section-title">📅 Datas e reunião</div>
             <div className="form-group">
               <label>Data de Entrada</label>
               <input className="form-control" name="data_entrada" type="date" value={formData.data_entrada} onChange={handleChange} />
@@ -254,9 +375,35 @@ export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos =
               <input className="form-control" name="ultimo_contato" type="date" value={formData.ultimo_contato} onChange={handleChange} />
             </div>
             <div className="form-group">
-              <label>Data da Reunião</label>
-              <input className="form-control" name="reuniao" type="date" value={formData.reuniao} onChange={handleChange} />
+              <label>Data e hora da reunião</label>
+              <input className="form-control" name="reuniaoDataHora" type="datetime-local" value={formData.reuniaoDataHora} onChange={handleChange} />
             </div>
+            <div className="form-group">
+              <label>Duração prevista</label>
+              <select className="form-control" name="reuniaoDuracaoMin" value={formData.reuniaoDuracaoMin} onChange={handleChange}>
+                {[30, 45, 60, 90].map(d => <option key={d} value={d}>{d} minutos</option>)}
+              </select>
+            </div>
+            <div className="form-group full">
+              <label>Objetivo da reunião</label>
+              <input className="form-control" name="reuniaoObjetivo" value={formData.reuniaoObjetivo} onChange={handleChange} placeholder="Ex: mapear o fluxo atual e confirmar o gargalo" />
+            </div>
+            <div className="form-group">
+              <label>Participantes</label>
+              <input className="form-control" name="reuniaoParticipantes" value={formData.reuniaoParticipantes} onChange={handleChange} placeholder="Marina, Guilherme" />
+            </div>
+            <div className="form-group">
+              <label>Link ou local</label>
+              <input className="form-control" name="reuniaoLinkLocal" value={formData.reuniaoLinkLocal} onChange={handleChange} placeholder="Google Meet ou endereço" />
+            </div>
+            <label className="form-check">
+              <input type="checkbox" name="conviteEnviado" checked={marcado(formData.conviteEnviado)} onChange={handleChange} />
+              <span><strong>Convite/link enviado</strong><small>Necessário para considerar a reunião marcada.</small></span>
+            </label>
+            <label className="form-check">
+              <input type="checkbox" name="confirmacaoExplicita" checked={marcado(formData.confirmacaoExplicita)} onChange={handleChange} />
+              <span><strong>Participante confirmou</strong><small>Somente aceite explícito transforma “marcada” em “confirmada”.</small></span>
+            </label>
 
             <div className="form-section-title">🎯 Análise & Estratégia</div>
 
@@ -346,3 +493,4 @@ export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos =
     </div>
   );
 }
+
