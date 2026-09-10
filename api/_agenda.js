@@ -58,6 +58,11 @@ export function somarMinutos(dataHora, minutos) {
     + `T${dd(d.getUTCHours())}:${dd(d.getUTCMinutes())}:00`;
 }
 
+/** Subtrai horas mantendo a representação local do formulário. */
+export function subtrairHoras(dataHora, horas) {
+  return somarMinutos(dataHora, -Math.abs(Number(horas) || 0) * 60);
+}
+
 /** Normaliza a entrada do formulário para o formato que o Google espera. */
 export function inicioDoEvento(dataHora) {
   const m = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/.exec(String(dataHora || ''));
@@ -83,12 +88,15 @@ export function textoDataHora(dataHora) {
  * confirmação que o próprio CRM manda.
  */
 export function montarEvento(lead = {}, opcoes = {}) {
-  const { dataHora, duracaoMin = 60, observacao = '', fuso = 'America/Sao_Paulo' } = opcoes;
+  const {
+    dataHora, duracaoMin = 30, objetivo = '', participantes = '', linkLocal = '',
+    observacao = '', fuso = 'America/Sao_Paulo',
+  } = opcoes;
 
   const inicio = inicioDoEvento(dataHora);
   if (!inicio) return null;
 
-  const fim = somarMinutos(dataHora, Number(duracaoMin) || 60);
+  const fim = somarMinutos(dataHora, Number(duracaoMin) || 30);
   const quem = lead.nome || 'Lead';
 
   const descricao = [
@@ -97,13 +105,16 @@ export function montarEvento(lead = {}, opcoes = {}) {
     lead.telefone ? `Telefone: ${lead.telefone}` : null,
     lead.email ? `E-mail: ${lead.email}` : null,
     lead.nicho ? `Nicho: ${lead.nicho}` : null,
+    participantes ? `Participantes: ${participantes}` : null,
+    objetivo ? `Objetivo: ${objetivo}` : null,
+    linkLocal ? `Link/local: ${linkLocal}` : null,
     observacao ? `\n${observacao}` : null,
   ].filter(Boolean).join('\n');
 
   return {
     summary: `Reunião — ${quem}`,
     description: descricao,
-    location: [lead.cidade, lead.estado].filter(Boolean).join(' / ') || undefined,
+    location: linkLocal || [lead.cidade, lead.estado].filter(Boolean).join(' / ') || undefined,
     start: { dateTime: inicio, timeZone: fuso },
     end: { dateTime: fim, timeZone: fuso },
     // Lembrete no Google Agenda é por pessoa, não por evento: o que a conta de
@@ -117,7 +128,10 @@ export function montarEvento(lead = {}, opcoes = {}) {
 
 /** Texto do e-mail de confirmação para o lead. */
 export function textoConfirmacao(lead = {}, opcoes = {}) {
-  const { dataHora, duracaoMin = 60, observacao = '', empresa = 'Grupo Portel' } = opcoes;
+  const {
+    dataHora, duracaoMin = 30, objetivo = '', participantes = '', linkLocal = '',
+    observacao = '', empresa = 'Grupo Portel',
+  } = opcoes;
   const quando = textoDataHora(dataHora);
   const tratamento = lead.decisor || lead.nome || '';
 
@@ -125,6 +139,9 @@ export function textoConfirmacao(lead = {}, opcoes = {}) {
     tratamento ? `Olá, ${tratamento}!` : 'Olá!',
     '',
     `Confirmando nossa reunião para ${quando}, com duração prevista de ${duracaoMin} minutos.`,
+    objetivo ? `Objetivo: ${objetivo}` : null,
+    participantes ? `Participantes: ${participantes}` : null,
+    linkLocal ? `Link/local: ${linkLocal}` : null,
     observacao ? `\n${observacao}` : null,
     '',
     'Se precisar remarcar, é só responder este e-mail.',
@@ -180,3 +197,4 @@ export function explicarErroAgenda(erro) {
   }
   return null;
 }
+
