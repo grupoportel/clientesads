@@ -33,6 +33,7 @@
   --s-ligacao-feita: #d97706;
   --s-contato-decisor: #9333ea;
   --s-reuniao-marcada: #0fa06f;
+  --s-reuniao-confirmada: #16a34a;
   --s-contrato-realizado: #c026d3;
   --s-venda: #0499b3;
   --s-perda: #dc2626;
@@ -122,6 +123,16 @@ body { position: relative; z-index: 0; }
   color:var(--text2);cursor:pointer;transition:all .15s;font-size:14px;line-height:1;
 }
 .btn-icon:hover{background:var(--surface2);color:var(--text);border-color:var(--border2)}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px;
+}
+
+.global-search{
+  height:36px;padding:0 11px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:9px;transition:border-color .15s,background .15s,box-shadow .15s;
+}
+.global-search:hover{background:var(--surface3);border-color:var(--border2)}
+.global-search-icon{font-size:18px;line-height:1;color:var(--text2)}
 
 /* ── VIEW TOGGLE ── */
 .view-toggle{display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:8px;overflow:hidden;gap:1px;padding:2px}
@@ -130,6 +141,23 @@ body { position: relative; z-index: 0; }
   font-size:14px;border-radius:6px;transition:all .15s;
 }
 .view-btn.active{background:var(--surface3);color:var(--text)}
+
+/* ── CABEÇALHO DE LEADS ── */
+.leads-header{
+  display:flex;align-items:center;justify-content:space-between;gap:24px;
+  padding:18px 24px;border-bottom:1px solid var(--border);flex-shrink:0;
+  background:linear-gradient(180deg,rgba(10,42,73,.45),rgba(6,29,57,.18));
+}
+.leads-header-main{display:flex;align-items:center;gap:22px;min-width:0;flex:1}
+.leads-title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0}
+.leads-title{font-size:20px;line-height:1.15;font-weight:700;letter-spacing:-.02em;color:var(--text)}
+.leads-title span{display:inline-flex;margin-left:6px;padding:2px 8px;border-radius:999px;background:var(--surface3);color:var(--text2);font:600 11px 'DM Mono',monospace;vertical-align:middle}
+.leads-subtitle{font-size:11px;color:var(--text3);margin-top:4px}
+.leads-search{width:min(360px,100%)}
+.leads-search input{width:100%;height:38px;background:rgba(10,42,73,.85)}
+.leads-search input:focus{width:100%}
+.leads-header-actions{display:flex;align-items:center;gap:9px;flex-shrink:0}
+.leads-new-mobile{display:none}
 
 /* ── LAYOUT ── */
 .main{display:flex;height:calc(100vh - 52px);overflow:hidden}
@@ -199,8 +227,8 @@ table {
 .hidden { display: none !important; }
 
 /* ── STATS BAR ── */
-.stats-bar{display:flex;gap:10px;padding:12px 20px;border-bottom:1px solid var(--border);flex-shrink:0;animation:fadeIn .4s ease;}
-.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:90px;cursor:default;transition:border-color .2s,transform .2s,box-shadow .2s;}
+.stats-bar{display:flex;gap:10px;padding:12px 24px;border-bottom:1px solid var(--border);flex-shrink:0;animation:fadeIn .4s ease;background:rgba(0,16,43,.28)}
+.stat-card{background:rgba(6,29,57,.74);border:1px solid var(--border);border-radius:var(--radius);padding:11px 14px;flex:1;min-width:110px;cursor:default;transition:border-color .2s,transform .2s,box-shadow .2s;}
 .stat-card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:var(--shadow)}
 .stat-label{font-size:10px;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
 .stat-value{font-size:20px;font-weight:700;font-family:'DM Mono',monospace;letter-spacing:-1px}
@@ -209,6 +237,27 @@ table {
 .filter-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 11px;border-radius:20px;font-size:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);cursor:pointer;transition:all .15s;}
 .filter-chip:hover{border-color:var(--border2);color:var(--text)}
 .filter-chip.active{border-color:var(--accent);color:var(--accent);background:rgba(5,219,233,.1)}
+
+/* Um único painel substitui quatro gavetas e uma segunda barra de ações. */
+.filters-panel{border-bottom:1px solid var(--border);flex-shrink:0;background:rgba(6,29,57,.52)}
+.filters-toggle{width:100%;min-height:42px;padding:9px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;background:transparent;border:0;color:var(--text);font-family:inherit;cursor:pointer;text-align:left}
+.filters-toggle:hover{background:rgba(10,42,73,.55)}
+.filters-toggle-title{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:650}
+.filters-count{min-width:20px;height:20px;padding:0 6px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;background:rgba(5,219,233,.14);color:var(--accent);font:600 10px 'DM Mono',monospace}
+.filters-toggle-hint{font-size:11px;color:var(--text3);font-weight:400}
+.filters-panel.open .filters-toggle-hint span{display:inline-block;transform:rotate(180deg)}
+.filters-content{padding:4px 24px 16px;animation:fadeIn .16s ease}
+.filters-grid{display:grid;grid-template-columns:repeat(6,minmax(130px,1fr));gap:12px}
+.filter-field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.filter-field-row{display:flex;align-items:center;gap:6px}
+.filter-field-row .form-control{min-width:0}
+.filter-field-row .btn-icon{width:34px;height:34px;flex-shrink:0;font-size:18px}
+.filters-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+.filters-data-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+
+.table-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 24px;border-bottom:1px solid var(--border);flex-shrink:0;background:rgba(0,16,43,.2)}
+.table-toolbar-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
+.pagination{display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 20px;border-top:1px solid var(--border);flex-shrink:0;background:var(--surface)}
 
 /* ── TABLE VISUALS ── */
 thead th{position:sticky;top:0;z-index:10;background:var(--surface2);padding:9px 13px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--text3);border-bottom:1px solid var(--border);white-space:nowrap;user-select:none;transition:color .15s;}
@@ -244,7 +293,7 @@ tbody tr:hover .row-actions{opacity:1}
    classe tinha o seu tom fixo, então mudar a cor em Configurações mudava o
    texto mas não o fundo — as cores viviam em dois lugares ao mesmo tempo. */
 .s-nenhum,.s-lead-qualificado,.s-ligacao-feita,.s-contato-decisor,
-.s-reuniao-marcada,.s-contrato-realizado,.s-venda,.s-perda,.s-concluido{
+.s-reuniao-marcada,.s-reuniao-confirmada,.s-contrato-realizado,.s-venda,.s-perda,.s-concluido{
   background:color-mix(in srgb, var(--cor-etapa) 16%, transparent);
   color:color-mix(in srgb, var(--cor-etapa) 82%, white);
   border:1px solid color-mix(in srgb, var(--cor-etapa) 38%, transparent);
@@ -254,6 +303,7 @@ tbody tr:hover .row-actions{opacity:1}
 .s-ligacao-feita{--cor-etapa:var(--s-ligacao-feita)}
 .s-contato-decisor{--cor-etapa:var(--s-contato-decisor)}
 .s-reuniao-marcada{--cor-etapa:var(--s-reuniao-marcada)}
+.s-reuniao-confirmada{--cor-etapa:var(--s-reuniao-confirmada)}
 .s-contrato-realizado{--cor-etapa:var(--s-contrato-realizado)}
 .s-venda{--cor-etapa:var(--s-venda)}
 .s-perda{--cor-etapa:var(--s-perda)}
@@ -296,6 +346,14 @@ select.form-control{cursor:pointer}
 select.form-control option{background:var(--surface2)}
 textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
 .form-section-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);padding:4px 0;border-bottom:1px solid var(--border);grid-column:1/-1;margin-top:4px;}
+.playbook-pendencias{font-size:11px;color:var(--yellow);margin-top:5px;display:block;line-height:1.45}
+.form-check{display:flex;gap:9px;align-items:flex-start;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:pointer}
+.form-check.full{grid-column:1/-1}
+.form-check input{margin-top:3px;accent-color:var(--accent)}
+.form-check span{display:flex;flex-direction:column;gap:2px;color:var(--text2);font-size:12px;line-height:1.4}
+.form-check strong{color:var(--text);font-size:12px}
+.form-check small{color:var(--text3);font-size:10.5px}
+.form-check-danger{border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.06)}
 
 /* ── DROPDOWNS & TOASTS ── */
 .status-dropdown{position:fixed;z-index:9999;background:var(--surface);border:1px solid var(--border2);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.5);overflow:hidden;min-width:190px;animation:popIn .18s cubic-bezier(.34,1.56,.64,1);}
@@ -1468,10 +1526,24 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
 
 /* ── Celular ── */
 @media (max-width: 768px) {
-  .topbar { padding: 0 12px; gap: 8px; }
-  .topbar .search-wrap { width: auto !important; min-width: 0; flex: 1; }
-  .topbar .search-wrap kbd { display: none; }
+  .topbar { padding: 0 12px; gap: 8px; height: 56px; }
+  .topbar-left{flex:1;min-width:0;gap:8px}
+  .global-search{width:40px!important;flex:0 0 40px;padding:0!important;justify-content:center!important;text-align:center!important}
+  .global-search-label,.global-search kbd{display:none}
   .user-menu-name { display: none; }
+  .user-menu-trigger{padding-right:4px}
+
+  .leads-header{padding:14px 16px 12px;display:block;background:var(--surface)}
+  .leads-header-main{display:block}
+  .leads-title-row{width:100%;margin-bottom:12px}
+  .leads-title{font-size:20px}
+  .leads-subtitle{font-size:11px}
+  .leads-search{width:100%;max-width:none}
+  .leads-header-actions{width:100%;margin-top:10px}
+  .leads-header-actions .view-toggle{width:100%;display:grid;grid-template-columns:repeat(3,1fr)}
+  .leads-header-actions .view-btn{padding:8px 6px;font-size:12px}
+  .leads-new-desktop{display:none}
+  .leads-new-mobile{display:inline-flex}
 
   .page-header {
     flex-direction: column; align-items: flex-start; gap: 12px;
@@ -1496,17 +1568,42 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
     max-height: 100% !important; height: 100%;
     border-radius: 0; display: flex; flex-direction: column;
   }
-  .modal-body { flex: 1; overflow-y: auto; }
-  .modal-footer { position: sticky; bottom: 0; background: var(--surface); }
+  .modal-header { padding: 14px 16px; }
+  .modal-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 18px 16px; }
+  .modal-footer { position: sticky; bottom: 0; background: var(--surface); padding: 10px 12px; }
   .form-grid { grid-template-columns: 1fr !important; }
 
   /* Kanban rola na horizontal com colunas mais estreitas */
   .kanban-col { min-width: 240px; }
 
-  .stats-bar { overflow-x: auto; padding-bottom: 6px; }
-  .stat-card { min-width: 132px; flex-shrink: 0; }
+  .stats-bar{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px 16px;overflow:visible}
+  .stat-card{min-width:0;padding:10px 12px;box-shadow:none}
+  .stat-card:hover{transform:none;box-shadow:none}
+  .stat-secondary{display:none}
+  .stat-value{font-size:18px}
+
+  .filters-toggle{padding:10px 16px;min-height:44px}
+  .filters-toggle-hint{font-size:10.5px}
+  .filters-content{padding:4px 16px 14px}
+  .filters-grid{grid-template-columns:1fr 1fr;gap:10px}
+  .filters-actions{align-items:stretch;flex-direction:column}
+  .filters-data-actions{width:100%;margin-left:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .filters-data-actions .btn{justify-content:center;min-width:0;padding-left:8px;padding-right:8px}
+
+  .table-toolbar{padding:8px 16px}
+  .table-toolbar-actions select.form-control{font-size:13px!important;min-height:34px;width:132px!important}
+  .pagination{padding:9px 12px;gap:8px}
+  .pagination .pagination-edge{display:none}
+  .pagination .btn{flex:1;justify-content:center;max-width:112px;padding-left:8px!important;padding-right:8px!important}
 
   .detail-panel.open { width: 100vw; }
+}
+
+@media (max-width: 380px) {
+  /* Mantém as duas ações principais inteiras até em celulares de 320 px. */
+  .modal-footer .draft-status { font-size: 0; min-width: 38px; }
+  .modal-footer .draft-status::after { content: 'Salvo'; font-size: 10px; }
+  .modal-footer .btn { padding-left: 10px; padding-right: 10px; }
 }
 
 /* ── Cartões de lead, no lugar da tabela ── */
@@ -1524,6 +1621,10 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
 .cartao-lead-linha { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .cartao-lead-acoes { display: flex; gap: 7px; flex-wrap: wrap; padding-top: 4px; border-top: 1px solid var(--border); }
 .cartao-lead-acoes .btn { flex: 1; min-width: 0; justify-content: center; font-size: 12px; }
+.cartao-proxima-acao{width:100%;display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:9px 10px;text-align:left;background:rgba(5,219,233,.05);border:1px solid rgba(5,219,233,.16);border-radius:8px;color:var(--text2);font-family:inherit;cursor:pointer}
+.cartao-proxima-acao .cartao-proxima-label{grid-column:1/-1;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent2);font-weight:700}
+.cartao-proxima-acao strong{font-size:11.5px;color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cartao-proxima-acao>span:last-child{font:500 10.5px 'DM Mono',monospace;color:var(--text3);white-space:nowrap}
 
 /* Larguras fixas que sobraram do desenho só-desktop e estouram no celular */
 @media (max-width: 768px) {
@@ -1539,8 +1640,20 @@ textarea.form-control{resize:vertical;min-height:72px;line-height:1.5}
   /* A tabela continua com min-width para rolar no tablet, mas no celular ela
      nem é renderizada — os cartões entram no lugar */
   .table-wrapper { -webkit-overflow-scrolling: touch; }
+  .lista-cartoes{padding:10px 12px;gap:9px}
+  .cartao-lead{padding:12px;gap:10px;border-color:rgba(29,104,135,.62);content-visibility:auto;contain-intrinsic-size:180px}
+  .cartao-lead-nome{font-size:14px}
+  .cartao-lead-acoes{padding-top:9px}
+  .cartao-lead-acoes .btn{min-height:36px;padding:7px 8px}
+}
+
+@media (max-width: 380px) {
+  .filters-grid{grid-template-columns:1fr}
+  .leads-new-mobile{padding-left:11px;padding-right:11px}
+  .cartao-lead-acoes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 
 /* Nada pode empurrar a página para os lados: rolagem horizontal no corpo
    inteiro é a forma mais rápida de tornar um app inutilizável no celular */
 html, body { max-width: 100%; overflow-x: hidden; }
+
