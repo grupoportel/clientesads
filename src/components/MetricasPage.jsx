@@ -329,9 +329,11 @@ export default function MetricasPage({ leads = [], etapas = [], propostas = [] }
       sinais.push({ t: '=', cat: 'Potencial', txt: 'Potencial de escala não avaliado [0]' });
     }
 
-    // 9. REUNIÃO FUTURA CONFIRMADA ───────────────────────────
-    if (l.reuniao && l.reuniao >= hoje) {
-      pts += 12; sinais.push({ t: '+', cat: 'Engajamento', txt: `Reunião confirmada para ${l.reuniao} — compromisso firme de compra [+12]` });
+    // 9. REUNIÃO FUTURA — marcada e confirmada são fatos diferentes.
+    if (l.reuniao && l.reuniao >= hoje && l.confirmacaoExplicita) {
+      pts += 12; sinais.push({ t: '+', cat: 'Engajamento', txt: `Reunião confirmada para ${l.reuniao} — aceite explícito registrado [+12]` });
+    } else if (l.reuniao && l.reuniao >= hoje) {
+      pts += 5; sinais.push({ t: '+', cat: 'Engajamento', txt: `Reunião marcada para ${l.reuniao}, ainda aguardando confirmação [+5]` });
     } else if (l.reuniao && l.reuniao < hoje) {
       sinais.push({ t: '=', cat: 'Engajamento', txt: `Reunião já ocorreu em ${l.reuniao} — verificar andamento pós-reunião [0]` });
     }
@@ -1021,3 +1023,4 @@ export default function MetricasPage({ leads = [], etapas = [], propostas = [] }
     </div>
   );
 }
+

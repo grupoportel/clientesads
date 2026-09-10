@@ -2,22 +2,19 @@ import React from 'react';
 import { rotuloPapel, corPapel } from '../papeis';
 
 const NAV_ITEMS = [
-  { id: 'dashboard',     icon: '📊', label: 'Dashboard' },
-  { id: 'leads',         icon: '👥', label: 'Leads',        badgeKey: 'leads' },
-  { id: 'clientes',      icon: '🏢', label: 'Clientes' },
-  { id: 'buscar-leads',  icon: '🔎', label: 'Buscar Leads' },
-  { id: 'tarefas',       icon: '✅', label: 'Tarefas' },
-  { id: 'conversas',     icon: '💬', label: 'Conversas' },
-  { id: 'emails',        icon: '✉️', label: 'E-mails' },
-  { id: 'agenda',        icon: '📅', label: 'Agenda' },
-  { id: 'financeiro',    icon: '💰', label: 'Financeiro' },
-  { id: 'metricas',      icon: '🎯', label: 'Métricas' },
-  { id: 'relatorios',    icon: '📈', label: 'Relatórios' },
+  { id: 'dashboard',     icon: '▦', label: 'Dashboard' },
+  { id: 'leads',         icon: '◎', label: 'Leads',        badgeKey: 'leads' },
+  { id: 'clientes',      icon: '◇', label: 'Clientes' },
+  { id: 'tarefas',       icon: '✓', label: 'Tarefas' },
+  { id: 'agenda',        icon: '□', label: 'Agenda' },
+  { id: 'financeiro',    icon: '$', label: 'Financeiro' },
+  { id: 'metricas',      icon: '◉', label: 'Métricas' },
+  { id: 'relatorios',    icon: '↗', label: 'Relatórios' },
 ];
 
 export default function Sidebar({
   paginaAtiva, setPaginaAtiva, leads = [],
-  tarefasPendentes = 0, conversasNaoLidas = 0, emailsNaoLidos = 0,
+  tarefasPendentes = 0,
   nomeEmpresa = 'Grupo Portel', nomeUsuario = 'Usuário', emailUsuario = '',
   iniciaisUsuario = '?', onLogout, aberta = false, onFechar = () => {},
   papel = null, mostrarConfiguracoes = true,
@@ -35,9 +32,15 @@ export default function Sidebar({
     fontSize: '13px',
     fontWeight: isActive(id) ? 600 : 500,
     transition: 'all 0.15s',
+    borderTop: 'none',
+    borderRight: 'none',
+    borderBottom: 'none',
     borderLeft: isActive(id) ? '3px solid var(--accent)' : '3px solid transparent',
     background: isActive(id) ? 'rgba(0,210,223,.12)' : 'transparent',
     marginBottom: '2px',
+    width: '100%',
+    textAlign: 'left',
+    fontFamily: 'inherit',
   });
 
   const badgeStyle = (alert) => ({
@@ -105,16 +108,11 @@ export default function Sidebar({
           } else if (item.id === 'tarefas' && tarefasPendentes > 0) {
             badgeContent = tarefasPendentes;
             isAlert = true;
-          } else if (item.id === 'conversas' && conversasNaoLidas > 0) {
-            badgeContent = conversasNaoLidas;
-            isAlert = true;
-          } else if (item.id === 'emails' && emailsNaoLidos > 0) {
-            badgeContent = emailsNaoLidos;
-            isAlert = true;
           }
 
           return (
-            <div
+            <button
+              type="button"
               key={item.id}
               style={navItemStyle(item.id)}
               onClick={() => setPaginaAtiva(item.id)}
@@ -138,7 +136,7 @@ export default function Sidebar({
               {badgeContent !== null && (
                 <span style={badgeStyle(isAlert)}>{badgeContent}</span>
               )}
-            </div>
+            </button>
           );
         })}
 
@@ -149,7 +147,8 @@ export default function Sidebar({
 
         {/* Configurações — só para quem administra */}
         {mostrarConfiguracoes && (
-        <div
+        <button
+          type="button"
           style={navItemStyle('configuracoes')}
           onClick={() => setPaginaAtiva('configuracoes')}
           onMouseEnter={(e) => {
@@ -167,9 +166,9 @@ export default function Sidebar({
             }
           }}
         >
-          <span style={{ fontSize: '15px', lineHeight: 1 }}>⚙️</span>
+          <span style={{ fontSize: '15px', lineHeight: 1 }}>⚙</span>
           <span>Configurações</span>
-        </div>
+        </button>
         )}
       </div>
 
@@ -238,3 +237,4 @@ export default function Sidebar({
     </div>
   );
 }
+

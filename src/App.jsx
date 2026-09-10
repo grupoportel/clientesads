@@ -46,6 +46,7 @@ const AgendarReuniaoModal = lazy(() => import('./components/AgendarReuniaoModal'
 const PainelPrioridade = lazy(() => import('./components/PainelPrioridade'));
 const BuscarLeadsPage = lazy(() => import('./components/BuscarLeadsPage'));
 import { rodarAutomacoes } from './automacoesRunner';
+import { validarMudancaStatus, descricaoBloqueio } from './processoProspeccao';
 
 // No topo do módulo em vez de dentro do filtro: recriada a cada lead, ela
 // impedia o compilador do React de preservar a memoização da lista.
@@ -100,6 +101,17 @@ const ROTULOS_CAMPOS = {
   reuniao: 'Reunião', melhores: 'Melhores conteúdos', oportunidades: 'Oportunidades',
   pontos: 'Pontos fortes', escalar: 'Potencial de escala', obs: 'Observação',
   motivoPerda: 'Motivo da perda',
+  prioridadeProspeccao: 'Cadência de prospecção', objetivoContato: 'Objetivo do contato',
+  evidencia: 'Evidência', hipotese: 'Hipótese', processoAtual: 'Processo atual',
+  problemaConfirmado: 'Problema confirmado', impacto: 'Impacto', momento: 'Momento',
+  decisorPapel: 'Papel do decisor', permissaoWhatsApp: 'Permissão de WhatsApp',
+  origemPermissaoWhatsApp: 'Origem da permissão', optOut: 'Opt-out',
+  proximaAcao: 'Próxima ação', proximaAcaoDataHora: 'Data da próxima ação',
+  proximaAcaoCanal: 'Canal da próxima ação', proximaAcaoResponsavel: 'Responsável pela próxima ação',
+  proximaAcaoObjetivo: 'Objetivo da próxima ação', reuniaoDataHora: 'Data e hora da reunião',
+  reuniaoObjetivo: 'Objetivo da reunião', reuniaoDuracaoMin: 'Duração da reunião',
+  reuniaoLinkLocal: 'Link/local da reunião', reuniaoParticipantes: 'Participantes',
+  conviteEnviado: 'Convite enviado', confirmacaoExplicita: 'Confirmação explícita',
 };
 
 function App() {
@@ -477,6 +489,20 @@ function App() {
       return;
     }
 
+    if (campo === 'status') {
+      const bloqueados = alvos
+        .map(lead => ({ lead, validacao: validarMudancaStatus(lead, novoValor) }))
+        .filter(item => !item.validacao.ok);
+      if (bloqueados.length > 0) {
+        const primeiro = bloqueados[0];
+        showToast(
+          `${bloqueados.length} lead(s) não podem avançar. ${primeiro.lead.nome}: ${descricaoBloqueio(primeiro.validacao.pendencias)}`,
+          'error'
+        );
+        return;
+      }
+    }
+
     setAplicandoEmMassa(true);
     const agora = new Date().toISOString();
     const rotulo = ROTULOS_CAMPOS[campo] || campo;
@@ -761,6 +787,12 @@ function App() {
       showToast("O nome é obrigatório!", 'error');
       return Promise.resolve(false);
     }
+    const statusAnterior = leadEmEdicao?.status || 'nenhum';
+    const validacaoStatus = validarMudancaStatus({ ...dados, status: statusAnterior }, dados.status);
+    if (!validacaoStatus.ok) {
+      showToast(descricaoBloqueio(validacaoStatus.pendencias), 'error');
+      return Promise.resolve(false);
+    }
     const agora = new Date().toISOString();
 
     if (!leadEmEdicao) {
@@ -828,6 +860,10 @@ function App() {
 
     const gravarUm = (lead) => {
       if (!lead || String(lead[campo] ?? '') === String(novoValor ?? '')) return Promise.resolve();
+      if (campo === 'status') {
+        const validacao = validarMudancaStatus(lead, novoValor);
+        if (!validacao.ok) return Promise.reject(new Error(descricaoBloqueio(validacao.pendencias)));
+      }
       const extras = campo === 'status' ? carimbosDeFecho(lead.status, novoValor, agora) : {};
       return update(ref(database, 'crm_data/leads/' + lead.id), { [campo]: novoValor, updatedAt: agora, ...extras })
         .then(() => {
@@ -846,8 +882,18 @@ function App() {
     };
 
     if (selectedLeads.length > 1 && selectedLeads.includes(leadId)) {
+      const alvos = selectedLeads.map(id => leads.find(x => String(x.id) === String(id))).filter(Boolean);
+      if (campo === 'status') {
+        const bloqueado = alvos
+          .map(lead => ({ lead, validacao: validarMudancaStatus(lead, novoValor) }))
+          .find(item => !item.validacao.ok);
+        if (bloqueado) {
+          showToast(`${bloqueado.lead.nome}: ${descricaoBloqueio(bloqueado.validacao.pendencias)}`, 'error');
+          return;
+        }
+      }
       if (window.confirm(`Aplicar essa alteração a TODOS os ${selectedLeads.length} leads selecionados?`)) {
-        Promise.all(selectedLeads.map(id => gravarUm(leads.find(x => String(x.id) === String(id)))))
+        Promise.all(alvos.map(gravarUm))
           .then(() => showToast(`${selectedLeads.length} leads atualizados!`, 'success'))
           .catch(e => showToast('Erro ao atualizar: ' + e.message, 'error'));
       }
@@ -862,6 +908,11 @@ function App() {
     if (!exigirEdicao('mover leads')) return;
     const lead = leads.find(l => String(l.id) === String(leadId));
     if (lead && lead.status !== novoStatus) {
+      const validacao = validarMudancaStatus(lead, novoStatus);
+      if (!validacao.ok) {
+        showToast(descricaoBloqueio(validacao.pendencias), 'error');
+        return;
+      }
       const agora = new Date().toISOString();
       update(ref(database, 'crm_data/leads/' + lead.id), {
         status: novoStatus, updatedAt: agora,
@@ -884,8 +935,6 @@ function App() {
   // ---------------------------------------------------------
   const hojeApp = new Date().toISOString().slice(0, 10);
   const tarefasPendentesDia = tarefasGlobais.filter(t => t.data === hojeApp && !t.concluida);
-  const conversasNaoLidas = conversasGlobais.filter(c => c.naoLidas > 0 && !c.arquivada).length;
-  const emailsNaoLidos = emailsGlobais.filter(e => e.naoLidas > 0).length;
 
   // ---------------------------------------------------------
   // RENDER
@@ -910,36 +959,29 @@ function App() {
         return (
           <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
             <div className="content">
-              {/* Sub-header do módulo de Leads */}
-              <div style={{ 
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '12px 20px', borderBottom: '1px solid var(--border)', flexShrink: 0
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text)', margin: 0 }}>
-                    👥 Leads
-                    <span style={{ 
-                      fontSize: '12px', fontWeight: 600, background: 'var(--surface3)', 
-                      color: 'var(--text2)', padding: '2px 10px', borderRadius: '20px',
-                      fontFamily: "'DM Mono', monospace", marginLeft: '10px'
-                    }}>
-                      {leadsFiltrados.length}
-                    </span>
-                  </h2>
-                  <div className="search-wrap">
-                    <span className="search-icon">🔍</span>
-                    <input type="text" placeholder="Buscar leads…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+              <header className="leads-header">
+                <div className="leads-header-main">
+                  <div className="leads-title-row">
+                    <div>
+                      <h1 className="leads-title">Leads <span>{leadsFiltrados.length}</span></h1>
+                      <p className="leads-subtitle">Prospecção e oportunidades comerciais</p>
+                    </div>
+                    {editavel && <button className="btn btn-primary leads-new-mobile" onClick={abrirModalNovo}>Novo lead</button>}
+                  </div>
+                  <div className="search-wrap leads-search">
+                    <span className="search-icon" aria-hidden="true">⌕</span>
+                    <input aria-label="Buscar leads" type="search" placeholder="Buscar por empresa, contato ou cidade" value={busca} onChange={(e) => setBusca(e.target.value)} />
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="leads-header-actions">
                   <div className="view-toggle">
-                    <button className={`view-btn ${visaoAtual === 'table' ? 'active' : ''}`} onClick={() => setVisaoAtual('table')}>☰ Tabela</button>
-                    <button className={`view-btn ${visaoAtual === 'kanban' ? 'active' : ''}`} onClick={() => setVisaoAtual('kanban')}>⊞ Kanban</button>
-                    <button className={`view-btn ${visaoAtual === 'prioridade' ? 'active' : ''}`} onClick={() => setVisaoAtual('prioridade')} title="A carteira ordenada por chance de fechar">🎯 Prioridade</button>
+                    <button className={`view-btn ${visaoAtual === 'table' ? 'active' : ''}`} onClick={() => setVisaoAtual('table')}>Lista</button>
+                    <button className={`view-btn ${visaoAtual === 'kanban' ? 'active' : ''}`} onClick={() => setVisaoAtual('kanban')}>Kanban</button>
+                    <button className={`view-btn ${visaoAtual === 'prioridade' ? 'active' : ''}`} onClick={() => setVisaoAtual('prioridade')} title="Carteira ordenada por chance de fechar">Prioridade</button>
                   </div>
-                  {editavel && <button className="btn btn-primary" onClick={abrirModalNovo}>+ Novo Lead</button>}
+                  {editavel && <button className="btn btn-primary leads-new-desktop" onClick={abrirModalNovo}>Novo lead</button>}
                 </div>
-              </div>
+              </header>
 
               {editavel && selectedLeads.length > 0 && (
                 <BarraEmMassa
@@ -966,79 +1008,17 @@ function App() {
                 filtroResponsavel={filtroResponsavel} setFiltroResponsavel={setFiltroResponsavel}
                 filtroEstado={filtroEstado} setFiltroEstado={setFiltroEstado}
                 filtroCidade={filtroCidade} setFiltroCidade={setFiltroCidade}
+                filtroDataInicio={filtroDataInicio} setFiltroDataInicio={setFiltroDataInicio}
+                filtroDataFim={filtroDataFim} setFiltroDataFim={setFiltroDataFim}
+                quantidadeAtivos={filtrosAtivos.length}
+                onLimpar={limparFiltros}
+                podeEditar={editavel}
+                onImportar={() => setModalImportar(true)}
+                onExportar={() => exportarLeads()}
+                quantidadeExportar={leadsFiltrados.length}
+                onLixeira={() => setLixeiraAberta(true)}
+                quantidadeLixeira={lixeira.length}
               />
-
-              {/* Barra de filtros ativos + período + exportação */}
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-                padding: '10px 20px', borderBottom: '1px solid var(--border)', flexShrink: 0,
-              }}>
-                <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
-                  Entrada
-                </span>
-                <input
-                  type="date"
-                  className="form-control"
-                  style={{ width: 'auto', fontSize: 12, padding: '4px 8px' }}
-                  value={filtroDataInicio}
-                  onChange={e => setFiltroDataInicio(e.target.value)}
-                  title="Leads que entraram a partir desta data"
-                />
-                <span style={{ fontSize: 12, color: 'var(--text3)' }}>até</span>
-                <input
-                  type="date"
-                  className="form-control"
-                  style={{ width: 'auto', fontSize: 12, padding: '4px 8px' }}
-                  value={filtroDataFim}
-                  onChange={e => setFiltroDataFim(e.target.value)}
-                  title="Leads que entraram até esta data"
-                />
-
-                {filtrosAtivos.map((f, i) => (
-                  <span key={i} style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                    background: 'rgba(0,208,223,0.1)', border: '1px solid rgba(0,208,223,0.3)',
-                    color: 'var(--accent)', borderRadius: 20, padding: '3px 10px', fontSize: 12,
-                  }}>
-                    <span style={{ opacity: 0.7 }}>{f.rotulo}:</span> {f.valor}
-                    <span onClick={f.limpar} style={{ cursor: 'pointer', opacity: 0.7, fontSize: 11 }} title="Remover filtro">✕</span>
-                  </span>
-                ))}
-
-                {filtrosAtivos.length > 0 && (
-                  <button className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 10px' }} onClick={limparFiltros}>
-                    Limpar tudo
-                  </button>
-                )}
-
-                <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-                  {/* Só aparece quando há algo lá dentro: um botão de lixeira
-                      sempre visível e sempre vazio vira ruído no cabeçalho. */}
-                  {editavel && lixeira.length > 0 && (
-                    <button
-                      className="btn btn-ghost" style={{ fontSize: 12, padding: '5px 12px' }}
-                      onClick={() => setLixeiraAberta(true)}
-                      title="Leads excluídos, com opção de restaurar"
-                    >
-                      🗑 Lixeira ({lixeira.length})
-                    </button>
-                  )}
-                  {editavel && (
-                    <button className="btn btn-ghost" style={{ fontSize: 12, padding: '5px 12px' }} onClick={() => setModalImportar(true)}>
-                      📥 Importar
-                    </button>
-                  )}
-                  <button
-                    className="btn btn-ghost"
-                    style={{ fontSize: 12, padding: '5px 12px' }}
-                    onClick={() => exportarLeads()}
-                    disabled={leadsFiltrados.length === 0}
-                    title={`Exportar ${leadsFiltrados.length} lead(s) desta visão`}
-                  >
-                    📤 Exportar ({leadsFiltrados.length})
-                  </button>
-                </div>
-              </div>
 
               {visaoAtual === 'table' ? (
                 <TableBoard 
@@ -1183,8 +1163,9 @@ function App() {
             ☰
           </button>
           <button
-            className="search-wrap"
+            className="global-search"
             onClick={() => setBuscaGlobalAberta(true)}
+            aria-label="Buscar em todo o CRM"
             title="Buscar em todo o CRM (Ctrl+K)"
             style={{
               marginLeft: 0, width: '320px', display: 'flex', alignItems: 'center',
@@ -1192,8 +1173,8 @@ function App() {
               font: 'inherit', color: 'var(--text3)',
             }}
           >
-            <span className="search-icon" style={{ position: 'static' }}>🔍</span>
-            <span style={{ flex: 1, fontSize: '13px' }}>Buscar no CRM…</span>
+            <span className="global-search-icon" aria-hidden="true">⌕</span>
+            <span className="global-search-label" style={{ flex: 1, fontSize: '13px' }}>Buscar no CRM…</span>
             <kbd style={{
               fontSize: '10px', border: '1px solid var(--border)', borderRadius: '4px',
               padding: '1px 5px', fontFamily: "'DM Mono', monospace", color: 'var(--text3)',
@@ -1203,7 +1184,7 @@ function App() {
         <div className="topbar-right">
           {/* Sino de notificações */}
           <div style={{ position: 'relative' }}>
-            <button className="notification-bell" onClick={() => setShowNotifications(!showNotifications)}>
+            <button className="notification-bell" aria-label="Abrir notificações" onClick={() => setShowNotifications(!showNotifications)}>
               🔔
               {tarefasPendentesDia.length > 0 && (
                 <span className="notification-badge">{tarefasPendentesDia.length}</span>
@@ -1293,8 +1274,6 @@ function App() {
           setPaginaAtiva={setPaginaAtiva}
           leads={leads}
           tarefasPendentes={tarefasPendentesDia.length}
-          conversasNaoLidas={conversasNaoLidas}
-          emailsNaoLidos={emailsNaoLidos}
           nomeEmpresa={nomeEmpresa}
           nomeUsuario={nomeUsuario}
           emailUsuario={emailUsuario}
@@ -1397,3 +1376,4 @@ function App() {
 }
 
 export default App;
+

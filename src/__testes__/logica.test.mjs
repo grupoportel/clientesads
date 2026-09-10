@@ -6,7 +6,7 @@ import { regrasQueDisparam, regraValida, calcularPrazo, planejarAcoes } from '..
 import { saudeCliente, saudeMediaDaCarteira, receitaRecorrente, clienteAPartirDoLead, ganhosSemCliente } from '../clientes.js';
 import { normalizarMeta, achatar, extrairCampos, extrairUtm, acharDuplicado, camposParaCompletar } from '../../api/_leadIn.js';
 import { papelDoUsuario, podeEditar, podeAdministrar, podeVer, motivoBloqueio } from '../papeis.js';
-import { configuracaoAgenda, somarMinutos, inicioDoEvento, textoDataHora, montarEvento, textoConfirmacao, explicarErroAgenda } from '../../api/_agenda.js';
+import { configuracaoAgenda, somarMinutos, subtrairHoras, inicioDoEvento, textoDataHora, montarEvento, textoConfirmacao, explicarErroAgenda } from '../../api/_agenda.js';
 import { INTENCOES, acharIntencao, resumirHistorico, montarPromptMensagem, interpretarMensagem, ehTransitorio, atrasoDaTentativa, escolherModelo, configuracaoIa, textoDoHtml, urlDoSite, montarPromptAnalise, interpretarAnalise, CAMPOS_ANALISE } from '../../api/_ia.js';
 import { responderPara, montarHtml, configuracaoSmtp, caixaDeEntrada, explicarErroSmtp } from '../../api/_email.js';
 import { NICHOS_UI, UFS, nomeDaFatia } from '../prospeccaoNichos.js';
@@ -15,6 +15,10 @@ import { ultimaPasta, dividirLinha, montarCnpj, montarTelefone, linhaInteressa, 
 import { telefoneUtil, acharExistente, pontuarCandidato, prepararRevisao, resumoDaRevisao, ordenarRevisao } from '../prospeccao.js';
 import { pontuarLead, ordenarPorPrioridade, resumoDaCarteira, faixaDe, FAIXAS } from '../prioridade.js';
 import { paraLixeira, deLixeira, diasNaLixeira, vencidos, planoDeDesfazer, textoTempoNaLixeira, PRAZO_DIAS } from '../lixeira.js';
+import {
+  CADENCIAS, podeUsarWhatsApp, pendenciasProximaAcao,
+  pendenciasParaStatus, validarMudancaStatus, qualidadeRegistroProspeccao,
+} from '../processoProspeccao.js';
 
 let ok = 0, fail = 0;
 const t = (nome, cond) => { if (cond) { ok++; } else { fail++; console.log('FALHOU:', nome); } };
@@ -65,6 +69,15 @@ const custom = mesclarEtapas([{ id: 'venda', label: 'Fechado', probabilidade: 10
 t('override de rótulo', custom.find(x => x.id === 'venda').label === 'Fechado');
 t('mantém cls do padrão', custom.find(x => x.id === 'venda').cls === 's-venda');
 t('config parcial não quebra', custom.length === ETAPAS_PADRAO.length);
+const configAntiga = mesclarEtapas([
+  { id: 'nenhum', label: 'Nenhum', ordem: 0 },
+  { id: 'reuniao-marcada', label: 'Reunião Marcada', ordem: 4 },
+  { id: 'contrato-realizado', label: 'Contrato Realizado', ordem: 5 },
+]);
+t('rótulo padrão antigo migra para o playbook', configAntiga.find(x => x.id === 'nenhum').label === 'Conta Selecionada');
+t('reunião confirmada entra entre marcada e contrato',
+  configAntiga.findIndex(x => x.id === 'reuniao-marcada') < configAntiga.findIndex(x => x.id === 'reuniao-confirmada')
+  && configAntiga.findIndex(x => x.id === 'reuniao-confirmada') < configAntiga.findIndex(x => x.id === 'contrato-realizado'));
 
 const leads = [
   { status: 'reuniao-marcada', valor: 10000 },  // 60% -> 6000
@@ -76,6 +89,36 @@ const leads = [
 t('em aberto = 15000', valorEmAberto(e, leads) === 15000);
 t('previsão = 8000', previsaoPonderada(e, leads) === 8000);
 t('ganho = 20000', valorGanho(e, leads) === 20000);
+
+// ── Processo de prospecção do playbook ──
+const baseProspeccao = {
+  status: 'ligacao-feita', responsavel: 'Ana', decisor: 'Marina', decisorPapel: 'Sócia',
+  evidencia: 'Site sem conversão', hipotese: 'Perde pedidos por falta de resposta',
+  objetivoContato: 'Validar o processo atual', proximaAcao: 'Ligar para Marina',
+  proximaAcaoDataHora: '2026-09-11T10:00', proximaAcaoCanal: 'telefone',
+  proximaAcaoResponsavel: 'Ana', proximaAcaoObjetivo: 'Entender impacto',
+};
+t('cadência A tem 7 contatos em 12 dias úteis', CADENCIAS.A.contatos === 7 && CADENCIAS.A.diasUteis === 12);
+t('próxima ação completa não tem pendências', pendenciasProximaAcao(baseProspeccao).length === 0);
+t('próxima ação exige verbo/data/canal/responsável/objetivo', pendenciasProximaAcao({}).length === 5);
+t('WhatsApp exige permissão', !podeUsarWhatsApp({ whatsapp: '6699999999' }));
+t('WhatsApp autorizado pode ser usado', podeUsarWhatsApp({ whatsapp: '6699999999', permissaoWhatsApp: true }));
+t('opt-out sempre bloqueia WhatsApp', !podeUsarWhatsApp({ whatsapp: '6699999999', permissaoWhatsApp: true, optOut: true }));
+t('contato com decisor exige papel', pendenciasParaStatus({ ...baseProspeccao, decisorPapel: '' }, 'contato-decisor').includes('papel do decisor'));
+t('perda exige motivo', !validarMudancaStatus(baseProspeccao, 'perda').ok);
+t('perda com motivo é válida', validarMudancaStatus({ ...baseProspeccao, motivoPerda: 'Sem prioridade' }, 'perda').ok);
+
+const reuniaoMarcada = {
+  ...baseProspeccao, status: 'reuniao-marcada', reuniaoDataHora: '2026-09-12T14:00',
+  reuniaoObjetivo: 'Diagnosticar gargalo', reuniaoDuracaoMin: 30,
+  reuniaoLinkLocal: 'https://meet.google.com/abc', reuniaoParticipantes: 'Marina',
+  conviteEnviado: true,
+};
+t('reunião marcada completa pode avançar', pendenciasParaStatus(reuniaoMarcada, 'reuniao-marcada').length === 0);
+t('marcada não equivale a confirmada', !validarMudancaStatus(reuniaoMarcada, 'reuniao-confirmada').ok);
+t('aceite explícito confirma reunião', validarMudancaStatus({ ...reuniaoMarcada, confirmacaoExplicita: true }, 'reuniao-confirmada').ok);
+t('opt-out bloqueia avanço ativo', !validarMudancaStatus({ ...baseProspeccao, optOut: true }, 'contato-decisor').ok);
+t('qualidade do registro completo é 100%', qualidadeRegistroProspeccao(baseProspeccao) === 100);
 
 // ── Períodos ──
 // 15/03/2026, um dia qualquer no meio do mês
@@ -557,6 +600,8 @@ t('respeita ano bissexto', somarMinutos('2028-02-28T23:30', 60) === '2028-02-29T
 t('ano comum pula para marco', somarMinutos('2026-02-28T23:30', 60) === '2026-03-01T00:30:00');
 t('data invalida devolve null', somarMinutos('ontem', 30) === null);
 t('data vazia devolve null', somarMinutos('', 30) === null);
+t('lembrete T-24h atravessa o dia', subtrairHoras('2026-08-20T14:30', 24) === '2026-08-19T14:30:00');
+t('lembrete T-2h mantém o dia', subtrairHoras('2026-08-20T14:30', 2) === '2026-08-20T12:30:00');
 
 t('inicio normaliza com segundos', inicioDoEvento('2026-08-20T14:30') === '2026-08-20T14:30:00');
 t('inicio aceita espaco no lugar do T', inicioDoEvento('2026-08-20 14:30') === '2026-08-20T14:30:00');
@@ -585,7 +630,7 @@ t('evento nao leva convidados', ev.attendees === undefined);
 t('lembrete usa o padrao de quem usa', ev.reminders.useDefault === true);
 t('nao finge definir lembrete', ev.reminders.overrides === undefined);
 
-t('duracao padrao de 60', montarEvento(leadAgenda, { dataHora: '2026-08-20T09:00' }).end.dateTime === '2026-08-20T10:00:00');
+t('duracao padrao de 30', montarEvento(leadAgenda, { dataHora: '2026-08-20T09:00' }).end.dateTime === '2026-08-20T09:30:00');
 t('sem data nao monta evento', montarEvento(leadAgenda, { dataHora: '' }) === null);
 t('lead sem nome ainda monta', montarEvento({}, { dataHora: '2026-08-20T09:00' }).summary === 'Reunião — Lead');
 t('sem cidade nao inventa local', montarEvento({ nome: 'X' }, { dataHora: '2026-08-20T09:00' }).location === undefined);
@@ -1070,3 +1115,4 @@ t('duplicado desmarcado mesmo marcando por padrao',
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);
+

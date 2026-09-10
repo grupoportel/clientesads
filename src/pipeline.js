@@ -12,11 +12,12 @@
 // "Nenhum" (cinza recessivo) e "Perda" (vermelho de estado) ficam fora do
 // gráfico do funil, então não entram na paleta categórica.
 export const ETAPAS_PADRAO = [
-  { id: 'nenhum',             label: 'Nenhum',              cls: 's-nenhum',             cor: '#64748b', probabilidade: 0,   ganho: false, perdido: false, ativo: true },
-  { id: 'lead-qualificado',   label: 'Lead Qualificado',    cls: 's-lead-qualificado',   cor: '#1791d0', probabilidade: 10,  ganho: false, perdido: false, ativo: true },
-  { id: 'ligacao-feita',      label: 'Ligação Feita',       cls: 's-ligacao-feita',      cor: '#d97706', probabilidade: 20,  ganho: false, perdido: false, ativo: true },
+  { id: 'nenhum',             label: 'Conta Selecionada',   cls: 's-nenhum',             cor: '#64748b', probabilidade: 0,   ganho: false, perdido: false, ativo: true },
+  { id: 'lead-qualificado',   label: 'Preparação Concluída',cls: 's-lead-qualificado',   cor: '#1791d0', probabilidade: 10,  ganho: false, perdido: false, ativo: true },
+  { id: 'ligacao-feita',      label: 'Contato Iniciado',    cls: 's-ligacao-feita',      cor: '#d97706', probabilidade: 20,  ganho: false, perdido: false, ativo: true },
   { id: 'contato-decisor',    label: 'Contato com Decisor', cls: 's-contato-decisor',    cor: '#9333ea', probabilidade: 40,  ganho: false, perdido: false, ativo: true },
   { id: 'reuniao-marcada',    label: 'Reunião Marcada',     cls: 's-reuniao-marcada',    cor: '#0fa06f', probabilidade: 60,  ganho: false, perdido: false, ativo: true },
+  { id: 'reuniao-confirmada', label: 'Reunião Confirmada',  cls: 's-reuniao-confirmada', cor: '#16a34a', probabilidade: 75,  ganho: false, perdido: false, ativo: true },
   { id: 'contrato-realizado', label: 'Contrato Realizado',  cls: 's-contrato-realizado', cor: '#c026d3', probabilidade: 90,  ganho: true,  perdido: false, ativo: true },
   { id: 'venda',              label: 'Venda',               cls: 's-venda',              cor: '#0499b3', probabilidade: 100, ganho: true,  perdido: false, ativo: true },
   { id: 'concluido',          label: 'Concluído',           cls: 's-concluido',          cor: '#6ba30d', probabilidade: 100, ganho: true,  perdido: false, ativo: true },
@@ -40,6 +41,12 @@ export const MAPA_STATUS_ANTIGOS = {
   'interesse':    'perda',
 };
 
+const ROTULOS_PADRAO_ANTIGOS = {
+  nenhum: 'Nenhum',
+  'lead-qualificado': 'Lead Qualificado',
+  'ligacao-feita': 'Ligação Feita',
+};
+
 // Junta as etapas padrão com o que estiver salvo em crm_data/config/pipeline.
 // O que vem do banco só sobrescreve os campos que existirem, então nunca dá
 // para "quebrar" o funil salvando uma configuração incompleta.
@@ -52,13 +59,32 @@ export function mesclarEtapas(configSalva) {
 
   const porId = new Map(salvas.filter(Boolean).map(e => [e.id, e]));
 
-  const mescladas = ETAPAS_PADRAO.map(padrao => ({
-    ...padrao,
-    ...(porId.get(padrao.id) || {}),
-    // id e classe de estilo nunca vêm do banco
-    id: padrao.id,
-    cls: padrao.cls,
-  }));
+  const mescladas = ETAPAS_PADRAO.map(padrao => {
+    const salva = porId.get(padrao.id) || {};
+    const rotuloEraPadraoAntigo = salva.label === ROTULOS_PADRAO_ANTIGOS[padrao.id];
+    return {
+      ...padrao,
+      ...salva,
+      // Atualiza nomenclaturas antigas do próprio CRM sem apagar nomes que o
+      // usuário tenha personalizado em Configurações.
+      label: rotuloEraPadraoAntigo ? padrao.label : (salva.label || padrao.label),
+      // id e classe de estilo nunca vêm do banco
+      id: padrao.id,
+      cls: padrao.cls,
+    };
+  });
+
+  // Bancos anteriores não conhecem "Reunião Confirmada". Quando há uma ordem
+  // personalizada salva, insere a nova etapa exatamente entre Marcada e
+  // Contrato, sem empurrá-la para o fim do funil.
+  if (!porId.has('reuniao-confirmada')) {
+    const marcada = Number(porId.get('reuniao-marcada')?.ordem);
+    const contrato = Number(porId.get('contrato-realizado')?.ordem);
+    const confirmada = mescladas.find(e => e.id === 'reuniao-confirmada');
+    if (confirmada && Number.isFinite(marcada) && Number.isFinite(contrato)) {
+      confirmada.ordem = (marcada + contrato) / 2;
+    }
+  }
 
   // Etapas criadas pelo usuário (não existem no padrão) entram no fim
   const extras = salvas
@@ -124,3 +150,4 @@ export const formatarBRLCurto = (n) => {
   if (Math.abs(v) >= 1000)    return `R$ ${(v / 1000).toFixed(0)}k`;
   return `R$ ${Math.round(v)}`;
 };
+
