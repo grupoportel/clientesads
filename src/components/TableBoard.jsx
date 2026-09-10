@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { acharEtapa, etapasAtivas, formatarBRL } from '../pipeline';
 import { formataData } from '../periodo';
 import { useTelaEstreita } from '../useTelaEstreita';
+import { podeUsarWhatsApp } from '../processoProspeccao';
 
 const ORIGEM_OPTIONS = [
   { value: 'gmn', label: 'GMN' }, { value: 'whatsapp', label: 'WhatsApp' },
@@ -17,6 +18,10 @@ const urlIg = (ig) => {
   return 'https://instagram.com/' + ig.replace('@', '').trim();
 };
 const urlSite = (s) => (s ? (s.startsWith('http') ? s : 'https://' + s) : '');
+const formataDataHoraCompacta = (valor) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(valor || ''));
+  return m ? `${m[3]}/${m[2]} · ${m[4]}:${m[5]}` : '';
+};
 
 const Vazio = () => <span className="td-empty">—</span>;
 
@@ -257,9 +262,9 @@ export default function TableBoard({
     },
     {
       campo: 'whatsapp', titulo: 'WhatsApp', largura: 150, edicao: { tipo: 'text' },
-      render: (l) => (l.whatsapp
+      render: (l) => (podeUsarWhatsApp(l)
         ? <a href={`https://wa.me/55${limpaTel(l.whatsapp)}`} target="_blank" rel="noreferrer" className="td-link" onClick={e => e.stopPropagation()}>💬 {l.whatsapp}</a>
-        : <Vazio />),
+        : l.whatsapp ? <span style={{ color: 'var(--text3)', fontSize: 11 }}>Sem permissão</span> : <Vazio />),
     },
     {
       campo: 'email', titulo: 'E-mail', largura: 190, edicao: { tipo: 'text' },
@@ -403,10 +408,7 @@ export default function TableBoard({
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
 
       {/* Barra da tabela */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-        padding: '7px 20px', borderBottom: '1px solid var(--border)', flexShrink: 0,
-      }}>
+      <div className="table-toolbar">
         <span style={{ fontSize: 11.5, color: 'var(--text3)', fontFamily: "'DM Mono', monospace" }}>
           {inicio + 1}–{Math.min(inicio + porPagina, leadsOrdenados.length)} de {leadsOrdenados.length}
         </span>
@@ -423,7 +425,7 @@ export default function TableBoard({
           </button>
         )}
 
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="table-toolbar-actions">
           <select
             className="form-control"
             style={{ fontSize: 11.5, padding: '3px 8px', width: 'auto' }}
@@ -450,18 +452,20 @@ export default function TableBoard({
           {daPagina.map(lead => {
             const marcado = selectedLeads.includes(lead.id);
             const etapa = acharEtapa(etapas, lead.status);
-            const wpp = lead.whatsapp ? lead.whatsapp.replace(/\D/g, '') : '';
+            const wpp = podeUsarWhatsApp(lead) ? lead.whatsapp.replace(/\D/g, '') : '';
             return (
               <div key={lead.id} className={`cartao-lead ${marcado ? 'selecionado' : ''}`}>
                 <div className="cartao-lead-topo">
                   <input
                     type="checkbox"
+                    aria-label={`Selecionar ${lead.nome}`}
                     checked={marcado}
                     onChange={e => alternarUm(e, lead.id)}
                     style={{ cursor: 'pointer', marginTop: 3, width: 18, height: 18, flexShrink: 0 }}
                   />
                   <button
                     onClick={() => onOpenDetail(lead)}
+                    aria-label={`Abrir detalhes de ${lead.nome}`}
                     style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', textAlign: 'left', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}
                   >
                     <div className="cartao-lead-nome">{lead.nome}</div>
@@ -484,6 +488,14 @@ export default function TableBoard({
                     </span>
                   )}
                 </div>
+
+                {lead.proximaAcao && (
+                  <button type="button" className="cartao-proxima-acao" onClick={() => onOpenDetail(lead)}>
+                    <span className="cartao-proxima-label">Próxima ação</span>
+                    <strong>{lead.proximaAcao}</strong>
+                    {lead.proximaAcaoDataHora && <span>{formataDataHoraCompacta(lead.proximaAcaoDataHora)}</span>}
+                  </button>
+                )}
 
                 <div className="cartao-lead-acoes">
                   {wpp && (
@@ -580,12 +592,9 @@ export default function TableBoard({
 
       {/* Navegação de páginas */}
       {totalPaginas > 1 && (
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          padding: '9px 20px', borderTop: '1px solid var(--border)', flexShrink: 0,
-        }}>
+        <nav className="pagination" aria-label="Paginação de leads">
           <button
-            className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 10px' }}
+            className="btn btn-ghost pagination-edge" style={{ fontSize: 12, padding: '4px 10px' }}
             onClick={() => setPagina(1)} disabled={paginaSegura === 1}
           >« Primeira</button>
           <button
@@ -602,11 +611,12 @@ export default function TableBoard({
             onClick={() => setPagina(Math.min(totalPaginas, paginaSegura + 1))} disabled={paginaSegura === totalPaginas}
           >Próxima ›</button>
           <button
-            className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 10px' }}
+            className="btn btn-ghost pagination-edge" style={{ fontSize: 12, padding: '4px 10px' }}
             onClick={() => setPagina(totalPaginas)} disabled={paginaSegura === totalPaginas}
           >Última »</button>
-        </div>
+        </nav>
       )}
     </div>
   );
 }
+
