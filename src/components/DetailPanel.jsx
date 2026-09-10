@@ -1,9 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { acharEtapa, formatarBRL } from '../pipeline';
 import { escutarAtividadesDoLead, tempoRelativo, TIPOS } from '../atividades';
+import { CADENCIAS, podeUsarWhatsApp, qualidadeRegistroProspeccao } from '../processoProspeccao';
 
 const limpaTel = (t) => String(t || '').replace(/\D/g, '');
 const formataData = (d) => d ? d.split('-').reverse().join('/') : '';
+const formataDataHora = (d) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(d || ''));
+  return m ? `${m[3]}/${m[2]}/${m[1]} às ${m[4]}:${m[5]}` : formataData(d);
+};
 const urlIg = (ig) => {
   if (!ig) return '';
   if (ig.startsWith('http')) return ig;
@@ -92,6 +97,10 @@ export default function DetailPanel({ lead, onClose, onEdit, onDelete, onAgendar
   const igDono = urlIg(lead.ig_dono);
   const sLink = urlSite(lead.site);
   const wppLink = lead.whatsapp ? `https://wa.me/55${limpaTel(lead.whatsapp)}` : '';
+  const whatsappLiberado = podeUsarWhatsApp(lead);
+  const optOutAtivo = lead.optOut === true || lead.optOut === 'true';
+  const qualidade = qualidadeRegistroProspeccao(lead);
+  const cadencia = CADENCIAS[lead.prioridadeProspeccao];
 
   return (
     <div className={`detail-panel ${lead ? 'open' : ''}`}>
@@ -99,7 +108,7 @@ export default function DetailPanel({ lead, onClose, onEdit, onDelete, onAgendar
         <div className="detail-header">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div><span className={`status-badge ${st.cls}`}>{st.label}</span></div>
-            <button className="btn-icon" onClick={onClose}>✕</button>
+            <button className="btn-icon" onClick={onClose} aria-label="Fechar detalhes do lead">✕</button>
           </div>
           <div className="detail-name">{lead.nome}</div>
           <div className="detail-sub">
@@ -127,7 +136,11 @@ export default function DetailPanel({ lead, onClose, onEdit, onDelete, onAgendar
             {lead.telefone && <a href={`tel:${limpaTel(lead.telefone)}`} style={{ color: 'var(--accent2)', textDecoration: 'none' }}>{lead.telefone}</a>}
           </DetailRow>
           <DetailRow label="💬 WhatsApp">
-            {lead.whatsapp && <a href={wppLink} target="_blank" rel="noreferrer" style={{ color: 'var(--accent2)', textDecoration: 'none' }}>{lead.whatsapp}</a>}
+            {lead.whatsapp && (whatsappLiberado
+              ? <a href={wppLink} target="_blank" rel="noreferrer" style={{ color: 'var(--accent2)', textDecoration: 'none' }}>{lead.whatsapp}</a>
+              : <span title={optOutAtivo ? 'O contato pediu para não receber novas abordagens.' : 'Registre a permissão antes de usar este canal.'} style={{ color: 'var(--yellow)' }}>
+                  {lead.whatsapp} · {optOutAtivo ? 'opt-out' : 'sem permissão'}
+                </span>)}
           </DetailRow>
           <DetailRow label="✉️ E-mail">
             {lead.email && <a href={`mailto:${lead.email}`} style={{ color: 'var(--accent2)', textDecoration: 'none' }}>{lead.email}</a>}
@@ -149,17 +162,48 @@ export default function DetailPanel({ lead, onClose, onEdit, onDelete, onAgendar
             {lead.origem && <span className="badge-pill" style={{ textTransform: 'capitalize' }}>{lead.origem}</span>}
           </DetailRow>
           <DetailRow label="👤 Decisor">{lead.decisor}</DetailRow>
+          <DetailRow label="🧭 Papel">{lead.decisorPapel}</DetailRow>
           <DetailRow label="📥 Entrada">{formataData(lead.data_entrada || (lead.createdAt || '').slice(0, 10))}</DetailRow>
           <DetailRow label="🧑 Responsável">{lead.responsavel}</DetailRow>
           <DetailRow label="🏢 CNPJ">{lead.cnpj && <span className="td-mono">{lead.cnpj}</span>}</DetailRow>
           <DetailRow label="⭐ Nota Google">{lead.nota ? `${lead.nota}/5 (${lead.avaliacoes || 0} avaliações)` : null}</DetailRow>
           <DetailRow label="📅 Último Contato">{formataData(lead.ultimo_contato)}</DetailRow>
           <DetailRow label="🤝 Reunião">
-            {lead.reuniao && <span style={{ color: 'var(--green)', fontWeight: 600 }}>{formataData(lead.reuniao)}</span>}
+            {(lead.reuniaoDataHora || lead.reuniao) && (
+              <span style={{ color: 'var(--green)', fontWeight: 600 }}>
+                {formataDataHora(lead.reuniaoDataHora || lead.reuniao)}
+                {lead.confirmacaoExplicita ? ' · confirmada' : ' · aguardando confirmação'}
+              </span>
+            )}
           </DetailRow>
           <DetailRow label="📝 Histórico">
             {lead.historico && <span style={{ whiteSpace: 'pre-wrap' }}>{lead.historico}</span>}
           </DetailRow>
+        </div>
+
+        <div className="detail-section">
+          <div className="detail-section-title">Operação do playbook</div>
+          <DetailRow label="🎯 Cadência">
+            {cadencia ? `${cadencia.rotulo} · ${cadencia.contatos} contatos/${cadencia.diasUteis} dias úteis` : null}
+          </DetailRow>
+          <DetailRow label="📊 Qualidade CRM">{`${qualidade}% completo`}</DetailRow>
+          <DetailRow label="🔎 Evidência">{lead.evidencia}</DetailRow>
+          <DetailRow label="💭 Hipótese">{lead.hipotese}</DetailRow>
+          <DetailRow label="☎️ Objetivo">{lead.objetivoContato}</DetailRow>
+          <DetailRow label="✅ Próxima ação">
+            {lead.proximaAcao && (
+              <span>
+                {lead.proximaAcao}
+                {lead.proximaAcaoDataHora ? ` · ${formataDataHora(lead.proximaAcaoDataHora)}` : ''}
+                {lead.proximaAcaoCanal ? ` · ${lead.proximaAcaoCanal}` : ''}
+              </span>
+            )}
+          </DetailRow>
+          {optOutAtivo && (
+            <div style={{ marginTop: 8, color: 'var(--red)', fontSize: 12, fontWeight: 600 }}>
+              ⛔ Opt-out registrado: não realizar novas abordagens.
+            </div>
+          )}
         </div>
 
         <div className="detail-section">
@@ -193,3 +237,4 @@ export default function DetailPanel({ lead, onClose, onEdit, onDelete, onAgendar
     </div>
   );
 }
+
