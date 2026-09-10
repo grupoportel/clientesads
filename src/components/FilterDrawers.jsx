@@ -1,87 +1,89 @@
-import React, { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ref, set } from 'firebase/database';
 import { database } from '../firebase';
 
-// Este é o "Molde" de uma gaveta expansível
-const Drawer = ({ title, icon, items, leads, field, activeFilter, setFilter, dbPath }) => {
-  const [isOpen, setIsOpen] = useState(false);
+function FilterField({ label, field, items, leads, value, onChange, dbPath, podeEditar }) {
+  const opcoes = useMemo(() => {
+    const usados = leads.map(lead => lead[field]).filter(Boolean);
+    return [...new Set([...items, ...usados])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [field, items, leads]);
 
-  // Pega os itens salvos no banco + os itens que já existem nos leads e remove duplicados
-  const leadItems = leads.map(l => l[field]).filter(Boolean);
-  const allItems = [...new Set([...leadItems, ...items])].sort();
-
-  // Função para adicionar uma nova opção no Firebase
-  const handleAdd = () => {
-    const nome = window.prompt(`Adicionar novo(a) ${title}:`);
-    if (nome && nome.trim()) {
-      const novoArray = [...new Set([...items, nome.trim()])];
-      set(ref(database, dbPath), novoArray);
-    }
-  };
-
-  // Remove uma opção do Firebase, avisando se ela está em uso.
-  // Sem o aviso, os leads que usavam o valor ficavam com um campo órfão que
-  // nenhum filtro alcança mais.
-  const handleRemove = (itemParaRemover) => {
-    const emUso = leads.filter(l => l[field] === itemParaRemover).length;
-
-    const aviso = emUso > 0
-      ? `"${itemParaRemover}" está em uso por ${emUso} lead(s).\n\n` +
-        `Removendo da lista, esses leads continuam com o valor gravado, mas ele ` +
-        `deixa de aparecer nos filtros e nos formulários.\n\nRemover mesmo assim?`
-      : `Excluir "${itemParaRemover}" da lista rápida?`;
-
-    if (window.confirm(aviso)) {
-      const novoArray = items.filter(i => i !== itemParaRemover);
-      set(ref(database, dbPath), novoArray);
-      if (activeFilter === itemParaRemover) setFilter(null);
-    }
+  const adicionar = () => {
+    const nome = window.prompt(`Adicionar ${label.toLowerCase()}:`);
+    if (!nome?.trim()) return;
+    const proximaLista = [...new Set([...items, nome.trim()])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    set(ref(database, dbPath), proximaLista);
   };
 
   return (
-    <div className={`nicho-drawer ${isOpen ? 'open' : ''}`}>
-      <div className="nicho-drawer-header" onClick={() => setIsOpen(!isOpen)}>
-        <span className="arrow" style={{ display: 'inline-block', transition: 'transform 0.2s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span> 
-        {icon} {title}
-      </div>
-      
-      <div className="nicho-drawer-content">
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', width: '100%' }}>
-          
-          {allItems.map(item => (
-            <div 
-              key={item} 
-              className={`filter-chip ${activeFilter === item ? 'active' : ''}`}
-              onClick={() => setFilter(activeFilter === item ? null : item)}
-            >
-              {field === 'responsavel' && '👤 '}
-              {item}
-              <span 
-                style={{ marginLeft: '6px', opacity: 0.6, cursor: 'pointer' }}
-                title="Excluir"
-                onClick={(e) => { e.stopPropagation(); handleRemove(item); }}
-              >✕</span>
-            </div>
-          ))}
-          
-          <button className="filter-chip" onClick={handleAdd} style={{ borderStyle: 'dashed', color: 'var(--accent2)', background: 'transparent' }}>
-            ＋ Adicionar
+    <div className="filter-field">
+      <label>{label}</label>
+      <div className="filter-field-row">
+        <select className="form-control" value={value || ''} onChange={event => onChange(event.target.value || null)}>
+          <option value="">Todos</option>
+          {opcoes.map(item => <option key={item} value={item}>{item}</option>)}
+        </select>
+        {podeEditar && (
+          <button type="button" className="btn-icon" onClick={adicionar} aria-label={`Adicionar ${label.toLowerCase()}`} title="Adicionar opção">
+            +
           </button>
-
-        </div>
+        )}
       </div>
-    </div>
-  );
-};
-
-// Aqui nós exportamos o painel completo juntando as 4 gavetas
-export default function FilterDrawers(props) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-      <Drawer title="Nichos / Mercados" icon="📁" field="nicho" items={props.nichos} leads={props.leads} activeFilter={props.filtroNicho} setFilter={props.setFiltroNicho} dbPath="crm_data/nichos" />
-      <Drawer title="Equipe / Responsáveis" icon="👥" field="responsavel" items={props.responsaveis} leads={props.leads} activeFilter={props.filtroResponsavel} setFilter={props.setFiltroResponsavel} dbPath="crm_data/responsaveis" />
-      <Drawer title="Estado" icon="🗺️" field="estado" items={props.estados} leads={props.leads} activeFilter={props.filtroEstado} setFilter={props.setFiltroEstado} dbPath="crm_data/estados" />
-      <Drawer title="Cidade" icon="🏙️" field="cidade" items={props.cidades} leads={props.leads} activeFilter={props.filtroCidade} setFilter={props.setFiltroCidade} dbPath="crm_data/cidades" />
     </div>
   );
 }
+
+export default function FilterDrawers({
+  leads = [], nichos = [], responsaveis = [], estados = [], cidades = [],
+  filtroNicho, setFiltroNicho, filtroResponsavel, setFiltroResponsavel,
+  filtroEstado, setFiltroEstado, filtroCidade, setFiltroCidade,
+  filtroDataInicio, setFiltroDataInicio, filtroDataFim, setFiltroDataFim,
+  quantidadeAtivos = 0, onLimpar, podeEditar = false,
+  onImportar, onExportar, quantidadeExportar = 0, onLixeira, quantidadeLixeira = 0,
+}) {
+  const [aberto, setAberto] = useState(false);
+
+  return (
+    <section className={`filters-panel ${aberto ? 'open' : ''}`} aria-label="Filtros da lista de leads">
+      <button
+        type="button" className="filters-toggle" aria-expanded={aberto}
+        onClick={() => setAberto(atual => !atual)}
+      >
+        <span className="filters-toggle-title">
+          Filtros e dados
+          {quantidadeAtivos > 0 && <span className="filters-count">{quantidadeAtivos}</span>}
+        </span>
+        <span className="filters-toggle-hint">{quantidadeAtivos ? `${quantidadeAtivos} filtro(s) ativo(s)` : 'Refinar lista'} <span aria-hidden="true">⌄</span></span>
+      </button>
+
+      {aberto && (
+        <div className="filters-content">
+          <div className="filters-grid">
+            <FilterField label="Nicho" field="nicho" items={nichos} leads={leads} value={filtroNicho} onChange={setFiltroNicho} dbPath="crm_data/nichos" podeEditar={podeEditar} />
+            <FilterField label="Responsável" field="responsavel" items={responsaveis} leads={leads} value={filtroResponsavel} onChange={setFiltroResponsavel} dbPath="crm_data/responsaveis" podeEditar={podeEditar} />
+            <FilterField label="Estado" field="estado" items={estados} leads={leads} value={filtroEstado} onChange={setFiltroEstado} dbPath="crm_data/estados" podeEditar={podeEditar} />
+            <FilterField label="Cidade" field="cidade" items={cidades} leads={leads} value={filtroCidade} onChange={setFiltroCidade} dbPath="crm_data/cidades" podeEditar={podeEditar} />
+            <div className="filter-field">
+              <label>Entrada a partir de</label>
+              <input type="date" className="form-control" value={filtroDataInicio} onChange={event => setFiltroDataInicio(event.target.value)} />
+            </div>
+            <div className="filter-field">
+              <label>Entrada até</label>
+              <input type="date" className="form-control" value={filtroDataFim} onChange={event => setFiltroDataFim(event.target.value)} />
+            </div>
+          </div>
+
+          <div className="filters-actions">
+            {quantidadeAtivos > 0 && <button type="button" className="btn btn-ghost" onClick={onLimpar}>Limpar filtros</button>}
+            <div className="filters-data-actions">
+              {podeEditar && quantidadeLixeira > 0 && <button type="button" className="btn btn-ghost" onClick={onLixeira}>Lixeira ({quantidadeLixeira})</button>}
+              {podeEditar && <button type="button" className="btn btn-ghost" onClick={onImportar}>Importar</button>}
+              <button type="button" className="btn btn-ghost" onClick={onExportar} disabled={quantidadeExportar === 0}>Exportar ({quantidadeExportar})</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
