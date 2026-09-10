@@ -47,9 +47,13 @@ function Etapa({ rotulo, estado, link }) {
  */
 export default function AgendarReuniaoModal({ aberto, aoFechar, lead }) {
   const [dataHora, setDataHora] = useState(proximoHorario);
-  const [duracao, setDuracao] = useState(60);
+  const [duracao, setDuracao] = useState(30);
+  const [objetivo, setObjetivo] = useState('');
+  const [participantes, setParticipantes] = useState('');
+  const [linkLocal, setLinkLocal] = useState('');
   const [observacao, setObservacao] = useState('');
   const [enviarEmail, setEnviarEmail] = useState(true);
+  const [conviteJaEnviado, setConviteJaEnviado] = useState(false);
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState('');
   const [resultado, setResultado] = useState(null);
@@ -57,8 +61,9 @@ export default function AgendarReuniaoModal({ aberto, aoFechar, lead }) {
   if (!aberto || !lead) return null;
 
   const fechar = () => {
-    setResultado(null); setErro(''); setObservacao('');
-    setDataHora(proximoHorario()); setDuracao(60); setEnviarEmail(true);
+    setResultado(null); setErro(''); setObservacao(''); setObjetivo('');
+    setParticipantes(''); setLinkLocal(''); setConviteJaEnviado(false);
+    setDataHora(proximoHorario()); setDuracao(30); setEnviarEmail(true);
     aoFechar();
   };
 
@@ -72,7 +77,10 @@ export default function AgendarReuniaoModal({ aberto, aoFechar, lead }) {
       const r = await fetch('/api/agendar-reuniao', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ lead, dataHora, duracaoMin: duracao, observacao, enviarEmail }),
+        body: JSON.stringify({
+          lead, dataHora, duracaoMin: duracao, objetivo, participantes,
+          linkLocal, observacao, enviarEmail, conviteJaEnviado,
+        }),
       });
       const corpo = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(corpo.error || 'Não foi possível marcar a reunião.');
@@ -92,7 +100,7 @@ export default function AgendarReuniaoModal({ aberto, aoFechar, lead }) {
             <h2 className="modal-title">📅 Marcar reunião</h2>
             <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>{lead.nome}</div>
           </div>
-          <button className="modal-close" onClick={fechar}>✕</button>
+          <button className="modal-close" onClick={fechar} aria-label="Fechar agendamento">✕</button>
         </div>
 
         {erro && (
@@ -112,8 +120,8 @@ export default function AgendarReuniaoModal({ aberto, aoFechar, lead }) {
                 rotulo={resultado.email.feito ? `E-mail de confirmação enviado para ${lead.email}` : 'E-mail de confirmação'}
                 estado={resultado.email}
               />
-              <Etapa rotulo="Tarefa criada: confirmar por mensagem" estado={resultado.tarefa} />
-              <Etapa rotulo="Data da reunião salva no lead" estado={resultado.lead} />
+              <Etapa rotulo="Lembretes T-24h e T-2h criados" estado={resultado.tarefa} />
+              <Etapa rotulo="Reunião marcada no lead (a confirmação continua pendente)" estado={resultado.lead} />
             </div>
             <button className="btn btn-primary" onClick={fechar}>Fechar</button>
           </div>
@@ -125,6 +133,27 @@ export default function AgendarReuniaoModal({ aberto, aoFechar, lead }) {
                 <input
                   className="form-control" type="datetime-local"
                   value={dataHora} onChange={e => setDataHora(e.target.value)}
+                />
+              </div>
+              <div className="form-group full">
+                <label className="form-label">Objetivo da reunião <span style={{ color: 'var(--red)' }}>*</span></label>
+                <input
+                  className="form-control" value={objetivo} onChange={e => setObjetivo(e.target.value)}
+                  placeholder="Ex: entender o processo atual e validar o gargalo"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Participantes <span style={{ color: 'var(--red)' }}>*</span></label>
+                <input
+                  className="form-control" value={participantes} onChange={e => setParticipantes(e.target.value)}
+                  placeholder={lead.decisor || 'Nome e função'}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Link ou local <span style={{ color: 'var(--red)' }}>*</span></label>
+                <input
+                  className="form-control" value={linkLocal} onChange={e => setLinkLocal(e.target.value)}
+                  placeholder="Google Meet ou endereço"
                 />
               </div>
               <div className="form-group">
@@ -161,8 +190,22 @@ export default function AgendarReuniaoModal({ aberto, aoFechar, lead }) {
               </span>
             </label>
 
+            <label className="form-check full" style={{ marginBottom: 16 }}>
+              <input
+                type="checkbox" checked={conviteJaEnviado}
+                onChange={e => setConviteJaEnviado(e.target.checked)}
+              />
+              <span>
+                <strong>Convite/link já foi enviado por outro canal</strong>
+                <small>Marque somente se não depender do e-mail que o CRM tentará enviar agora.</small>
+              </span>
+            </label>
+
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-primary" onClick={marcar} disabled={ocupado || !dataHora}>
+              <button
+                className="btn btn-primary" onClick={marcar}
+                disabled={ocupado || !dataHora || !objetivo.trim() || !participantes.trim() || !linkLocal.trim() || (!((enviarEmail && Boolean(lead.email)) || conviteJaEnviado))}
+              >
                 {ocupado ? '⏳ Marcando…' : '📅 Marcar reunião'}
               </button>
               <button className="btn btn-ghost" onClick={fechar}>Cancelar</button>
@@ -173,3 +216,4 @@ export default function AgendarReuniaoModal({ aberto, aoFechar, lead }) {
     </div>
   );
 }
+
