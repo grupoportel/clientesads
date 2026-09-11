@@ -19,6 +19,8 @@ import {
   CADENCIAS, podeUsarWhatsApp, pendenciasProximaAcao,
   pendenciasParaStatus, validarMudancaStatus, qualidadeRegistroProspeccao,
 } from '../processoProspeccao.js';
+import { criarPreparacaoInicial, progressoPreparacao, validarRegistroReuniao, montarResumoCrm, sugestaoManual, ETAPAS_REUNIAO, OBJECOES_REUNIAO } from '../reuniao.js';
+import { montarPromptReuniao, interpretarPreparacaoReuniao } from '../../api/_ia.js';
 
 let ok = 0, fail = 0;
 const t = (nome, cond) => { if (cond) { ok++; } else { fail++; console.log('FALHOU:', nome); } };
@@ -1112,6 +1114,35 @@ t('resumo conta zero marcados',
 // Duplicado segue desmarcado nos dois modos
 t('duplicado desmarcado mesmo marcando por padrao',
   prepararRevisao([{ nome: 'X', email: 'x@y.com' }], [{ id: 'L', nome: 'Velho', email: 'x@y.com' }])[0].importar === false);
+
+// ── Copiloto de reunião ──
+const prep = criarPreparacaoInicial({ nome: 'Clínica Alfa', decisor: 'Ana', oportunidades: 'Demora no primeiro contato' });
+t('preparacao herda decisor', prep.participantes === 'Ana');
+t('evidencia antiga e preservada', prep.evidencia === 'Demora no primeiro contato');
+t('preparacao antiga prevalece', criarPreparacaoInicial({ preparacaoReuniao: { hipotese: 'Teste' } }).hipotese === 'Teste');
+t('progresso inicial e parcial', progressoPreparacao(prep) === 75);
+t('progresso completo chega a 100', progressoPreparacao({ objetivo: 'a', evidencia: 'b', hipotese: 'c', participantes: 'd' }) === 100);
+t('registro incompleto aponta tres campos', validarRegistroReuniao({}).length === 3);
+t('registro aceita ausencia de impacto', validarRegistroReuniao({ situacao: 'x', problema: 'nenhum', proximoPasso: 'encerrar' }).length === 0);
+t('resumo nao inclui campo vazio', !montarResumoCrm({ situacao: 'Hoje', impacto: '', proximoPasso: 'Retomar' }).includes('Impacto'));
+t('resumo inclui proximo passo', montarResumoCrm({ proximoPasso: 'Ana envia dados' }).includes('Ana envia dados'));
+t('roteiro cobre sete momentos', ETAPAS_REUNIAO.length === 7);
+t('toda etapa tem frase e perguntas', ETAPAS_REUNIAO.every(e => e.frase && e.perguntas.length));
+t('objecoes usam encaminhamento', OBJECOES_REUNIAO.every(o => o.acolher && o.reenquadrar && o.encaminhar));
+const manual = sugestaoManual({ nome: 'Solar X', nicho: 'energia solar' }, {});
+t('modo sem ia usa nome real', manual.briefing.includes('Solar X'));
+t('modo sem ia declara hipotese', manual.hipotese.toLowerCase().includes('hipótese'));
+
+const promptReuniao = montarPromptReuniao({ nome: 'Clínica Alfa' }, { preparacao: { evidencia: 'Lead relatou demora' } });
+t('prompt inclui evidencia real', promptReuniao.includes('Lead relatou demora'));
+t('prompt proibe promessa', promptReuniao.includes('Não prometa'));
+const iaReuniao = interpretarPreparacaoReuniao(JSON.stringify({
+  briefing: 'Breve', evidencia: 'Fato', hipotese: 'Talvez', abertura: 'Olá',
+  perguntas: ['Como funciona?'], riscos: ['Inventar'], proximoPasso: 'Combinar data', confianca: 'alta',
+}));
+t('interpreta copiloto valido', iaReuniao?.confianca === 'alta' && iaReuniao.perguntas.length === 1);
+t('recusa copiloto sem perguntas', interpretarPreparacaoReuniao('{"briefing":"x","abertura":"y","perguntas":[]}') === null);
+t('limita listas da ia', interpretarPreparacaoReuniao(JSON.stringify({ briefing: 'x', abertura: 'y', perguntas: new Array(12).fill('q') })).perguntas.length === 8);
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);

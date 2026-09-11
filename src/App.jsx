@@ -31,6 +31,7 @@ const ConfigPage     = lazy(() => import('./components/ConfigPage'));
 const ConversasPage  = lazy(() => import('./components/ConversasPage'));
 const EmailPage      = lazy(() => import('./components/EmailPage'));
 const MetricasPage   = lazy(() => import('./components/MetricasPage'));
+const CopilotoReuniaoPage = lazy(() => import('./components/CopilotoReuniaoPage'));
 
 import './index.css';
 
@@ -44,7 +45,6 @@ const BuscaGlobal = lazy(() => import('./components/BuscaGlobal'));
 const LixeiraModal = lazy(() => import('./components/LixeiraModal'));
 const AgendarReuniaoModal = lazy(() => import('./components/AgendarReuniaoModal'));
 const PainelPrioridade = lazy(() => import('./components/PainelPrioridade'));
-const BuscarLeadsPage = lazy(() => import('./components/BuscarLeadsPage'));
 import { rodarAutomacoes } from './automacoesRunner';
 import { validarMudancaStatus, descricaoBloqueio } from './processoProspeccao';
 
@@ -89,7 +89,7 @@ function Carregando() {
 const PAGINAS = [
   'dashboard', 'leads', 'clientes', 'tarefas', 'conversas',
   'emails', 'agenda', 'financeiro', 'metricas', 'relatorios', 'configuracoes',
-  'buscar-leads',
+  'copiloto-bdr',
 ];
 
 const ROTULOS_CAMPOS = {
@@ -175,6 +175,7 @@ function App() {
   const segmentos = local.pathname.split('/').filter(Boolean);
   const paginaAtiva = PAGINAS.includes(segmentos[0]) ? segmentos[0] : 'dashboard';
   const leadIdNaUrl = paginaAtiva === 'leads' ? (segmentos[1] || null) : null;
+  const leadIdNoCopiloto = paginaAtiva === 'copiloto-bdr' ? (segmentos[1] || null) : null;
 
   const telaMedia = useTelaMedia();
 
@@ -561,52 +562,6 @@ function App() {
     }
   };
 
-  /**
-   * Grava os prospectados aprovados na busca.
-   *
-   * Uma gravação multi-caminho só: com 200 empresas aprovadas de uma vez, 200
-   * chamadas separadas travariam a tela. `origemProspeccao` fica no registro
-   * para ser possível saber depois de onde veio cada lead — e desfazer a
-   * importação inteira, se ela vier ruim.
-   */
-  const importarProspectados = async (candidatos, nomeDoNicho) => {
-    if (!exigirEdicao('importar leads')) return;
-
-    const agora = new Date().toISOString();
-    const gravacoes = {};
-    const criados = [];
-
-    candidatos.forEach(c => {
-      if (!c.nome) return;
-      const refNovo = push(ref(database, 'crm_data/leads'));
-      gravacoes[refNovo.key] = {
-        ...c,
-        id: refNovo.key,
-        status: 'nenhum',
-        nicho: nomeDoNicho || c.nicho || '',
-        origem: 'outro',
-        origemProspeccao: `Receita Federal · ${nomeDoNicho || ''}`.trim(),
-        data_entrada: agora.slice(0, 10),
-        createdAt: agora,
-        updatedAt: agora,
-      };
-      criados.push({ id: refNovo.key, nome: c.nome });
-    });
-
-    if (criados.length === 0) return;
-
-    await update(ref(database, 'crm_data/leads'), gravacoes);
-
-    await registrarAtividadesEmLote(criados.map(l => ({
-      leadId: l.id,
-      leadNome: l.nome,
-      tipo: 'criado',
-      descricao: `Lead trazido da busca na base da Receita${nomeDoNicho ? ` (${nomeDoNicho})` : ''}`,
-    })));
-
-    showToast(`${criados.length} lead(s) importado(s) da busca.`, 'success');
-  };
-
   const exportarSelecionados = () => {
     const selecionados = leads.filter(l => selectedLeads.includes(l.id));
     exportarLeads(selecionados, 'leads-selecionados');
@@ -853,6 +808,42 @@ function App() {
     }
   };
 
+  // O roteiro fica dentro do próprio lead para acompanhar a pessoa em qualquer
+  // computador. A atividade é separada: a preparação pode ser atualizada várias
+  // vezes sem fingir que a reunião já aconteceu.
+  const salvarPreparacaoReuniao = async (leadId, preparacao, resumo, registrar = false) => {
+    if (!exigirEdicao('salvar a preparação da reunião')) {
+      throw new Error(motivoBloqueio(papel, 'salvar a preparação da reunião'));
+    }
+    const lead = leads.find(item => String(item.id) === String(leadId));
+    if (!lead) throw new Error('O lead selecionado não está mais disponível.');
+
+    const agora = new Date().toISOString();
+    const registro = {
+      ...preparacao,
+      atualizadoEm: agora,
+      atualizadoPor: usuario?.uid || null,
+      atualizadoPorNome: nomeUsuario,
+    };
+    if (registrar) {
+      registro.ultimaReuniaoRegistradaEm = agora;
+      registro.ultimaReuniaoRegistradaPor = usuario?.uid || null;
+    }
+
+    await update(ref(database, `crm_data/leads/${leadId}`), {
+      preparacaoReuniao: registro,
+      updatedAt: agora,
+    });
+
+    await registrarAtividade({
+      leadId,
+      leadNome: lead.nome,
+      tipo: 'reuniao',
+      descricao: registrar ? `Reunião com ${lead.nome} registrada` : `Preparação da reunião com ${lead.nome} atualizada`,
+      detalhe: registrar ? { resumo } : { progresso: 'preparação atualizada' },
+    });
+  };
+
   const atualizarLeadInline = (leadId, campo, novoValor) => {
     if (!exigirEdicao('editar leads')) return;
     const agora = new Date().toISOString();
@@ -1048,6 +1039,7 @@ function App() {
               onEdit={abrirModalEdicao}
               onDelete={deletarLead}
               onAgendar={editavel ? setLeadParaAgendar : null}
+              onPrepararReuniao={(lead) => navegar(`/copiloto-bdr/${lead.id}`)}
               etapas={etapas}
             />
           </div>
@@ -1096,12 +1088,14 @@ function App() {
         return <MetricasPage leads={leads} etapas={etapas} propostas={propostasGlobais} />;
       case 'relatorios':
         return <RelatoriosPage leads={leads} etapas={etapas} />;
-      case 'buscar-leads':
+      case 'copiloto-bdr':
         return (
-          <BuscarLeadsPage
+          <CopilotoReuniaoPage
             leads={leads}
+            leadInicialId={leadIdNoCopiloto}
             podeEditar={editavel}
-            aoImportar={importarProspectados}
+            aoSalvar={salvarPreparacaoReuniao}
+            aoAbrirLead={abrirLeadNaLista}
           />
         );
       case 'configuracoes':
@@ -1376,4 +1370,3 @@ function App() {
 }
 
 export default App;
-

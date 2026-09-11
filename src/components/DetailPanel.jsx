@@ -88,7 +88,7 @@ function LinhaDoTempo({ leadId }) {
   );
 }
 
-export default function DetailPanel({ lead, onClose, onEdit, onDelete, onAgendar, etapas = [] }) {
+export default function DetailPanel({ lead, onClose, onEdit, onDelete, onAgendar, onPrepararReuniao, etapas = [] }) {
   // Se não tem lead selecionado, o painel fica fechado (width: 0 no CSS)
   if (!lead) return <div className="detail-panel"></div>;
 
@@ -225,6 +225,11 @@ export default function DetailPanel({ lead, onClose, onEdit, onDelete, onAgendar
         </div>
 
         <div className="detail-section" style={{ border: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {onPrepararReuniao && (
+            <button className="btn btn-primary" style={{ justifyContent: 'center' }} onClick={() => onPrepararReuniao(lead)}>
+              🧭 Preparar reunião
+            </button>
+          )}
           <button className="btn btn-primary" style={{ justifyContent: 'center' }} onClick={() => onEdit(lead)}>✏️ Editar Lead</button>
           {onAgendar && (
             <button className="btn btn-ghost" style={{ justifyContent: 'center' }} onClick={() => onAgendar(lead)}>
@@ -237,4 +242,3 @@ export default function DetailPanel({ lead, onClose, onEdit, onDelete, onAgendar
     </div>
   );
 }
-

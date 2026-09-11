@@ -497,3 +497,78 @@ export function interpretarMensagem(texto = '', canal = 'whatsapp') {
 
   return { corpo, assunto };
 }
+
+// ── Preparar reunião ───────────────────────────────────────────────────────
+
+export function montarPromptReuniao(lead = {}, opcoes = {}) {
+  const { preparacao = {}, historico = '' } = opcoes;
+  const dados = [
+    ['Empresa', lead.nome], ['Nicho', lead.nicho], ['Decisor', lead.decisor],
+    ['Etapa no funil', lead.status], ['Cidade', [lead.cidade, lead.estado].filter(Boolean).join(' / ')],
+    ['Site', lead.site], ['Oportunidades já anotadas', lead.oportunidades],
+    ['Pontos fortes', lead.pontos], ['Observações', lead.obs],
+    ['Objetivo da reunião', preparacao.objetivo], ['Evidência registrada', preparacao.evidencia],
+    ['Hipótese a validar', preparacao.hipotese], ['Participantes', preparacao.participantes],
+  ].filter(([, valor]) => valor !== undefined && valor !== null && String(valor).trim())
+   .map(([rotulo, valor]) => `- ${rotulo}: ${valor}`).join('\n');
+
+  return `Você é o copiloto de um BDR do Grupo Portel preparando uma reunião
+consultiva de 30 minutos. O objetivo não é forçar uma venda: é compreender a
+situação, confirmar ou rejeitar uma hipótese, dimensionar impacto, entender por
+que isso importa agora, mapear como a decisão acontece e combinar um próximo
+passo legítimo.
+
+DADOS DISPONÍVEIS
+${dados || '- Quase nenhum dado preenchido.'}
+
+${historico ? `HISTÓRICO REGISTRADO NO CRM\n${historico}` : 'Não há histórico registrado.'}
+
+Responda SOMENTE com JSON válido, sem cercas de código:
+{
+  "briefing": "resumo em até 2 frases",
+  "evidencia": "somente fatos presentes nos dados; vazio se não houver",
+  "hipotese": "uma possibilidade claramente marcada como hipótese",
+  "abertura": "abertura natural com agenda e permissão",
+  "perguntas": ["4 a 6 perguntas prioritárias"],
+  "riscos": ["2 a 4 riscos específicos desta conversa"],
+  "proximoPasso": "forma segura de encerrar e definir ação, responsável e data",
+  "confianca": "alta, media ou baixa"
+}
+
+Regras:
+- Português do Brasil, direto e natural; roteiro é trilho, não fala decorada.
+- Não invente número, pessoa, problema, dor, urgência ou fato.
+- Não prometa faturamento, pacientes, vendas ou qualquer resultado.
+- Não use falsa intimidade, falsa confusão, pressão, medo ou ataque a fornecedor.
+- Faça poucas perguntas abertas e peça exemplos concretos.
+- Se a unidade não tiver autonomia, sugira identificar a rota corporativa.
+- A IA organiza sinais; a validação pertence ao BDR e ao cliente.`;
+}
+
+export function interpretarPreparacaoReuniao(texto = '') {
+  const semCerca = String(texto).replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+  const inicio = semCerca.indexOf('{');
+  const fim = semCerca.lastIndexOf('}');
+  if (inicio === -1 || fim < inicio) return null;
+
+  let bruto;
+  try { bruto = JSON.parse(semCerca.slice(inicio, fim + 1)); } catch { return null; }
+  if (!bruto || typeof bruto !== 'object') return null;
+
+  const textoSeguro = (valor, limite = 1200) => typeof valor === 'string' ? valor.trim().slice(0, limite) : '';
+  const listaSegura = (valor) => Array.isArray(valor)
+    ? valor.filter(item => typeof item === 'string' && item.trim()).slice(0, 8).map(item => item.trim().slice(0, 500))
+    : [];
+
+  const resultado = {
+    briefing: textoSeguro(bruto.briefing),
+    evidencia: textoSeguro(bruto.evidencia),
+    hipotese: textoSeguro(bruto.hipotese),
+    abertura: textoSeguro(bruto.abertura),
+    perguntas: listaSegura(bruto.perguntas),
+    riscos: listaSegura(bruto.riscos),
+    proximoPasso: textoSeguro(bruto.proximoPasso),
+    confianca: ['alta', 'media', 'baixa'].includes(bruto.confianca) ? bruto.confianca : 'baixa',
+  };
+  return resultado.briefing && resultado.abertura && resultado.perguntas.length ? resultado : null;
+}

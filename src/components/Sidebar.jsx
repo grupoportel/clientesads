@@ -5,6 +5,7 @@ const NAV_ITEMS = [
   { id: 'dashboard',     icon: '▦', label: 'Dashboard' },
   { id: 'leads',         icon: '◎', label: 'Leads',        badgeKey: 'leads' },
   { id: 'clientes',      icon: '◇', label: 'Clientes' },
+  { id: 'copiloto-bdr',  icon: '⌾', label: 'Copiloto BDR' },
   { id: 'tarefas',       icon: '✓', label: 'Tarefas' },
   { id: 'agenda',        icon: '□', label: 'Agenda' },
   { id: 'financeiro',    icon: '$', label: 'Financeiro' },
@@ -237,4 +238,3 @@ export default function Sidebar({
     </div>
   );
 }
-
