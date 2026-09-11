@@ -572,3 +572,76 @@ export function interpretarPreparacaoReuniao(texto = '') {
   };
   return resultado.briefing && resultado.abertura && resultado.perguntas.length ? resultado : null;
 }
+
+// ── Preparar prospecção ────────────────────────────────────────────────────
+
+export function montarPromptProspeccao(lead = {}, opcoes = {}) {
+  const { preparacao = {}, historico = '' } = opcoes;
+  const dados = [
+    ['Empresa', lead.nome], ['Nicho', lead.nicho], ['Contato conhecido', lead.decisor],
+    ['Etapa no funil', lead.status], ['Cidade', [lead.cidade, lead.estado].filter(Boolean).join(' / ')],
+    ['Site', lead.site], ['Instagram', lead.instagram], ['Evidência', preparacao.evidencia || lead.evidencia],
+    ['Oportunidades anotadas', lead.oportunidades], ['Hipótese', preparacao.hipotese || lead.hipotese],
+    ['Objetivo desta ligação', preparacao.objetivo], ['Contato esperado', preparacao.contatoEsperado],
+    ['Pedido desejado', preparacao.pedidoDesejado],
+  ].filter(([, valor]) => valor !== undefined && valor !== null && String(valor).trim())
+   .map(([rotulo, valor]) => `- ${rotulo}: ${valor}`).join('\n');
+
+  return `Você é o copiloto de um BDR do Grupo Portel preparando uma ligação fria
+curta. Use como referência principal este padrão observado em ligações reais:
+pedir dois minutos, descobrir ou confirmar o decisor, dar contexto em uma frase,
+ligar um fato verificável a uma hipótese, fazer uma ou duas perguntas e vender
+somente o próximo passo. A meta normal é concluir em 3 a 5 minutos. Se a pessoa
+estiver engajada, o BDR deve pedir permissão antes de aprofundar.
+
+DADOS DISPONÍVEIS
+${dados || '- Quase nenhum dado preenchido.'}
+
+${historico ? `HISTÓRICO REGISTRADO NO CRM\n${historico}` : 'Não há histórico registrado.'}
+
+Responda SOMENTE com JSON válido, sem cercas de código:
+{
+  "briefing": "objetivo prático em até 2 frases",
+  "evidencia": "somente fatos presentes nos dados; vazio se não houver",
+  "hipotese": "possibilidade claramente marcada como hipótese",
+  "abertura": "fala natural e curta que pede dois minutos",
+  "perguntas": ["2 ou 3 perguntas prioritárias"],
+  "desvios": ["2 a 4 situações prováveis e como reagir"],
+  "proximoPasso": "pedido específico de orientação, retorno ou reunião",
+  "confianca": "alta, media ou baixa"
+}
+
+Regras:
+- Português do Brasil, direto e natural; entregue um trilho, não fala decorada.
+- A ligação não é uma reunião de diagnóstico e não deve prometer 20 ou 30 minutos de conversa agora.
+- Não invente números, pessoas, problema, dor, urgência, case ou fato.
+- Não prometa faturamento, pacientes, vendas ou qualquer resultado.
+- Não use falsa intimidade, falsa confusão, pressão, medo ou ataque a fornecedor.
+- Se atender a recepção, priorize obter nome, função, canal e horário do decisor.
+- Se pedirem material, sugira contexto e uma data de retomada.
+- Se não houver aderência, sugira encerrar com respeito.`;
+}
+
+export function interpretarPreparacaoProspeccao(texto = '') {
+  const semCerca = String(texto).replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+  const inicio = semCerca.indexOf('{');
+  const fim = semCerca.lastIndexOf('}');
+  if (inicio === -1 || fim < inicio) return null;
+
+  let bruto;
+  try { bruto = JSON.parse(semCerca.slice(inicio, fim + 1)); } catch { return null; }
+  if (!bruto || typeof bruto !== 'object') return null;
+
+  const textoSeguro = (valor, limite = 1200) => typeof valor === 'string' ? valor.trim().slice(0, limite) : '';
+  const listaSegura = (valor) => Array.isArray(valor)
+    ? valor.filter(item => typeof item === 'string' && item.trim()).slice(0, 6).map(item => item.trim().slice(0, 500))
+    : [];
+  const resultado = {
+    briefing: textoSeguro(bruto.briefing), evidencia: textoSeguro(bruto.evidencia),
+    hipotese: textoSeguro(bruto.hipotese), abertura: textoSeguro(bruto.abertura),
+    perguntas: listaSegura(bruto.perguntas), desvios: listaSegura(bruto.desvios),
+    proximoPasso: textoSeguro(bruto.proximoPasso),
+    confianca: ['alta', 'media', 'baixa'].includes(bruto.confianca) ? bruto.confianca : 'baixa',
+  };
+  return resultado.briefing && resultado.abertura && resultado.perguntas.length ? resultado : null;
+}

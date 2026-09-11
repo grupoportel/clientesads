@@ -7,7 +7,7 @@ import { saudeCliente, saudeMediaDaCarteira, receitaRecorrente, clienteAPartirDo
 import { normalizarMeta, achatar, extrairCampos, extrairUtm, acharDuplicado, camposParaCompletar } from '../../api/_leadIn.js';
 import { papelDoUsuario, podeEditar, podeAdministrar, podeVer, motivoBloqueio } from '../papeis.js';
 import { configuracaoAgenda, somarMinutos, subtrairHoras, inicioDoEvento, textoDataHora, montarEvento, textoConfirmacao, explicarErroAgenda } from '../../api/_agenda.js';
-import { INTENCOES, acharIntencao, resumirHistorico, montarPromptMensagem, interpretarMensagem, ehTransitorio, atrasoDaTentativa, escolherModelo, configuracaoIa, textoDoHtml, urlDoSite, montarPromptAnalise, interpretarAnalise, CAMPOS_ANALISE } from '../../api/_ia.js';
+import { INTENCOES, acharIntencao, resumirHistorico, montarPromptMensagem, interpretarMensagem, ehTransitorio, atrasoDaTentativa, escolherModelo, configuracaoIa, textoDoHtml, urlDoSite, montarPromptAnalise, interpretarAnalise, CAMPOS_ANALISE, montarPromptProspeccao, interpretarPreparacaoProspeccao } from '../../api/_ia.js';
 import { responderPara, montarHtml, configuracaoSmtp, caixaDeEntrada, explicarErroSmtp } from '../../api/_email.js';
 import { NICHOS_UI, UFS, nomeDaFatia } from '../prospeccaoNichos.js';
 import { NICHOS, acharNicho, codigosDoNicho, codigosDeVarios, conferirCodigos } from '../../scripts/_nichos.mjs';
@@ -21,6 +21,7 @@ import {
 } from '../processoProspeccao.js';
 import { criarPreparacaoInicial, progressoPreparacao, validarRegistroReuniao, montarResumoCrm, sugestaoManual, ETAPAS_REUNIAO, OBJECOES_REUNIAO } from '../reuniao.js';
 import { montarPromptReuniao, interpretarPreparacaoReuniao } from '../../api/_ia.js';
+import { criarPreparacaoProspeccao, progressoPreparacaoProspeccao, validarRegistroProspeccao, montarResumoProspeccao, sugestaoManualProspeccao, ETAPAS_LIGACAO, ROTAS_LIGACAO, RESULTADOS_PROSPECCAO } from '../prospeccaoBdr.js';
 
 let ok = 0, fail = 0;
 const t = (nome, cond) => { if (cond) { ok++; } else { fail++; console.log('FALHOU:', nome); } };
@@ -1143,6 +1144,31 @@ const iaReuniao = interpretarPreparacaoReuniao(JSON.stringify({
 t('interpreta copiloto valido', iaReuniao?.confianca === 'alta' && iaReuniao.perguntas.length === 1);
 t('recusa copiloto sem perguntas', interpretarPreparacaoReuniao('{"briefing":"x","abertura":"y","perguntas":[]}') === null);
 t('limita listas da ia', interpretarPreparacaoReuniao(JSON.stringify({ briefing: 'x', abertura: 'y', perguntas: new Array(12).fill('q') })).perguntas.length === 8);
+
+// ── Copiloto BDR: prospecção curta ──
+const ligacao = criarPreparacaoProspeccao({ nome: 'Solar X', decisor: 'Ana', evidencia: 'Site sem formulário', responsavel: 'Guilherme' });
+t('prospeccao herda dados operacionais do lead', ligacao.contatoEsperado === 'Ana' && ligacao.evidencia === 'Site sem formulário' && ligacao.responsavel === 'Guilherme');
+t('prospeccao antiga prevalece', criarPreparacaoProspeccao({ preparacaoProspeccao: { hipotese: 'Hipótese salva' } }).hipotese === 'Hipótese salva');
+t('prospeccao nao le preparacao de reuniao', criarPreparacaoProspeccao({ preparacaoReuniao: { hipotese: 'Não usar' } }).hipotese === '');
+t('progresso da prospeccao considera quatro essenciais', progressoPreparacaoProspeccao({ objetivo: 'a', evidencia: 'b', hipotese: 'c', pedidoDesejado: 'd' }) === 100);
+t('resultado sempre e obrigatorio', validarRegistroProspeccao({}).includes('resultado da ligação'));
+t('sem contato pode encerrar sem proxima acao', validarRegistroProspeccao({ resultado: 'sem_contato' }).length === 0);
+t('decisor identificado exige nome', validarRegistroProspeccao({ resultado: 'decisor_identificado' }).includes('decisor identificado'));
+t('retorno exige acao responsavel e data', validarRegistroProspeccao({ resultado: 'retorno_agendado' }).length === 3);
+t('reuniao agendada completa e aceita', validarRegistroProspeccao({ resultado: 'reuniao_agendada', proximoPasso: 'Reunião', responsavel: 'Ana', dataProximoPasso: '2026-09-15T10:00' }).length === 0);
+t('resumo da prospeccao usa rotulo do resultado', montarResumoProspeccao({ resultado: 'nutricao' }).includes('Seguir em nutrição'));
+t('roteiro de prospeccao cobre extensao consentida', ETAPAS_LIGACAO.at(-1).frase.includes('mais cinco minutos'));
+t('roteiro de prospeccao nao promete ligacao de trinta minutos', !JSON.stringify(ETAPAS_LIGACAO).includes('30 min'));
+t('rotas cobrem recepcao material e fornecedor', ['recepcao', 'material', 'fornecedor'].every(id => ROTAS_LIGACAO.some(rota => rota.id === id)));
+t('resultados incluem reuniao e sem aderencia', ['reuniao_agendada', 'sem_aderencia'].every(id => RESULTADOS_PROSPECCAO.some(item => item.id === id)));
+const manualProspeccao = sugestaoManualProspeccao({ nome: 'Clínica Alfa' }, {});
+t('modo manual pede dois minutos', manualProspeccao.abertura.includes('dois minutos'));
+const promptProspeccao = montarPromptProspeccao({ nome: 'Clínica Alfa' }, { preparacao: { evidencia: 'Fato real' } });
+t('prompt de prospeccao inclui evidencia', promptProspeccao.includes('Fato real'));
+t('prompt de prospeccao limita a ligacao fria', promptProspeccao.includes('3 a 5 minutos') && promptProspeccao.includes('não deve prometer 20 ou 30 minutos'));
+const iaProspeccao = interpretarPreparacaoProspeccao(JSON.stringify({ briefing: 'Breve', abertura: 'Dois minutos?', perguntas: ['Quem decide?'], desvios: ['Recepção'], confianca: 'alta' }));
+t('interpreta preparo de prospeccao valido', iaProspeccao?.confianca === 'alta' && iaProspeccao.desvios.length === 1);
+t('recusa preparo de prospeccao sem perguntas', interpretarPreparacaoProspeccao('{"briefing":"x","abertura":"y","perguntas":[]}') === null);
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);

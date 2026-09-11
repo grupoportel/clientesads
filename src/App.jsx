@@ -808,12 +808,11 @@ function App() {
     }
   };
 
-  // O roteiro fica dentro do próprio lead para acompanhar a pessoa em qualquer
-  // computador. A atividade é separada: a preparação pode ser atualizada várias
-  // vezes sem fingir que a reunião já aconteceu.
-  const salvarPreparacaoReuniao = async (leadId, preparacao, resumo, registrar = false) => {
-    if (!exigirEdicao('salvar a preparação da reunião')) {
-      throw new Error(motivoBloqueio(papel, 'salvar a preparação da reunião'));
+  // Prospecção e reunião são registros separados: preparar uma ligação fria não
+  // altera o material de diagnóstico que ficará reservado para o closer.
+  const salvarPreparacaoProspeccao = async (leadId, preparacao, resumo, registrar = false) => {
+    if (!exigirEdicao('salvar a preparação da prospecção')) {
+      throw new Error(motivoBloqueio(papel, 'salvar a preparação da prospecção'));
     }
     const lead = leads.find(item => String(item.id) === String(leadId));
     if (!lead) throw new Error('O lead selecionado não está mais disponível.');
@@ -826,21 +825,32 @@ function App() {
       atualizadoPorNome: nomeUsuario,
     };
     if (registrar) {
-      registro.ultimaReuniaoRegistradaEm = agora;
-      registro.ultimaReuniaoRegistradaPor = usuario?.uid || null;
+      registro.ultimaLigacaoRegistradaEm = agora;
+      registro.ultimaLigacaoRegistradaPor = usuario?.uid || null;
     }
 
-    await update(ref(database, `crm_data/leads/${leadId}`), {
-      preparacaoReuniao: registro,
-      updatedAt: agora,
-    });
+    const alteracoes = { preparacaoProspeccao: registro, updatedAt: agora };
+    if (registrar) {
+      if (preparacao.decisorIdentificado) alteracoes.decisor = preparacao.decisorIdentificado;
+      if (preparacao.proximoPasso) alteracoes.proximaAcao = preparacao.proximoPasso;
+      if (preparacao.dataProximoPasso) alteracoes.proximaAcaoDataHora = preparacao.dataProximoPasso;
+      if (preparacao.responsavel) alteracoes.proximaAcaoResponsavel = preparacao.responsavel;
+      if (preparacao.proximoPasso) alteracoes.proximaAcaoObjetivo = preparacao.proximoPasso;
+      if (preparacao.proximoPasso) alteracoes.proximaAcaoCanal = 'telefone';
+      if (preparacao.resultado === 'reuniao_agendada' && preparacao.dataProximoPasso) {
+        alteracoes.reuniaoDataHora = preparacao.dataProximoPasso;
+        alteracoes.reuniao = preparacao.dataProximoPasso.slice(0, 10);
+      }
+    }
+
+    await update(ref(database, `crm_data/leads/${leadId}`), alteracoes);
 
     await registrarAtividade({
       leadId,
       leadNome: lead.nome,
-      tipo: 'reuniao',
-      descricao: registrar ? `Reunião com ${lead.nome} registrada` : `Preparação da reunião com ${lead.nome} atualizada`,
-      detalhe: registrar ? { resumo } : { progresso: 'preparação atualizada' },
+      tipo: 'prospeccao',
+      descricao: registrar ? `Prospecção de ${lead.nome} registrada` : `Preparação da prospecção de ${lead.nome} atualizada`,
+      detalhe: registrar ? { resumo, resultado: preparacao.resultado || '' } : { progresso: 'preparação atualizada' },
     });
   };
 
@@ -1039,7 +1049,7 @@ function App() {
               onEdit={abrirModalEdicao}
               onDelete={deletarLead}
               onAgendar={editavel ? setLeadParaAgendar : null}
-              onPrepararReuniao={(lead) => navegar(`/copiloto-bdr/${lead.id}`)}
+              onPrepararProspeccao={(lead) => navegar(`/copiloto-bdr/${lead.id}`)}
               etapas={etapas}
             />
           </div>
@@ -1094,7 +1104,7 @@ function App() {
             leads={leads}
             leadInicialId={leadIdNoCopiloto}
             podeEditar={editavel}
-            aoSalvar={salvarPreparacaoReuniao}
+            aoSalvar={salvarPreparacaoProspeccao}
             aoAbrirLead={abrirLeadNaLista}
           />
         );

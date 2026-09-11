@@ -15,6 +15,7 @@ export const TIPOS = {
   mensagem:      { icone: '💬', cor: 'var(--cyan)' },
   email:         { icone: '✉️', cor: 'var(--accent2)' },
   reuniao:       { icone: '🤝', cor: 'var(--green)' },
+  prospeccao:    { icone: '☎', cor: 'var(--cyan)' },
   nota:          { icone: '📝', cor: 'var(--text2)' },
   importado:     { icone: '📥', cor: 'var(--accent)' },
 };
