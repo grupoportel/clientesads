@@ -46,10 +46,10 @@ function Etapa({ rotulo, estado, link }) {
  * que nada aconteceu.
  */
 export default function AgendarReuniaoModal({ aberto, aoFechar, lead }) {
-  const [dataHora, setDataHora] = useState(proximoHorario);
+  const [dataHora, setDataHora] = useState(() => lead?.preparacaoProspeccao?.dataProximoPasso || proximoHorario());
   const [duracao, setDuracao] = useState(30);
-  const [objetivo, setObjetivo] = useState('');
-  const [participantes, setParticipantes] = useState('');
+  const [objetivo, setObjetivo] = useState(() => lead?.preparacaoProspeccao?.proximoPasso || '');
+  const [participantes, setParticipantes] = useState(() => lead?.preparacaoProspeccao?.decisorIdentificado || lead?.decisor || '');
   const [linkLocal, setLinkLocal] = useState('');
   const [observacao, setObservacao] = useState('');
   const [enviarEmail, setEnviarEmail] = useState(true);
@@ -61,6 +61,7 @@ export default function AgendarReuniaoModal({ aberto, aoFechar, lead }) {
   if (!aberto || !lead) return null;
 
   const fechar = () => {
+    if (ocupado) return;
     setResultado(null); setErro(''); setObservacao(''); setObjetivo('');
     setParticipantes(''); setLinkLocal(''); setConviteJaEnviado(false);
     setDataHora(proximoHorario()); setDuracao(30); setEnviarEmail(true);

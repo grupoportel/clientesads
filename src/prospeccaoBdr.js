@@ -6,6 +6,7 @@ export const RESULTADOS_PROSPECCAO = [
   { id: 'reuniao_agendada', rotulo: 'Reunião agendada', exigeProximoPasso: true },
   { id: 'nutricao', rotulo: 'Seguir em nutrição', exigeProximoPasso: true },
   { id: 'sem_aderencia', rotulo: 'Sem aderência' },
+  { id: 'opt_out', rotulo: 'Pediu para não receber contatos' },
 ];
 
 export const PASSOS_PREPARACAO = [
@@ -41,14 +42,14 @@ export const ETAPAS_LIGACAO = [
   {
     id: 'qualificacao', titulo: 'Uma ou duas perguntas', tempo: '1min30–3 min',
     objetivo: 'Descobrir apenas o necessário para decidir se existe um próximo passo.',
-    frase: 'Só para eu não te chamar para uma conversa que não ajude: hoje, onde esse processo mais trava?',
+    frase: 'Como vocês acompanham esse processo hoje? Existe alguma dificuldade ou ele já atende bem vocês?',
     intencao: 'O BDR segue a resposta em vez de aplicar um questionário completo de diagnóstico.',
     perguntas: ['Qual exemplo recente mostra isso?', 'Isso hoje é prioridade ou existe algo mais importante na frente?'],
   },
   {
     id: 'proximo_passo', titulo: 'Pedido direto', tempo: '3–5 min',
     objetivo: 'Combinar uma ação concreta quando houver aderência.',
-    frase: 'Faz sentido reservarmos 20 minutos para olhar isso com calma? Para você é melhor [opção A] ou [opção B]?',
+    frase: 'Faz sentido reservarmos uma reunião de 30 minutos, em outro horário, para olhar isso com calma? Qual dia funciona para você?',
     intencao: 'A Rugido oferece alternativas concretas de horário e vende a conversa seguinte, não uma proposta prematura.',
     perguntas: ['Quem precisa participar?', 'Qual horário fica realmente viável para você?'],
   },
@@ -106,6 +107,8 @@ export function criarPreparacaoProspeccao(lead = {}) {
     contextoApresentado: '', sinalConfirmado: '', objecao: '', resultado: '',
     proximoPasso: '', responsavel: lead.responsavel || '', dataProximoPasso: '', notas: '',
     etapasConcluidas: {},
+    autonomia: '', rotaComercial: '', motivoEncerramento: '', fonteEvidencia: '', decisorPapel: lead.decisorPapel || '',
+    perguntaPrincipal: '', canalProximoPasso: 'telefone',
   };
   return { ...base, ...salvo, etapasConcluidas: { ...(salvo.etapasConcluidas || {}) } };
 }
@@ -120,6 +123,12 @@ export function validarRegistroProspeccao(preparacao = {}) {
   const faltando = [];
   const resultado = RESULTADOS_PROSPECCAO.find(item => item.id === preparacao.resultado);
   if (!resultado) faltando.push('resultado da ligação');
+  if (preparacao.resultado === 'sem_aderencia' && !String(preparacao.motivoEncerramento || '').trim()) faltando.push('motivo do encerramento');
+  if (preparacao.resultado === 'reuniao_agendada') {
+    if (!String(preparacao.decisorIdentificado || '').trim()) faltando.push('participante adequado');
+    if (!String(preparacao.decisorPapel || '').trim()) faltando.push('papel do participante');
+    if (!['local', 'compartilhada'].includes(preparacao.autonomia)) faltando.push('autonomia ou participantes da decisão');
+  }
   if (preparacao.resultado === 'decisor_identificado' && !String(preparacao.decisorIdentificado || '').trim()) {
     faltando.push('decisor identificado');
   }
@@ -140,6 +149,9 @@ export function montarResumoProspeccao(preparacao = {}) {
     ['Resultado', rotuloResultado], ['Próximo passo', preparacao.proximoPasso],
     ['Responsável', preparacao.responsavel], ['Data', preparacao.dataProximoPasso],
     ['Notas', preparacao.notas],
+    ['Autonomia', preparacao.autonomia], ['Rota comercial', preparacao.rotaComercial],
+    ['Papel do decisor', preparacao.decisorPapel], ['Evidência', preparacao.evidencia], ['Fonte', preparacao.fonteEvidencia], ['Hipótese', preparacao.hipotese],
+    ['Motivo do encerramento', preparacao.motivoEncerramento], ['Canal', preparacao.canalProximoPasso],
   ].filter(([, valor]) => String(valor || '').trim());
   return linhas.map(([rotulo, valor]) => `${rotulo}: ${String(valor).trim()}`).join('\n');
 }

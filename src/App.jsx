@@ -37,6 +37,7 @@ import './index.css';
 
 import { MAPA_STATUS_ANTIGOS, mesclarEtapas, acharEtapa, ehGanho, ehPerdido } from './pipeline';
 import { registrarAtividade, registrarAtividadesEmLote, descreverEdicao } from './atividades';
+import { validarRegistroProspeccao } from './prospeccaoBdr';
 import { paraLixeira, deLixeira, planoDeDesfazer } from './lixeira';
 import BarraEmMassa from './components/BarraEmMassa';
 import { gerarCSV, baixarCSV } from './csv';
@@ -816,6 +817,11 @@ function App() {
     }
     const lead = leads.find(item => String(item.id) === String(leadId));
     if (!lead) throw new Error('O lead selecionado não está mais disponível.');
+    if (registrar) {
+      const faltando = validarRegistroProspeccao(preparacao);
+      if (faltando.length) throw new Error(`Complete: ${faltando.join(', ')}.`);
+      if ((lead.optOut === true || lead.optOut === 'true') && preparacao.resultado !== 'opt_out') throw new Error('Este contato pediu para não receber novas abordagens.');
+    }
 
     const agora = new Date().toISOString();
     const registro = {
@@ -832,26 +838,28 @@ function App() {
     const alteracoes = { preparacaoProspeccao: registro, updatedAt: agora };
     if (registrar) {
       if (preparacao.decisorIdentificado) alteracoes.decisor = preparacao.decisorIdentificado;
+      if (preparacao.decisorPapel) alteracoes.decisorPapel = preparacao.decisorPapel;
       if (preparacao.proximoPasso) alteracoes.proximaAcao = preparacao.proximoPasso;
       if (preparacao.dataProximoPasso) alteracoes.proximaAcaoDataHora = preparacao.dataProximoPasso;
       if (preparacao.responsavel) alteracoes.proximaAcaoResponsavel = preparacao.responsavel;
       if (preparacao.proximoPasso) alteracoes.proximaAcaoObjetivo = preparacao.proximoPasso;
       if (preparacao.proximoPasso) alteracoes.proximaAcaoCanal = 'telefone';
-      if (preparacao.resultado === 'reuniao_agendada' && preparacao.dataProximoPasso) {
-        alteracoes.reuniaoDataHora = preparacao.dataProximoPasso;
-        alteracoes.reuniao = preparacao.dataProximoPasso.slice(0, 10);
+      if (preparacao.resultado === 'opt_out') {
+        Object.assign(alteracoes, { optOut: true, status: 'perda', motivoPerda: 'Pedido expresso de não contato', proximaAcao: '', proximaAcaoDataHora: '', proximaAcaoObjetivo: '', proximaAcaoCanal: '', proximaAcaoResponsavel: '' });
       }
     }
 
-    await update(ref(database, `crm_data/leads/${leadId}`), alteracoes);
-
-    await registrarAtividade({
+    const evento = push(ref(database, 'crm_data/atividades'));
+    const gravacoes = Object.fromEntries(Object.entries(alteracoes).map(([campo, valor]) => [`crm_data/leads/${leadId}/${campo}`, valor]));
+    gravacoes[`crm_data/atividades/${evento.key}`] = {
+      id: evento.key, autorUid: usuario?.uid || null, autorNome: nomeUsuario, criadoEm: agora,
       leadId,
       leadNome: lead.nome,
       tipo: 'prospeccao',
       descricao: registrar ? `Prospecção de ${lead.nome} registrada` : `Preparação da prospecção de ${lead.nome} atualizada`,
       detalhe: registrar ? { resumo, resultado: preparacao.resultado || '' } : { progresso: 'preparação atualizada' },
-    });
+    };
+    await update(ref(database), gravacoes);
   };
 
   const atualizarLeadInline = (leadId, campo, novoValor) => {
@@ -1105,6 +1113,7 @@ function App() {
             leadInicialId={leadIdNoCopiloto}
             podeEditar={editavel}
             aoSalvar={salvarPreparacaoProspeccao}
+            aoAgendar={editavel ? setLeadParaAgendar : null}
             aoAbrirLead={abrirLeadNaLista}
           />
         );
@@ -1314,6 +1323,7 @@ function App() {
       {/* ══════ IMPORTAÇÃO DE LEADS ══════ */}
       <Suspense fallback={null}>
       <AgendarReuniaoModal
+        key={leadParaAgendar?.id || 'fechado'}
         aberto={Boolean(leadParaAgendar)}
         aoFechar={() => setLeadParaAgendar(null)}
         lead={leadParaAgendar}

@@ -22,6 +22,7 @@ import {
 import { criarPreparacaoInicial, progressoPreparacao, validarRegistroReuniao, montarResumoCrm, sugestaoManual, ETAPAS_REUNIAO, OBJECOES_REUNIAO } from '../reuniao.js';
 import { montarPromptReuniao, interpretarPreparacaoReuniao } from '../../api/_ia.js';
 import { criarPreparacaoProspeccao, progressoPreparacaoProspeccao, validarRegistroProspeccao, montarResumoProspeccao, sugestaoManualProspeccao, ETAPAS_LIGACAO, ROTAS_LIGACAO, RESULTADOS_PROSPECCAO } from '../prospeccaoBdr.js';
+import { orientarLigacao } from '../conducaoBdr.js';
 
 let ok = 0, fail = 0;
 const t = (nome, cond) => { if (cond) { ok++; } else { fail++; console.log('FALHOU:', nome); } };
@@ -1155,10 +1156,13 @@ t('resultado sempre e obrigatorio', validarRegistroProspeccao({}).includes('resu
 t('sem contato pode encerrar sem proxima acao', validarRegistroProspeccao({ resultado: 'sem_contato' }).length === 0);
 t('decisor identificado exige nome', validarRegistroProspeccao({ resultado: 'decisor_identificado' }).includes('decisor identificado'));
 t('retorno exige acao responsavel e data', validarRegistroProspeccao({ resultado: 'retorno_agendado' }).length === 3);
-t('reuniao agendada completa e aceita', validarRegistroProspeccao({ resultado: 'reuniao_agendada', proximoPasso: 'Reunião', responsavel: 'Ana', dataProximoPasso: '2026-09-15T10:00' }).length === 0);
+t('reuniao agendada completa e aceita', validarRegistroProspeccao({ resultado: 'reuniao_agendada', decisorIdentificado: 'Ana', decisorPapel: 'Sócia', autonomia: 'local', proximoPasso: 'Reunião', responsavel: 'Ana', dataProximoPasso: '2026-09-15T10:00' }).length === 0);
 t('resumo da prospeccao usa rotulo do resultado', montarResumoProspeccao({ resultado: 'nutricao' }).includes('Seguir em nutrição'));
 t('roteiro de prospeccao cobre extensao consentida', ETAPAS_LIGACAO.at(-1).frase.includes('mais cinco minutos'));
-t('roteiro de prospeccao nao promete ligacao de trinta minutos', !JSON.stringify(ETAPAS_LIGACAO).includes('30 min'));
+t('trinta minutos pertencem a reuniao posterior', ETAPAS_LIGACAO.find(e => e.id === 'proximo_passo').frase.includes('em outro horário'));
+ t('matriz sem participante adequado impede agendamento', validarRegistroProspeccao({ resultado: 'reuniao_agendada', autonomia: 'matriz' }).includes('autonomia ou participantes da decisão'));
+t('encerramento exige motivo', validarRegistroProspeccao({ resultado: 'sem_aderencia' }).includes('motivo do encerramento'));
+t('opt-out permite encerramento imediato', validarRegistroProspeccao({ resultado: 'opt_out' }).length === 0);
 t('rotas cobrem recepcao material e fornecedor', ['recepcao', 'material', 'fornecedor'].every(id => ROTAS_LIGACAO.some(rota => rota.id === id)));
 t('resultados incluem reuniao e sem aderencia', ['reuniao_agendada', 'sem_aderencia'].every(id => RESULTADOS_PROSPECCAO.some(item => item.id === id)));
 const manualProspeccao = sugestaoManualProspeccao({ nome: 'Clínica Alfa' }, {});
@@ -1169,6 +1173,10 @@ t('prompt de prospeccao limita a ligacao fria', promptProspeccao.includes('3 a 5
 const iaProspeccao = interpretarPreparacaoProspeccao(JSON.stringify({ briefing: 'Breve', abertura: 'Dois minutos?', perguntas: ['Quem decide?'], desvios: ['Recepção'], confianca: 'alta' }));
 t('interpreta preparo de prospeccao valido', iaProspeccao?.confianca === 'alta' && iaProspeccao.desvios.length === 1);
 t('recusa preparo de prospeccao sem perguntas', interpretarPreparacaoProspeccao('{"briefing":"x","abertura":"y","perguntas":[]}') === null);
+
+t('conducao aproveita evidencia e pergunta da empresa', orientarLigacao('decisor', { nome: 'Empresa teste' }, { evidencia: 'Fato observado', perguntaPrincipal: 'Como acompanham?' }).contexto.includes('Fato observado') && orientarLigacao('decisor', {}, { perguntaPrincipal: 'Como acompanham?' }).pergunta === 'Como acompanham?');
+t('sem evidencia nao inventa problema', orientarLigacao('decisor').contexto.includes('sem afirmar um problema'));
+t('resumo preserva contexto para a passagem', montarResumoProspeccao({ evidencia: 'Fato', fonteEvidencia: 'Site', hipotese: 'Possibilidade', autonomia: 'local', rotaComercial: 'pontual' }).includes('Rota comercial: pontual'));
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);

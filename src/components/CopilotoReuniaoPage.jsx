@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiPost } from '../api';
 import { escutarAtividadesDoLead } from '../atividades';
+import { CENARIOS, OBJECOES, orientarLigacao } from '../conducaoBdr';
 import {
-  ETAPAS_LIGACAO, PASSOS_PREPARACAO, RESULTADOS_PROSPECCAO, ROTAS_LIGACAO,
+  PASSOS_PREPARACAO, RESULTADOS_PROSPECCAO,
   criarPreparacaoProspeccao, montarResumoProspeccao, progressoPreparacaoProspeccao,
   sugestaoManualProspeccao, validarRegistroProspeccao,
 } from '../prospeccaoBdr';
@@ -46,7 +47,7 @@ function CartaoLead({ lead, ativo, aoEscolher }) {
   );
 }
 
-function CopilotoWorkspace({ lead, podeEditar, aoSalvar, aoAbrirLead, aoTrocar }) {
+function CopilotoWorkspace({ lead, podeEditar, aoSalvar, aoAbrirLead, aoTrocar, aoAgendar }) {
   const [aba, setAba] = useState('preparar');
   const [preparacao, setPreparacao] = useState(() => criarPreparacaoProspeccao(lead));
   const [atividades, setAtividades] = useState([]);
@@ -55,8 +56,35 @@ function CopilotoWorkspace({ lead, podeEditar, aoSalvar, aoAbrirLead, aoTrocar }
   const [salvando, setSalvando] = useState(false);
   const [aviso, setAviso] = useState(null);
   const [rotaAberta, setRotaAberta] = useState(null);
+  const [cenario, setCenario] = useState('recepcao');
+  const [ultimoSalvo, setUltimoSalvo] = useState(() => JSON.stringify(criarPreparacaoProspeccao(lead)));
+  const alterado = JSON.stringify(preparacao) !== ultimoSalvo;
+  const orientacao = orientarLigacao(cenario, lead, preparacao);
+  const bloqueado = lead.optOut === true || lead.optOut === 'true';
 
   useEffect(() => escutarAtividadesDoLead(lead.id, setAtividades), [lead.id]);
+  useEffect(() => {
+    if (!alterado) return;
+    const avisar = e => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', avisar);
+    return () => window.removeEventListener('beforeunload', avisar);
+  }, [alterado]);
+  const sair = acao => {
+    if (salvando) return;
+    if (alterado && !window.confirm('Há anotações não salvas. Deseja sair e descartá-las?')) return;
+    acao();
+  };
+  const agendar = async () => {
+    const faltando = validarRegistroProspeccao(preparacao);
+    if (faltando.length) { setAviso({ tipo: 'erro', texto: `Complete antes de agendar: ${faltando.join(', ')}.` }); return; }
+    setSalvando(true);
+    try {
+      await aoSalvar(lead.id, preparacao, resumo, true);
+      setUltimoSalvo(JSON.stringify(preparacao));
+      aoAgendar?.({ ...lead, decisor: preparacao.decisorIdentificado, decisorPapel: preparacao.decisorPapel, preparacaoProspeccao: preparacao });
+    } catch (erro) { setAviso({ tipo: 'erro', texto: erro.message }); }
+    finally { setSalvando(false); }
+  };
 
   const atualizar = (campo, valor) => setPreparacao(atual => ({ ...atual, [campo]: valor }));
   const progresso = progressoPreparacaoProspeccao(preparacao);
@@ -85,6 +113,7 @@ function CopilotoWorkspace({ lead, podeEditar, aoSalvar, aoAbrirLead, aoTrocar }
       evidencia: atual.evidencia || sugestao.evidencia || '',
       hipotese: atual.hipotese || sugestao.hipotese || '',
       pedidoDesejado: atual.pedidoDesejado || sugestao.proximoPasso || '',
+      perguntaPrincipal: atual.perguntaPrincipal || sugestao.perguntas?.[0] || '',
     }));
     setAviso({ tipo: 'ok', texto: 'Os campos vazios foram preenchidos sem substituir o que você já escreveu.' });
   };
@@ -98,6 +127,7 @@ function CopilotoWorkspace({ lead, podeEditar, aoSalvar, aoAbrirLead, aoTrocar }
     setSalvando(true); setAviso(null);
     try {
       await aoSalvar(lead.id, preparacao, resumo, aba === 'registrar');
+      setUltimoSalvo(JSON.stringify(preparacao));
       setAviso({ tipo: 'ok', texto: aba === 'registrar' ? 'Prospecção registrada na linha do tempo.' : 'Preparação salva no lead.' });
     } catch (erro) {
       setAviso({ tipo: 'erro', texto: `Não foi possível salvar: ${erro.message}` });
@@ -108,7 +138,7 @@ function CopilotoWorkspace({ lead, podeEditar, aoSalvar, aoAbrirLead, aoTrocar }
     <div className="copiloto-page">
       <header className="copiloto-header">
         <div><span className="copiloto-eyebrow">MÉTODO PORTEL · PADRÕES REAIS DA RUGIDO</span><h1>Ligação de prospecção</h1><p>Encontre a pessoa certa, valide apenas o necessário e conquiste um próximo passo legítimo.</p></div>
-        <div className="copiloto-acoes"><button className="btn btn-ghost" onClick={aoTrocar}>Trocar empresa</button>{aoAbrirLead && <button className="btn btn-ghost" onClick={() => aoAbrirLead(lead)}>Abrir cadastro</button>}</div>
+        <div className="copiloto-acoes"><button className="btn btn-ghost" onClick={() => sair(aoTrocar)}>Trocar empresa</button>{aoAbrirLead && <button className="btn btn-ghost" onClick={() => sair(() => aoAbrirLead(lead))}>Abrir cadastro</button>}</div>
       </header>
 
       <div className="copiloto-contexto">
@@ -133,6 +163,9 @@ function CopilotoWorkspace({ lead, podeEditar, aoSalvar, aoAbrirLead, aoTrocar }
                 <Campo rotulo="Fato ou evidência" ajuda="Algo observado ou registrado. Não inclua suposições." valor={preparacao.evidencia} aoMudar={v => atualizar('evidencia', v)} placeholder="Ex.: o site direciona todos os pedidos ao mesmo canal" />
                 <Campo rotulo="Hipótese a validar" ajuda="Apresente como possibilidade: “isso acontece por aí?”" valor={preparacao.hipotese} aoMudar={v => atualizar('hipotese', v)} placeholder="Pode existir um gargalo em…" />
                 <Campo rotulo="Pedido desejado" valor={preparacao.pedidoDesejado} aoMudar={v => atualizar('pedidoDesejado', v)} placeholder="Orientação, retorno ou reunião com a pessoa certa" />
+                <CampoLinha rotulo="Fonte da evidência" valor={preparacao.fonteEvidencia} aoMudar={v => atualizar('fonteEvidencia', v)} placeholder="Página, observação ou conversa que originou o fato" />
+                <Campo rotulo="Pergunta principal" valor={preparacao.perguntaPrincipal} aoMudar={v => atualizar('perguntaPrincipal', v)} placeholder="Uma pergunta para confirmar ou corrigir a hipótese" />
+                <label className="copiloto-campo"><span>Rota comercial provável</span><select className="form-control" value={preparacao.rotaComercial} onChange={e => atualizar('rotaComercial', e.target.value)}><option value="">Ainda não definida</option><option value="estruturacao">Estruturação comercial</option><option value="pontual">Serviço pontual</option><option value="relacionamento">Relacionamento futuro</option><option value="encerramento">Encerramento</option></select><small>Uma hipótese de encaminhamento; confirme a necessidade antes de oferecer escopo.</small></label>
               </div>
             </section>
 
@@ -148,14 +181,25 @@ function CopilotoWorkspace({ lead, podeEditar, aoSalvar, aoAbrirLead, aoTrocar }
         {aba === 'ligar' && (
           <div className="copiloto-conduzir">
             <section className="copiloto-roteiro">
-              {ETAPAS_LIGACAO.map((etapa, indice) => {
-                const concluida = Boolean(preparacao.etapasConcluidas?.[etapa.id]);
-                return <article key={etapa.id} className={`copiloto-etapa ${concluida ? 'concluida' : ''}`}><button type="button" className="copiloto-check" aria-label={`Marcar ${etapa.titulo} como ${concluida ? 'não concluída' : 'concluída'}`} onClick={() => atualizar('etapasConcluidas', { ...(preparacao.etapasConcluidas || {}), [etapa.id]: !concluida })}>{concluida ? '✓' : indice + 1}</button><div><div className="copiloto-etapa-topo"><h2>{etapa.titulo}</h2><span>{etapa.tempo}</span></div><p>{etapa.objetivo}</p><blockquote>{etapa.frase}</blockquote><p className="copiloto-intencao"><strong>Por que funciona:</strong> {etapa.intencao}</p><ul>{etapa.perguntas.map(q => <li key={q}>{q}</li>)}</ul></div></article>;
-              })}
+              <div className="copiloto-card">
+                <label className="copiloto-campo"><span>Situação da ligação</span><select className="form-control" value={cenario} onChange={e => setCenario(e.target.value)}>{CENARIOS.map(([id, titulo]) => <option key={id} value={id}>{titulo}</option>)}</select></label>
+                {bloqueado ? <p role="alert">Este contato pediu para não receber abordagens. Encerre a prospecção.</p> : <>
+                  <h2>O que dizer agora</h2><p className="copiloto-abertura">{orientacao.fala}</p>
+                  <p><strong>Contexto da empresa:</strong> {orientacao.contexto}</p>
+                  {preparacao.hipotese && <p><strong>Hipótese a conferir:</strong> {preparacao.hipotese}</p>}
+                  <p><strong>Pergunta:</strong> {orientacao.pergunta}</p>
+                  <p className="copiloto-intencao"><strong>Como decidir:</strong> {orientacao.saida}</p>
+                  <label className="copiloto-campo"><span>Quem pode decidir?</span><select className="form-control" value={preparacao.autonomia} onChange={e => atualizar('autonomia', e.target.value)}><option value="">Ainda preciso confirmar</option><option value="local">Decisão local</option><option value="compartilhada">Decisão compartilhada / incluir sócio</option><option value="matriz">Matriz ou franqueadora</option><option value="sem_autonomia">Contato sem autonomia</option></select></label>
+                  <CampoLinha rotulo="Participante adequado / decisor" valor={preparacao.decisorIdentificado} aoMudar={v => atualizar('decisorIdentificado', v)} />
+                  <CampoLinha rotulo="Papel do participante" valor={preparacao.decisorPapel} aoMudar={v => atualizar('decisorPapel', v)} placeholder="Proprietário, gerente, sócio…" />
+                  <Campo rotulo="O que a pessoa respondeu?" valor={preparacao.sinalConfirmado} aoMudar={v => atualizar('sinalConfirmado', v)} linhas={2} placeholder="Registre a resposta, inclusive se corrigiu a hipótese" />
+                  <details><summary>Quando convidar para a reunião</summary><p>Com relevância e participantes adequados: “Faz sentido uma reunião de 30 minutos, em outro horário, para olhar esse ponto com calma?” Confira a agenda antes de oferecer horários.</p><p>Serviço pontual: delimite a necessidade. Estruturação: avalie os processos envolvidos. Sem prioridade: combine apenas uma retomada autorizada.</p></details>
+                </>}
+              </div>
             </section>
             <aside className="copiloto-lateral">
               <div className="copiloto-card copiloto-regra-tempo"><span className="copiloto-eyebrow">TEMPO É REFERÊNCIA, NÃO CRONÔMETRO</span><h2>Curta por padrão</h2><ul><li>Peça dois minutos no início.</li><li>Busque concluir em 3–5 minutos.</li><li>Se a conversa estiver útil, peça permissão para aprofundar.</li><li>As ligações de 6–12 minutos são exceções com engajamento, não a meta.</li></ul></div>
-              <div className="copiloto-card"><span className="copiloto-eyebrow">ROTAS REAIS DE LIGAÇÃO</span><p>Escolha a situação e adapte a fala ao contexto.</p>{ROTAS_LIGACAO.map(rota => <div key={rota.id} className="copiloto-objecao"><button onClick={() => setRotaAberta(rotaAberta === rota.id ? null : rota.id)} aria-expanded={rotaAberta === rota.id}>{rota.titulo}<span>{rotaAberta === rota.id ? '−' : '+'}</span></button>{rotaAberta === rota.id && <div><p><strong>Intenção:</strong> {rota.intencao}</p><p><strong>Exemplo:</strong> “{rota.fala}”</p></div>}</div>)}</div>
+              <div className="copiloto-card"><span className="copiloto-eyebrow">PARE: PAUSAR · ACOLHER · REENQUADRAR · ENCAMINHAR</span><p>Ouça até o fim. Faça no máximo um reenquadramento; respeite a recusa.</p>{OBJECOES.map(rota => <div key={rota.id} className="copiloto-objecao"><button onClick={() => setRotaAberta(rotaAberta === rota.id ? null : rota.id)} aria-expanded={rotaAberta === rota.id}>{rota.titulo}<span>{rotaAberta === rota.id ? '−' : '+'}</span></button>{rotaAberta === rota.id && <div><p><strong>Fala / pergunta:</strong> {rota.pergunta}</p><p><strong>Próximo passo:</strong> {rota.seguir}</p><p><strong>Quando encerrar:</strong> {rota.parar}</p></div>}</div>)}</div>
             </aside>
           </div>
         )}
@@ -167,6 +211,8 @@ function CopilotoWorkspace({ lead, podeEditar, aoSalvar, aoAbrirLead, aoTrocar }
               <CampoLinha rotulo="Pessoa que atendeu" valor={preparacao.pessoaAtendente} aoMudar={v => atualizar('pessoaAtendente', v)} placeholder="Nome, se informado" />
               <CampoLinha rotulo="Papel da pessoa" valor={preparacao.papelAtendente} aoMudar={v => atualizar('papelAtendente', v)} placeholder="Recepção, vendedor, sócio…" />
               <CampoLinha rotulo="Decisor identificado" valor={preparacao.decisorIdentificado} aoMudar={v => atualizar('decisorIdentificado', v)} placeholder="Nome e função" />
+              <CampoLinha rotulo="Papel do participante" valor={preparacao.decisorPapel} aoMudar={v => atualizar('decisorPapel', v)} />
+              <label className="copiloto-campo"><span>Autonomia para a decisão</span><select className="form-control" value={preparacao.autonomia} onChange={e => atualizar('autonomia', e.target.value)}><option value="">Ainda preciso confirmar</option><option value="local">Decisão local</option><option value="compartilhada">Decisão compartilhada / incluir sócio</option><option value="matriz">Matriz ou franqueadora</option><option value="sem_autonomia">Contato sem autonomia</option></select></label>
               <label className="copiloto-campo"><span>Resultado da ligação *</span><select className="form-control" value={preparacao.resultado} onChange={e => atualizar('resultado', e.target.value)}><option value="">Selecione o resultado</option>{RESULTADOS_PROSPECCAO.map(item => <option key={item.id} value={item.id}>{item.rotulo}</option>)}</select></label>
               <Campo rotulo="Contexto apresentado" valor={preparacao.contextoApresentado} aoMudar={v => atualizar('contextoApresentado', v)} placeholder="O que foi dito para explicar o contato?" />
               <Campo rotulo="Sinal ou problema confirmado" valor={preparacao.sinalConfirmado} aoMudar={v => atualizar('sinalConfirmado', v)} placeholder="O que a pessoa confirmou — ou que não acontece por ali" />
@@ -175,8 +221,12 @@ function CopilotoWorkspace({ lead, podeEditar, aoSalvar, aoAbrirLead, aoTrocar }
               <CampoLinha rotulo="Responsável pelo próximo passo" valor={preparacao.responsavel} aoMudar={v => atualizar('responsavel', v)} placeholder="Pessoa responsável" />
               <CampoLinha rotulo="Data e hora do próximo passo" tipo="datetime-local" valor={preparacao.dataProximoPasso} aoMudar={v => atualizar('dataProximoPasso', v)} />
               <Campo rotulo="Notas adicionais" valor={preparacao.notas} aoMudar={v => atualizar('notas', v)} placeholder="Correções e contexto que ajudarão a próxima pessoa" />
+              <Campo rotulo="Motivo do encerramento" valor={preparacao.motivoEncerramento} aoMudar={v => atualizar('motivoEncerramento', v)} placeholder="Obrigatório em sem aderência" />
             </div>
+            {preparacao.resultado === 'reuniao_agendada' && <div className="copiloto-resumo"><h3>Concluir o agendamento</h3><p>O próximo passo salva a ligação e abre o convite de 30 minutos para revisão. Confira participantes, link, convite e lembretes. A confirmação depende de aceite explícito.</p><button type="button" className="btn btn-primary" disabled={!podeEditar || salvando || bloqueado} onClick={agendar}>Salvar ligação e abrir agendamento</button></div>}
+            {lead.reuniaoDataHora && <p>Reunião: {lead.confirmacaoExplicita === true ? 'aceite registrado' : 'aguardando aceite'}. <button type="button" className="btn btn-ghost" onClick={() => sair(() => aoAbrirLead?.(lead))}>Conferir convite e confirmação no cadastro</button></p>}
             <div className="copiloto-resumo"><span>PRÉVIA DO REGISTRO NO CRM</span><pre>{resumo || 'Selecione o resultado e registre o que foi aprendido.'}</pre></div>
+            <details className="copiloto-resumo"><summary>Histórico das tentativas</summary>{atividades.filter(a => a.tipo === 'prospeccao' && a.detalhe?.resultado).slice(0, 10).map(a => <article key={a.id}><h4>{a.descricao}</h4><small>{a.criadoEm ? new Date(a.criadoEm).toLocaleString('pt-BR') : ''} · {a.autorNome}</small><pre>{a.detalhe.resumo}</pre></article>)}</details>
           </section>
         )}
       </main>
@@ -186,7 +236,7 @@ function CopilotoWorkspace({ lead, podeEditar, aoSalvar, aoAbrirLead, aoTrocar }
   );
 }
 
-export default function CopilotoReuniaoPage({ leads = [], leadInicialId = null, podeEditar = false, aoSalvar, aoAbrirLead }) {
+export default function CopilotoReuniaoPage({ leads = [], leadInicialId = null, podeEditar = false, aoSalvar, aoAbrirLead, aoAgendar }) {
   const [leadEscolhidoId, setLeadEscolhidoId] = useState('');
   const [busca, setBusca] = useState('');
   const leadId = leadEscolhidoId || leadInicialId || '';
@@ -204,7 +254,7 @@ export default function CopilotoReuniaoPage({ leads = [], leadInicialId = null, 
   }).slice(0, 30);
 
   if (lead) {
-    return <CopilotoWorkspace key={lead.id} lead={lead} podeEditar={podeEditar} aoSalvar={aoSalvar} aoAbrirLead={aoAbrirLead} aoTrocar={() => setLeadEscolhidoId('__trocar__')} />;
+    return <CopilotoWorkspace key={lead.id} lead={lead} podeEditar={podeEditar} aoSalvar={aoSalvar} aoAbrirLead={aoAbrirLead} aoAgendar={aoAgendar} aoTrocar={() => setLeadEscolhidoId('__trocar__')} />;
   }
 
   return (

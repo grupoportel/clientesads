@@ -584,6 +584,8 @@ export function montarPromptProspeccao(lead = {}, opcoes = {}) {
     ['Oportunidades anotadas', lead.oportunidades], ['Hipótese', preparacao.hipotese || lead.hipotese],
     ['Objetivo desta ligação', preparacao.objetivo], ['Contato esperado', preparacao.contatoEsperado],
     ['Pedido desejado', preparacao.pedidoDesejado],
+    ['Autonomia', preparacao.autonomia], ['Rota comercial', preparacao.rotaComercial],
+    ['Fonte da evidência', preparacao.fonteEvidencia], ['Pergunta principal', preparacao.perguntaPrincipal],
   ].filter(([, valor]) => valor !== undefined && valor !== null && String(valor).trim())
    .map(([rotulo, valor]) => `- ${rotulo}: ${valor}`).join('\n');
 
@@ -619,7 +621,11 @@ Regras:
 - Não use falsa intimidade, falsa confusão, pressão, medo ou ataque a fornecedor.
 - Se atender a recepção, priorize obter nome, função, canal e horário do decisor.
 - Se pedirem material, sugira contexto e uma data de retomada.
-- Se não houver aderência, sugira encerrar com respeito.`;
+- Se não houver aderência, sugira encerrar com respeito.
+- Se a hipótese não for confirmada, aceite a correção e não presuma um gargalo.
+- Se a decisão depender da matriz, busque a rota corporativa sem aprofundar com quem não tem autonomia.
+- Diferencie estruturação comercial, serviço pontual e relacionamento. Não invente preços ou ofereça plano completo gratuito.
+- A reunião posterior pode durar 30 minutos; a ligação atual continua breve.`;
 }
 
 export function interpretarPreparacaoProspeccao(texto = '') {
