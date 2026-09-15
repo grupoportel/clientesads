@@ -49,32 +49,7 @@ const PainelPrioridade = lazy(() => import('./components/PainelPrioridade'));
 import { rodarAutomacoes } from './automacoesRunner';
 import { validarMudancaStatus, descricaoBloqueio } from './processoProspeccao';
 
-// No topo do módulo em vez de dentro do filtro: recriada a cada lead, ela
-// impedia o compilador do React de preservar a memoização da lista.
-const normaliza = (texto) => String(texto || '').trim().toLowerCase();
-
-const CAMPOS_BUSCA = ['nome', 'nicho', 'telefone', 'whatsapp', 'email', 'responsavel', 'cidade', 'decisor'];
-
-// Predicado puro, fora do componente: com ele o corpo do useMemo vira uma
-// chamada simples e o compilador do React consegue preservar a memoização.
-function leadPassaNosFiltros(lead, f) {
-  if (f.status && normaliza(lead.status || 'nenhum') !== normaliza(f.status)) return false;
-  if (f.nicho && normaliza(lead.nicho) !== normaliza(f.nicho)) return false;
-  if (f.responsavel && normaliza(lead.responsavel) !== normaliza(f.responsavel)) return false;
-  if (f.estado && normaliza(lead.estado) !== normaliza(f.estado)) return false;
-  if (f.cidade && normaliza(lead.cidade) !== normaliza(f.cidade)) return false;
-
-  // Data de entrada: aceita o campo preenchido à mão ou o carimbo de criação
-  const entrada = (lead.data_entrada || lead.createdAt || '').slice(0, 10);
-  if (f.dataInicio && (!entrada || entrada < f.dataInicio)) return false;
-  if (f.dataFim && (!entrada || entrada > f.dataFim)) return false;
-
-  if (f.busca) {
-    const termo = normaliza(f.busca);
-    return CAMPOS_BUSCA.some(campo => normaliza(lead[campo]).includes(termo));
-  }
-  return true;
-}
+import { leadPassaNosFiltros } from './filtrosLeads';
 
 function Carregando() {
   return (
@@ -94,6 +69,7 @@ const PAGINAS = [
 ];
 
 const ROTULOS_CAMPOS = {
+  tipoProspeccao: 'Tipo de Prospecção',
   nome: 'Nome', status: 'Status', valor: 'Valor', nicho: 'Nicho', estado: 'Estado',
   cidade: 'Cidade', origem: 'Origem', responsavel: 'Responsável', decisor: 'Decisor',
   cnpj: 'CNPJ', telefone: 'Telefone', whatsapp: 'WhatsApp', email: 'E-mail',
@@ -140,6 +116,8 @@ function App() {
   const etapas = useMemo(() => mesclarEtapas(configPipeline), [configPipeline]);
 
   const [nichos, setNichos] = useState([]);
+  const [tiposProspeccao, setTiposProspeccao] = useState([]);
+  const [filtroTipoProspeccao, setFiltroTipoProspeccao] = useState(null);
   const [responsaveis, setResponsaveis] = useState([]);
   const [estados, setEstados] = useState([]);
   const [cidades, setCidades] = useState([]);
@@ -271,13 +249,13 @@ function App() {
      * computadores pareceram "não sincronizar" — um deles estava logado com uma
      * conta fora da lista de usuários, e a leitura era negada sem aviso.
      */
-    const escutar = (caminho, aoReceber) => {
+    const escutar = (caminho, aoReceber, critico = true) => {
       cancelarDados.push(onValue(
         ref(database, caminho),
         aoReceber,
         (erro) => {
           console.error(`[banco] Leitura de ${caminho} recusada:`, erro?.code || erro?.message);
-          if (String(erro?.code || '').includes('permission-denied')) {
+          if (critico && String(erro?.code || '').includes('permission-denied')) {
             setAcessoNegado(true);
           }
         }
@@ -298,6 +276,7 @@ function App() {
       if (!user) {
         setLeads([]); setTarefasGlobais([]); setConversasGlobais([]); setEmailsGlobais([]);
         setClientesGlobais([]); setPropostasGlobais([]); setModelos([]); setAutomacoes([]); setUsuariosCrm([]);
+        setTiposProspeccao([]); setFiltroTipoProspeccao(null);
         setLixeira([]);
         setAcessoNegado(false);
         return;
@@ -311,6 +290,8 @@ function App() {
       });
 
       escutar('crm_data/nichos',       (snap) => setNichos(snap.val() ? Object.values(snap.val()) : []));
+      // A lista opcional não deve bloquear o CRM durante a atualização das regras.
+      escutar('crm_data/tiposProspeccao', (snap) => setTiposProspeccao(snap.val() ? Object.values(snap.val()) : []), false);
       escutar('crm_data/responsaveis', (snap) => setResponsaveis(snap.val() ? Object.values(snap.val()) : []));
       escutar('crm_data/estados',      (snap) => setEstados(snap.val() ? Object.values(snap.val()) : []));
       escutar('crm_data/cidades',      (snap) => setCidades(snap.val() ? Object.values(snap.val()) : []));
@@ -340,6 +321,7 @@ function App() {
   const filtrosAtivos = [
     filtroStatus && { rotulo: 'Status', valor: acharEtapa(etapas, filtroStatus).label, limpar: () => setFiltroStatus(null) },
     filtroNicho && { rotulo: 'Nicho', valor: filtroNicho, limpar: () => setFiltroNicho(null) },
+    filtroTipoProspeccao && { rotulo: 'Tipo de Prospecção', valor: filtroTipoProspeccao, limpar: () => setFiltroTipoProspeccao(null) },
     filtroResponsavel && { rotulo: 'Responsável', valor: filtroResponsavel, limpar: () => setFiltroResponsavel(null) },
     filtroEstado && { rotulo: 'Estado', valor: filtroEstado, limpar: () => setFiltroEstado(null) },
     filtroCidade && { rotulo: 'Cidade', valor: filtroCidade, limpar: () => setFiltroCidade(null) },
@@ -349,6 +331,7 @@ function App() {
 
   const limparFiltros = () => {
     setFiltroStatus(null); setFiltroNicho(null); setFiltroResponsavel(null);
+    setFiltroTipoProspeccao(null);
     setFiltroEstado(null); setFiltroCidade(null);
     setFiltroDataInicio(''); setFiltroDataFim('');
   };
@@ -367,6 +350,7 @@ function App() {
       { titulo: 'Valor', valor: l => (Number(l.valor) || 0).toFixed(2).replace('.', ',') },
       { titulo: 'Responsável', campo: 'responsavel' },
       { titulo: 'Nicho', campo: 'nicho' },
+      { titulo: 'Tipo de Prospecção', campo: 'tipoProspeccao' },
       { titulo: 'Origem', campo: 'origem' },
       { titulo: 'Estado', campo: 'estado' },
       { titulo: 'Cidade', campo: 'cidade' },
@@ -392,9 +376,10 @@ function App() {
 
   const filtros = useMemo(() => ({
     status: filtroStatus, nicho: filtroNicho, responsavel: filtroResponsavel,
+    tipoProspeccao: filtroTipoProspeccao,
     estado: filtroEstado, cidade: filtroCidade,
     dataInicio: filtroDataInicio, dataFim: filtroDataFim, busca,
-  }), [filtroStatus, filtroNicho, filtroResponsavel, filtroEstado, filtroCidade, filtroDataInicio, filtroDataFim, busca]);
+  }), [filtroStatus, filtroNicho, filtroTipoProspeccao, filtroResponsavel, filtroEstado, filtroCidade, filtroDataInicio, filtroDataFim, busca]);
 
   // O compilador do React não consegue preservar esta memoização e por isso
   // desiste de otimizar o App inteiro. Como o compilador NÃO está ligado no
@@ -1014,6 +999,8 @@ function App() {
                 leads={leads}
                 nichos={nichos} responsaveis={responsaveis} estados={estados} cidades={cidades}
                 filtroNicho={filtroNicho} setFiltroNicho={setFiltroNicho}
+                tiposProspeccao={tiposProspeccao}
+                filtroTipoProspeccao={filtroTipoProspeccao} setFiltroTipoProspeccao={setFiltroTipoProspeccao}
                 filtroResponsavel={filtroResponsavel} setFiltroResponsavel={setFiltroResponsavel}
                 filtroEstado={filtroEstado} setFiltroEstado={setFiltroEstado}
                 filtroCidade={filtroCidade} setFiltroCidade={setFiltroCidade}
@@ -1313,6 +1300,7 @@ function App() {
           onSave={salvarLead} 
           leadAtual={leadEmEdicao}
           nichos={nichos}
+          tiposProspeccao={tiposProspeccao}
           responsaveis={responsaveis}
           estados={estados}
           cidades={cidades}

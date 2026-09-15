@@ -108,6 +108,13 @@
         ".read": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).exists())",
         ".write": "auth != null && (!root.child('crm_data/usuarios').exists() || (root.child('crm_data/usuarios').child(auth.uid).exists() && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'))"
       },
+      "tiposProspeccao": {
+        ".read": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).exists())",
+        ".write": "auth != null && (!root.child('crm_data/usuarios').exists() || (root.child('crm_data/usuarios').child(auth.uid).exists() && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'))",
+        "$opcao": {
+          ".validate": "newData.isString() && newData.val().length > 0"
+        }
+      },
       "responsaveis": {
         ".read": "auth != null && (!root.child('crm_data/usuarios').exists() || root.child('crm_data/usuarios').child(auth.uid).exists())",
         ".write": "auth != null && (!root.child('crm_data/usuarios').exists() || (root.child('crm_data/usuarios').child(auth.uid).exists() && root.child('crm_data/usuarios').child(auth.uid).child('role').val() !== 'Viewer'))"

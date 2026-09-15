@@ -15,6 +15,7 @@ const CAMPOS_IMPORTAVEIS = [
   { campo: 'whatsapp',       rotulo: 'WhatsApp',       apelidos: ['celular', 'zap', 'wpp'] },
   { campo: 'email',          rotulo: 'E-mail',         apelidos: ['mail', 'emailcontato'] },
   { campo: 'nicho',          rotulo: 'Nicho',          apelidos: ['segmento', 'mercado', 'categoria'] },
+  { campo: 'tipoProspeccao', rotulo: 'Tipo de Prospecção', apelidos: ['tipoprospeccao', 'tipodeprospeccao'] },
   { campo: 'responsavel',    rotulo: 'Responsável',    apelidos: ['dono', 'vendedor', 'consultor'] },
   { campo: 'estado',         rotulo: 'Estado',         apelidos: ['uf'] },
   { campo: 'cidade',         rotulo: 'Cidade',         apelidos: ['municipio'] },

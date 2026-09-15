@@ -1,40 +1,52 @@
 import { useMemo, useState } from 'react';
-import { ref, set } from 'firebase/database';
+import { ref, runTransaction } from 'firebase/database';
 import { database } from '../firebase';
+import { opcoesDeFiltro } from '../filtrosLeads';
 
 function FilterField({ label, field, items, leads, value, onChange, dbPath, podeEditar }) {
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState('');
   const opcoes = useMemo(() => {
     const usados = leads.map(lead => lead[field]).filter(Boolean);
-    return [...new Set([...items, ...usados])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    return opcoesDeFiltro(items, usados);
   }, [field, items, leads]);
 
-  const adicionar = () => {
+  const adicionar = async () => {
     const nome = window.prompt(`Adicionar ${label.toLowerCase()}:`);
     if (!nome?.trim()) return;
-    const proximaLista = [...new Set([...items, nome.trim()])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-    set(ref(database, dbPath), proximaLista);
+    setSalvando(true);
+    setErro('');
+    try {
+      await runTransaction(ref(database, dbPath), atual => opcoesDeFiltro(Object.values(atual || {}), [nome]), { applyLocally: false });
+    } catch {
+      setErro('Não foi possível salvar a opção. Verifique sua conexão e permissão e tente novamente.');
+    } finally {
+      setSalvando(false);
+    }
   };
 
   return (
     <div className="filter-field">
       <label>{label}</label>
       <div className="filter-field-row">
-        <select className="form-control" value={value || ''} onChange={event => onChange(event.target.value || null)}>
+        <select aria-label={label} className="form-control" value={value || ''} onChange={event => onChange(event.target.value || null)}>
           <option value="">Todos</option>
           {opcoes.map(item => <option key={item} value={item}>{item}</option>)}
         </select>
         {podeEditar && (
-          <button type="button" className="btn-icon" onClick={adicionar} aria-label={`Adicionar ${label.toLowerCase()}`} title="Adicionar opção">
+          <button type="button" className="btn-icon" disabled={salvando} onClick={adicionar} aria-label={`Adicionar ${label.toLowerCase()}`} title="Adicionar opção">
             +
           </button>
         )}
       </div>
+      {erro && <p role="alert">{erro}</p>}
     </div>
   );
 }
 
 export default function FilterDrawers({
   leads = [], nichos = [], responsaveis = [], estados = [], cidades = [],
+  tiposProspeccao = [], filtroTipoProspeccao, setFiltroTipoProspeccao,
   filtroNicho, setFiltroNicho, filtroResponsavel, setFiltroResponsavel,
   filtroEstado, setFiltroEstado, filtroCidade, setFiltroCidade,
   filtroDataInicio, setFiltroDataInicio, filtroDataFim, setFiltroDataFim,
@@ -60,6 +72,7 @@ export default function FilterDrawers({
         <div className="filters-content">
           <div className="filters-grid">
             <FilterField label="Nicho" field="nicho" items={nichos} leads={leads} value={filtroNicho} onChange={setFiltroNicho} dbPath="crm_data/nichos" podeEditar={podeEditar} />
+            <FilterField label="Tipo de Prospecção" field="tipoProspeccao" items={tiposProspeccao} leads={leads} value={filtroTipoProspeccao} onChange={setFiltroTipoProspeccao} dbPath="crm_data/tiposProspeccao" podeEditar={podeEditar} />
             <FilterField label="Responsável" field="responsavel" items={responsaveis} leads={leads} value={filtroResponsavel} onChange={setFiltroResponsavel} dbPath="crm_data/responsaveis" podeEditar={podeEditar} />
             <FilterField label="Estado" field="estado" items={estados} leads={leads} value={filtroEstado} onChange={setFiltroEstado} dbPath="crm_data/estados" podeEditar={podeEditar} />
             <FilterField label="Cidade" field="cidade" items={cidades} leads={leads} value={filtroCidade} onChange={setFiltroCidade} dbPath="crm_data/cidades" podeEditar={podeEditar} />

@@ -23,6 +23,7 @@ import { criarPreparacaoInicial, progressoPreparacao, validarRegistroReuniao, mo
 import { montarPromptReuniao, interpretarPreparacaoReuniao } from '../../api/_ia.js';
 import { criarPreparacaoProspeccao, progressoPreparacaoProspeccao, validarRegistroProspeccao, montarResumoProspeccao, sugestaoManualProspeccao, ETAPAS_LIGACAO, ROTAS_LIGACAO, RESULTADOS_PROSPECCAO } from '../prospeccaoBdr.js';
 import { orientarLigacao } from '../conducaoBdr.js';
+import { leadPassaNosFiltros, opcoesDeFiltro } from '../filtrosLeads.js';
 
 let ok = 0, fail = 0;
 const t = (nome, cond) => { if (cond) { ok++; } else { fail++; console.log('FALHOU:', nome); } };
@@ -1177,6 +1178,23 @@ t('recusa preparo de prospeccao sem perguntas', interpretarPreparacaoProspeccao(
 t('conducao aproveita evidencia e pergunta da empresa', orientarLigacao('decisor', { nome: 'Empresa teste' }, { evidencia: 'Fato observado', perguntaPrincipal: 'Como acompanham?' }).contexto.includes('Fato observado') && orientarLigacao('decisor', {}, { perguntaPrincipal: 'Como acompanham?' }).pergunta === 'Como acompanham?');
 t('sem evidencia nao inventa problema', orientarLigacao('decisor').contexto.includes('sem afirmar um problema'));
 t('resumo preserva contexto para a passagem', montarResumoProspeccao({ evidencia: 'Fato', fonteEvidencia: 'Site', hipotese: 'Possibilidade', autonomia: 'local', rotaComercial: 'pontual' }).includes('Rota comercial: pontual'));
+
+const leadTipo = { nome: 'Clínica Exemplo', nicho: 'Odontologia', cidade: 'Sinop', tipoProspeccao: 'Cold Call', createdAt: '2026-09-15T10:00:00Z' };
+t('tipo permite lead legado sem filtro', leadPassaNosFiltros({ nome: 'Legado' }));
+t('tipo nao classifica lead legado automaticamente', !leadPassaNosFiltros({ nome: 'Legado' }, { tipoProspeccao: 'Cold Call' }));
+t('tipo filtra Cold Call', leadPassaNosFiltros(leadTipo, { tipoProspeccao: 'Cold Call' }));
+t('tipo exclui Presencial', !leadPassaNosFiltros(leadTipo, { tipoProspeccao: 'Presencial' }));
+t('tipo normaliza caixa e espacos', leadPassaNosFiltros(leadTipo, { tipoProspeccao: ' cold call ' }));
+t('tipo combina nicho e cidade', leadPassaNosFiltros(leadTipo, { tipoProspeccao: 'Cold Call', nicho: 'Odontologia', cidade: 'Sinop' }));
+t('tipo nao anula outro filtro', !leadPassaNosFiltros(leadTipo, { tipoProspeccao: 'Cold Call', cidade: 'Cuiabá' }));
+t('tipo combina data', !leadPassaNosFiltros(leadTipo, { tipoProspeccao: 'Cold Call', dataInicio: '2026-09-16' }));
+t('busca encontra tipo', leadPassaNosFiltros(leadTipo, { busca: 'cold call' }));
+t('limpar tipo recupera outras contas', leadPassaNosFiltros(leadTipo, { tipoProspeccao: null }));
+t('opcoes removem duplicatas e vazios', JSON.stringify(opcoesDeFiltro(['Cold Call', ' cold call ', ''], ['Presencial', null])) === '["Cold Call","Presencial"]');
+t('opcoes incluem tipos importados', opcoesDeFiltro([], ['Prospecção escrita']).includes('Prospecção escrita'));
+t('opcoes preservam o valor selecionado antigo', opcoesDeFiltro(['cold call'], ['Cold Call'])[0] === 'cold call');
+const csvTipo = gerarCSV([leadTipo], [{ titulo: 'Tipo de Prospecção', campo: 'tipoProspeccao' }]);
+t('CSV preserva tipo', lerCSV(csvTipo).linhas[0][0] === 'Cold Call');
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);

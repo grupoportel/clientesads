@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import AnaliseIA from './AnaliseIA';
 import { hojeISO } from '../periodo';
+import { opcoesDeFiltro } from '../filtrosLeads';
 
 import { etapasAtivas, acharEtapa, formatarBRL } from '../pipeline';
 import {
@@ -8,7 +9,7 @@ import {
 } from '../processoProspeccao';
 
 const CAMPOS_INICIAIS = {
-  nome: '', status: 'nenhum', valor: '', nicho: '', estado: '', cidade: '', origem: '',
+  nome: '', status: 'nenhum', valor: '', nicho: '', tipoProspeccao: '', estado: '', cidade: '', origem: '',
   responsavel: '', decisor: '', cnpj: '', telefone: '', whatsapp: '', email: '',
   instagram: '', ig_dono: '', site: '', nota: '', avaliacoes: '', data_entrada: '',
   ultimo_contato: '', reuniao: '', melhores: '', oportunidades: '', pontos: '',
@@ -45,7 +46,7 @@ function removerRascunho(chave) {
 }
 
 // Recebemos as listas do Firebase (nichos, responsaveis, etc.)
-export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos = [], responsaveis = [], estados = [], cidades = [], etapas = [] }) {
+export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos = [], tiposProspeccao = [], responsaveis = [], estados = [], cidades = [], etapas = [] }) {
   // O App remonta este modal via key a cada abertura, então o estado inicial é
   // calculado uma vez na montagem — sem efeito que dispara um render extra.
   const [configRascunho] = useState(() => {
@@ -176,6 +177,14 @@ export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos =
               </select>
             </div>
             
+            <div className="form-group">
+              <label htmlFor="lead-tipo-prospeccao">Tipo de Prospecção</label>
+              <select id="lead-tipo-prospeccao" className="form-control" name="tipoProspeccao" value={formData.tipoProspeccao || ''} onChange={handleChange}>
+                <option value="">Não definido</option>
+                {opcoesDeFiltro([formData.tipoProspeccao], tiposProspeccao).map(tipo => <option key={tipo} value={tipo}>{tipo}</option>)}
+              </select>
+              <span className="form-hint">Cadastre opções no botão + do filtro Tipo de Prospecção, na lista de leads.</span>
+            </div>
             <div className="form-group">
               <label>Origem / Canal</label>
               <select className="form-control" name="origem" value={formData.origem} onChange={handleChange}>
