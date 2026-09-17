@@ -299,8 +299,6 @@ function App() {
       escutar('crm_data/tarefas',   (snap) => setTarefasGlobais(listaDe(snap)));
       escutar('crm_data/clientes',  (snap) => setClientesGlobais(listaDe(snap)));
       escutar('crm_data/propostas', (snap) => setPropostasGlobais(listaDe(snap)));
-      escutar('crm_data/conversas', (snap) => setConversasGlobais(listaDe(snap)));
-      escutar('crm_data/emails',    (snap) => setEmailsGlobais(listaDe(snap)));
       escutar('crm_data/config/empresa',  (snap) => setEmpresa(snap.val() || null));
       escutar('crm_data/config/pipeline', (snap) => setConfigPipeline(snap.val() || null));
       escutar('crm_data/config/metas',    (snap) => setMetas(snap.val() || {}));
