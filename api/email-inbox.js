@@ -34,6 +34,7 @@ function prepararLista(mensagens, leads) {
       const lead = acharLeadPorEmail(leads, item.remetenteEmail);
       return {
         ...item,
+        texto: textoDoEmail({ text: item.texto }),
         leadId: lead?.id || item.leadId || '',
         leadNome: lead?.nome || item.leadNome || '',
       };

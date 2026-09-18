@@ -537,6 +537,10 @@ t('chave da mensagem e deterministica', chaveMensagem('a@x.com', 10, '<id>') ===
 t('assunto de resposta adiciona prefixo uma vez', assuntoDeResposta('Pedido') === 'Re: Pedido' && assuntoDeResposta('RE: Pedido') === 'RE: Pedido');
 const corpoRecebido = textoDoEmail({ html: '<script>roubar()</script><p>Olá &amp; bem-vindo</p>' });
 t('HTML recebido vira texto sem script', corpoRecebido.includes('Olá & bem-vindo') && !corpoRecebido.includes('roubar'));
+const corpoMarcadoComoTexto = textoDoEmail({ text: '<h2>Assunto</h2><p>Mensagem limpa</p>' });
+t('HTML rotulado como texto também é limpo', corpoMarcadoComoTexto === 'Assunto Mensagem limpa');
+const linkRastreamento = `https://exemplo.com/${'a'.repeat(240)}`;
+t('link de rastreamento muito longo é resumido', textoDoEmail({ text: linkRastreamento }) === '[link longo omitido]');
 
 
 // ── IA ──

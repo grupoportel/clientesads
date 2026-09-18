@@ -3,19 +3,12 @@ import { normalizarEndereco } from './_email.js';
 
 export const LIMITE_CORPO_EMAIL = 50000;
 
-export function chaveMensagem(conta = '', uid = '', messageId = '') {
-  return createHash('sha256')
-    .update(`${normalizarEndereco(conta)}|${uid}|${String(messageId || '')}`)
-    .digest('hex');
+function limparLinksLongos(texto = '') {
+  return texto.replace(/https?:\/\/[^\s)<>'"]{220,}/gi, '[link longo omitido]');
 }
 
-export function textoDoEmail(parsed = {}) {
-  const texto = String(parsed.text || '').trim();
-  if (texto) return texto.slice(0, LIMITE_CORPO_EMAIL);
-
-  // O CRM nunca renderiza HTML recebido. Além de reduzir ruído, isso evita
-  // scripts, pixels de rastreamento e conteúdo remoto dentro da aplicação.
-  return String(parsed.html || '')
+function htmlParaTexto(valor = '') {
+  return String(valor)
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<br\s*\/?\s*>/gi, '\n')
@@ -24,13 +17,35 @@ export function textoDoEmail(parsed = {}) {
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
     .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
+    .replace(/&gt;/gi, '>');
+}
+
+function normalizarCorpo(valor = '') {
+  const fonte = String(valor || '');
+  const pareceHtml = /<(?:!doctype|html|body|p|br|a|h[1-6]|div|table|span)\b/i.test(fonte);
+  const texto = pareceHtml ? htmlParaTexto(fonte) : fonte;
+  return limparLinksLongos(texto)
     .replace(/\r/g, '')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .replace(/[ \t]{2,}/g, ' ')
     .trim()
     .slice(0, LIMITE_CORPO_EMAIL);
+}
+
+export function chaveMensagem(conta = '', uid = '', messageId = '') {
+  return createHash('sha256')
+    .update(`${normalizarEndereco(conta)}|${uid}|${String(messageId || '')}`)
+    .digest('hex');
+}
+
+export function textoDoEmail(parsed = {}) {
+  const texto = String(parsed.text || '').trim();
+  if (texto) return normalizarCorpo(texto);
+
+  // O CRM nunca renderiza HTML recebido. Além de reduzir ruído, isso evita
+  // scripts, pixels de rastreamento e conteúdo remoto dentro da aplicação.
+  return normalizarCorpo(parsed.html || '');
 }
 
 export function enderecoPrincipal(campo) {
