@@ -26,6 +26,7 @@ import { criarPreparacaoProspeccao, progressoPreparacaoProspeccao, validarRegist
 import { orientarLigacao } from '../conducaoBdr.js';
 import { leadPassaNosFiltros, opcoesDeFiltro } from '../filtrosLeads.js';
 import { appCheckObrigatorio } from '../../api/_auth.js';
+import nodemailer from 'nodemailer';
 
 let ok = 0, fail = 0;
 const t = (nome, cond) => { if (cond) { ok++; } else { fail++; console.log('FALHOU:', nome); } };
@@ -814,6 +815,17 @@ t('anexo seguro vira attachment', anexosEmail[0].filename === 'material.pdf' && 
 let rejeitouExecutavel = false;
 try { prepararAnexos([{ nome: 'programa.exe', tipo: 'application/octet-stream', dataUrl: 'data:application/octet-stream;base64,TVqQ' }]); } catch { rejeitouExecutavel = true; }
 t('anexo executavel e rejeitado', rejeitouExecutavel);
+const emailMime = await nodemailer.createTransport({ streamTransport: true, buffer: true, newline: 'unix' }).sendMail({
+  from: 'Grupo Portel <guilherme@grupoportel.com>',
+  to: 'teste@example.com',
+  subject: 'Teste local',
+  html: visualInline,
+  attachments: [imagemInline, ...anexosEmail],
+});
+const mensagemMime = emailMime.message.toString();
+t('mensagem final referencia o cid da imagem', mensagemMime.includes('cid:cabecalho-grupo-portel'));
+t('mensagem final incorpora a imagem no cabecalho', mensagemMime.includes('Content-ID: <cabecalho-grupo-portel>'));
+t('mensagem final inclui o arquivo como anexo', mensagemMime.includes('filename=material.pdf') && mensagemMime.includes('Content-Disposition: attachment'));
 
 
 // ── Responder a ──
