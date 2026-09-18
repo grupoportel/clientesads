@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiPost } from '../api';
 import EscreverComIA from './EscreverComIA';
 
-const VAZIO = { assunto: '', corpo: '', imagemUrl: '', imagemDataUrl: '', imagemNome: '', anexos: [], ctaTexto: '', ctaUrl: '' };
+const BANNER_PADRAO_URL = 'https://clientesads.vercel.app/email/banner-grupo-portel-v1.png';
+const VAZIO = { assunto: '', corpo: '', imagemUrl: BANNER_PADRAO_URL, imagemDataUrl: '', imagemNome: '', anexos: [], ctaTexto: '', ctaUrl: '' };
 const TIPOS_IMAGEM = ['image/jpeg', 'image/png', 'image/gif'];
 const MAX_IMAGEM_BYTES = 1500000;
 const TIPOS_POR_EXTENSAO = {
@@ -300,13 +301,23 @@ export default function EmailEnvioPage({ leads = [], empresa = 'Grupo Portel', m
               <details style={{ marginTop: 12 }}>
                 <summary style={{ cursor: 'pointer', color: 'var(--text2)', fontSize: 13, fontWeight: 600 }}>Imagem e botão (opcional)</summary>
                 <div style={{ marginTop: 12, display: 'grid', gap: 12 }}>
+                  {!form.imagemDataUrl && form.imagemUrl === BANNER_PADRAO_URL && (
+                    <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(0,184,200,.08)', border: '1px solid rgba(0,184,200,.22)', color: 'var(--text2)', fontSize: 12 }}>
+                      Banner padrão do Grupo Portel ativo.
+                      <button type="button" onClick={() => mudar('imagemUrl', '')} style={{ marginLeft: 8, border: 0, background: 'transparent', color: 'var(--red)', cursor: 'pointer' }}>Não usar</button>
+                    </div>
+                  )}
                   <div className="form-group full">
                     <label className="form-label">Imagem do cabeçalho</label>
                     <input key={form.imagemDataUrl ? 'imagem-selecionada' : 'imagem-vazia'} className="form-control" type="file" accept="image/jpeg,image/png,image/gif" onChange={e => escolherImagem(e.target.files?.[0])} disabled={enviando} />
                     <small style={{ display: 'block', marginTop: 6, color: 'var(--text3)', lineHeight: 1.5 }}>JPG, PNG ou GIF de até 1,5 MB. A imagem será incorporada ao e-mail e exibida no topo.</small>
                     {form.imagemNome && <div style={{ marginTop: 7, color: 'var(--accent2)', fontSize: 12 }}>{form.imagemNome} <button type="button" onClick={() => setForm(atual => ({ ...atual, imagemDataUrl: '', imagemNome: '' }))} style={{ border: 0, background: 'transparent', color: 'var(--red)', cursor: 'pointer' }}>Remover</button></div>}
                   </div>
-                  <div className="form-group full"><label className="form-label">Ou use uma URL pública HTTPS</label><input className="form-control" type="url" value={form.imagemUrl} onChange={e => setForm(atual => ({ ...atual, imagemUrl: e.target.value, imagemDataUrl: '', imagemNome: '' }))} placeholder="https://.../capa.jpg" disabled={enviando} /></div>
+                  <div className="form-group full">
+                    <label className="form-label">Ou use uma URL pública HTTPS</label>
+                    <input className="form-control" type="url" value={form.imagemUrl} onChange={e => setForm(atual => ({ ...atual, imagemUrl: e.target.value, imagemDataUrl: '', imagemNome: '' }))} placeholder="https://.../capa.jpg" disabled={enviando} />
+                    {!form.imagemDataUrl && form.imagemUrl !== BANNER_PADRAO_URL && <button type="button" className="btn btn-ghost" onClick={() => mudar('imagemUrl', BANNER_PADRAO_URL)} style={{ marginTop: 8 }} disabled={enviando}>Restaurar banner padrão</button>}
+                  </div>
                   <div className="email-cta-grid">
                     <div className="form-group"><label className="form-label">Texto do botão</label><input className="form-control" maxLength={60} value={form.ctaTexto} onChange={e => mudar('ctaTexto', e.target.value)} placeholder="Acessar material" disabled={enviando} /></div>
                     <div className="form-group"><label className="form-label">Link HTTPS do botão</label><input className="form-control" type="url" value={form.ctaUrl} onChange={e => mudar('ctaUrl', e.target.value)} placeholder="https://..." disabled={enviando} /></div>
