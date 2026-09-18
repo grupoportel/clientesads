@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { apiPost } from '../api';
 
 const ROTULOS = {
   melhores: 'Melhores conteúdos',
@@ -32,18 +33,7 @@ export default function AnaliseIA({ lead, aoAceitar, valoresAtuais = {} }) {
   const analisar = async () => {
     setCarregando(true); setErro(''); setResultado(null); setAceitos([]);
     try {
-      const { auth } = await import('../firebase');
-      if (!auth.currentUser) throw new Error('Faça login novamente.');
-      const token = await auth.currentUser.getIdToken();
-
-      const r = await fetch('/api/analisar-lead', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ lead }),
-      });
-      const corpo = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(corpo.error || 'Não foi possível analisar.');
-      setResultado(corpo);
+      setResultado(await apiPost('/api/analisar-lead', { lead }));
     } catch (e) {
       setErro(e.message);
     } finally {

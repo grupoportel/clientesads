@@ -28,8 +28,7 @@ const AgendaPage     = lazy(() => import('./components/AgendaPage'));
 const FinanceiroPage = lazy(() => import('./components/FinanceiroPage'));
 const RelatoriosPage = lazy(() => import('./components/RelatoriosPage'));
 const ConfigPage     = lazy(() => import('./components/ConfigPage'));
-const ConversasPage  = lazy(() => import('./components/ConversasPage'));
-const EmailPage      = lazy(() => import('./components/EmailPage'));
+const EmailEnvioPage = lazy(() => import('./components/EmailEnvioPage'));
 const MetricasPage   = lazy(() => import('./components/MetricasPage'));
 const CopilotoReuniaoPage = lazy(() => import('./components/CopilotoReuniaoPage'));
 
@@ -63,8 +62,8 @@ function Carregando() {
 }
 
 const PAGINAS = [
-  'dashboard', 'leads', 'clientes', 'tarefas', 'conversas',
-  'emails', 'agenda', 'financeiro', 'metricas', 'relatorios', 'configuracoes',
+  'dashboard', 'leads', 'clientes', 'tarefas', 'emails',
+  'agenda', 'financeiro', 'metricas', 'relatorios', 'configuracoes',
   'copiloto-bdr',
 ];
 
@@ -83,6 +82,7 @@ const ROTULOS_CAMPOS = {
   problemaConfirmado: 'Problema confirmado', impacto: 'Impacto', momento: 'Momento',
   decisorPapel: 'Papel do decisor', permissaoWhatsApp: 'Permissão de WhatsApp',
   origemPermissaoWhatsApp: 'Origem da permissão', optOut: 'Opt-out',
+  permissaoEmail: 'Permissão de e-mail', origemPermissaoEmail: 'Origem da permissão de e-mail',
   proximaAcao: 'Próxima ação', proximaAcaoDataHora: 'Data da próxima ação',
   proximaAcaoCanal: 'Canal da próxima ação', proximaAcaoResponsavel: 'Responsável pela próxima ação',
   proximaAcaoObjetivo: 'Objetivo da próxima ação', reuniaoDataHora: 'Data e hora da reunião',
@@ -96,8 +96,6 @@ function App() {
   const [carregando, setCarregando] = useState(true);
   const [leads, setLeads] = useState([]);
   const [tarefasGlobais, setTarefasGlobais] = useState([]);
-  const [conversasGlobais, setConversasGlobais] = useState([]);
-  const [emailsGlobais, setEmailsGlobais] = useState([]);
   const [clientesGlobais, setClientesGlobais] = useState([]);
   const [propostasGlobais, setPropostasGlobais] = useState([]);
   const [empresa, setEmpresa] = useState(null);
@@ -274,7 +272,7 @@ function App() {
       desligarDados();
 
       if (!user) {
-        setLeads([]); setTarefasGlobais([]); setConversasGlobais([]); setEmailsGlobais([]);
+        setLeads([]); setTarefasGlobais([]);
         setClientesGlobais([]); setPropostasGlobais([]); setModelos([]); setAutomacoes([]); setUsuariosCrm([]);
         setTiposProspeccao([]); setFiltroTipoProspeccao(null);
         setLixeira([]);
@@ -1070,10 +1068,8 @@ function App() {
             onAbrirLead={abrirLeadNaLista}
           />
         );
-      case 'conversas':
-        return <ConversasPage leads={leads} etapas={etapas} conversas={conversasGlobais} modelos={modelos} empresa={nomeEmpresa} meuNome={nomeUsuario} />;
       case 'emails':
-        return <EmailPage leads={leads} modelos={modelos} empresa={nomeEmpresa} meuNome={nomeUsuario} />;
+        return <EmailEnvioPage leads={leads} empresa={nomeEmpresa} meuNome={nomeUsuario} />;
       case 'agenda':
         return (
           <AgendaPage
@@ -1346,8 +1342,6 @@ function App() {
           clientes={clientesGlobais}
           tarefas={tarefasGlobais}
           propostas={propostasGlobais}
-          conversas={conversasGlobais}
-          emails={emailsGlobais}
           etapas={etapas}
         />
         </Suspense>

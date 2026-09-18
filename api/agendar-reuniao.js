@@ -20,7 +20,7 @@ import { podeUsarWhatsApp, validarMudancaStatus, descricaoBloqueio } from '../sr
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' });
 
-  const usuario = await exigirUsuario(req, res);
+  const usuario = await exigirUsuario(req, res, { papeis: ['Admin', 'Editor'] });
   if (!usuario) return;
 
   const {

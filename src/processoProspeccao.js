@@ -20,6 +20,8 @@ export const CAMPOS_PROSPECCAO_INICIAIS = {
   decisorPapel: '',
   permissaoWhatsApp: false,
   origemPermissaoWhatsApp: '',
+  permissaoEmail: false,
+  origemPermissaoEmail: '',
   optOut: false,
   proximaAcao: '',
   proximaAcaoDataHora: '',

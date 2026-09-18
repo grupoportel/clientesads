@@ -319,6 +319,16 @@ export default function LeadModal({ isOpen, onClose, onSave, leadAtual, nichos =
               <label>E-mail</label>
               <input className="form-control" name="email" type="email" value={formData.email} onChange={handleChange} placeholder="contato@empresa.com" />
             </div>
+            <label className="form-check full">
+              <input type="checkbox" name="permissaoEmail" checked={marcado(formData.permissaoEmail)} onChange={handleChange} />
+              <span><strong>E-mail autorizado para campanhas</strong><small>Marque quando o contato aceitou receber materiais, novidades ou comunicações recorrentes.</small></span>
+            </label>
+            {marcado(formData.permissaoEmail) && (
+              <div className="form-group full">
+                <label>Como a permissão de e-mail foi obtida?</label>
+                <input className="form-control" name="origemPermissaoEmail" value={formData.origemPermissaoEmail} onChange={handleChange} placeholder="Ex: solicitou o guia pelo Instagram em 16/09" />
+              </div>
+            )}
             <div className="form-group">
               <label>Instagram Empresa (@)</label>
               <input className="form-control" name="instagram" value={formData.instagram} onChange={handleChange} placeholder="@clinica" />

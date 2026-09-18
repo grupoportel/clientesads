@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { id: 'clientes',      icon: '◇', label: 'Clientes' },
   { id: 'copiloto-bdr',  icon: '⌾', label: 'Copiloto BDR' },
   { id: 'tarefas',       icon: '✓', label: 'Tarefas' },
+  { id: 'emails',        icon: '✉', label: 'E-mail' },
   { id: 'agenda',        icon: '□', label: 'Agenda' },
   { id: 'financeiro',    icon: '$', label: 'Financeiro' },
   { id: 'metricas',      icon: '◉', label: 'Métricas' },

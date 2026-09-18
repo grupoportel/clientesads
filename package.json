@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -12,9 +16,11 @@
   },
   "dependencies": {
     "firebase": "^12.14.0",
-    "firebase-admin": "^14.2.0",
+    "firebase-admin": "^14.4.0",
     "google-auth-library": "^10.9.1",
-    "nodemailer": "^9.0.3",
+    "imapflow": "^2.0.5",
+    "mailparser": "^3.9.28",
+    "nodemailer": "^10.0.10",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.18.2"

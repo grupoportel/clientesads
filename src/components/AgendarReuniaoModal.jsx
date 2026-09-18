@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { apiPost } from '../api';
 
 /** Sugere amanhã às 10h — quase nunca é hoje, e quase nunca é de madrugada. */
 function proximoHorario() {
@@ -71,20 +72,10 @@ export default function AgendarReuniaoModal({ aberto, aoFechar, lead }) {
   const marcar = async () => {
     setOcupado(true); setErro(''); setResultado(null);
     try {
-      const { auth } = await import('../firebase');
-      if (!auth.currentUser) throw new Error('Faça login novamente.');
-      const token = await auth.currentUser.getIdToken();
-
-      const r = await fetch('/api/agendar-reuniao', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          lead, dataHora, duracaoMin: duracao, objetivo, participantes,
-          linkLocal, observacao, enviarEmail, conviteJaEnviado,
-        }),
+      const corpo = await apiPost('/api/agendar-reuniao', {
+        lead, dataHora, duracaoMin: duracao, objetivo, participantes,
+        linkLocal, observacao, enviarEmail, conviteJaEnviado,
       });
-      const corpo = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(corpo.error || 'Não foi possível marcar a reunião.');
       setResultado(corpo);
     } catch (e) {
       setErro(e.message);

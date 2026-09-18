@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { apiPost } from '../api';
 
 const INTENCOES = [
   { id: 'primeiro-contato', rotulo: 'Primeira abordagem', dica: 'A pessoa ainda não conhece a agência' },
@@ -33,23 +34,13 @@ export default function EscreverComIA({
   const escrever = async () => {
     setOcupado(true); setErro(''); setRascunho(null);
     try {
-      const { auth } = await import('../firebase');
-      if (!auth.currentUser) throw new Error('Faça login novamente.');
-      const token = await auth.currentUser.getIdToken();
-
-      const r = await fetch('/api/redigir-mensagem', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          lead, canal, intencao, instrucao,
-          // Só as mais recentes: o resto não muda o texto e ocupa o prompt
-          atividades: atividades.slice(0, 8),
-          empresa, meuNome,
-        }),
+      const rascunhoGerado = await apiPost('/api/redigir-mensagem', {
+        lead, canal, intencao, instrucao,
+        // Só as mais recentes: o resto não muda o texto e ocupa o prompt
+        atividades: atividades.slice(0, 8),
+        empresa, meuNome,
       });
-      const corpo = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(corpo.error || 'Não foi possível escrever a mensagem.');
-      setRascunho(corpo);
+      setRascunho(rascunhoGerado);
     } catch (e) {
       setErro(e.message);
     } finally {

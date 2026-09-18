@@ -27,10 +27,9 @@ Ou copie o conteúdo de `database.rules.json` e cole direto no editor de regras 
 - Ninguém lê nada sem estar autenticado. Não há mais acesso anônimo.
 - Quem tem papel `Viewer` só lê; não grava em lugar nenhum.
 - `config`, `usuarios` e `automacoes` só aceitam escrita de quem tem papel `Admin`.
-- **Modo de transição:** enquanto não existir um registro em
-  `crm_data/usuarios/{seu-uid}`, o sistema trata você como Admin. Isso evita que
-  você fique trancado para fora ao publicar as regras hoje. Assim que a tela de
-  Usuários passar a gravar por `uid` (Fase 3), esse atalho deixa de valer sozinho.
+- Somente contas presentes em `crm_data/usuarios/{uid}` entram no CRM. Não há
+  atalho de primeiro acesso; se a lista for removida por engano, o banco fecha
+  em vez de promover qualquer conta autenticada.
 - `atividades` é somente-acréscimo: dá para criar registro novo, não dá para
   alterar nem apagar histórico já gravado.
 
@@ -45,31 +44,36 @@ Confirme que estas variáveis existem no painel do Vercel (Settings → Environm
 | `FIREBASE_CLIENT_EMAIL` | validação de token, gravação | sim |
 | `FIREBASE_PRIVATE_KEY` | validação de token, gravação | sim |
 | `FIREBASE_DATABASE_URL` | gravação | sim |
-| `WHATSAPP_PHONE_ID` | envio de WhatsApp | sim |
-| `WHATSAPP_ACCESS_TOKEN` | envio de WhatsApp | sim |
-| `WHATSAPP_VERIFY_TOKEN` | webhook da Meta | sim |
 | `GMAIL_USER` | envio de e-mail | **não — falta** |
 | `GMAIL_APP_PASSWORD` | envio de e-mail | **não — falta** |
-| `EMAIL_WEBHOOK_SECRET` | webhook de e-mail | **não — falta** |
 | `SMTP_HOST` | envio de e-mail | sim |
 | `SMTP_PORT` | envio de e-mail — 465 (SSL) ou 587 (STARTTLS) | não, cai em 465 |
 | `SMTP_USER` | envio de e-mail | sim |
 | `SMTP_PASS` | envio de e-mail | sim |
 | `SMTP_REMETENTE` | endereço que aparece no "de" | não, cai em `SMTP_USER` |
 | `SMTP_NOME` | nome que aparece no "de" | não, cai em `Grupo Portel` |
+| `IMAP_HOST` | caixa de entrada — `imap.hostinger.com` | não, é inferido quando o SMTP é Hostinger |
+| `IMAP_PORT` | caixa de entrada — 993 (SSL) | não, cai em 993 |
+| `IMAP_USER` | usuário da caixa de entrada | não, cai em `SMTP_USER` |
+| `IMAP_PASS` | senha da caixa de entrada | não, cai em `SMTP_PASS` |
 | `GEMINI_API_KEY` | análise de lead por IA | sim, para a IA funcionar |
 | `GEMINI_MODELO` | fixa um modelo do Gemini | não — sem ela o modelo é descoberto pela API |
 | `ANTHROPIC_API_KEY` | alternativa ao Gemini | não |
 | `GOOGLE_CALENDAR_ID` | eventos no Google Agenda | sim, para a agenda funcionar |
 | `AGENDA_FUSO` | fuso dos eventos | não, cai em `America/Sao_Paulo` |
+| `VITE_FIREBASE_APPCHECK_SITE_KEY` | prova que as chamadas vieram do CRM legítimo | adicionar após registrar o app no App Check |
+| `FIREBASE_APPCHECK_ENFORCE` | exige App Check nas funções `/api` | manter ausente durante a observação |
 
-As três últimas não estão no `.env.local`, então o envio de e-mail não funciona em
-desenvolvimento. Se já estiverem configuradas no Vercel, produção segue normal —
-só o ambiente local fica sem.
+As credenciais do e-mail não devem ser copiadas para código, Firebase ou
+variáveis `VITE_*`: estas últimas vão para o navegador. Elas ficam apenas nas
+variáveis protegidas da Vercel. O ambiente local só envia ou sincroniza quando
+recebe credenciais próprias no `.env.local`.
 
-> `EMAIL_WEBHOOK_SECRET` tem um valor padrão no código (`portelcrm_email_secret`).
-> Como ele é público neste repositório, defina um valor próprio no Vercel e no
-> Apps Script do Gmail.
+A antiga caixa baseada em webhook foi aposentada. A nova integração lê a
+própria caixa da Hostinger por IMAP e não usa `EMAIL_WEBHOOK_SECRET`. As antigas
+variáveis de WhatsApp também podem ser removidas depois da publicação. O campo
+WhatsApp dos leads continua existindo como dado de contato e link manual,
+sujeito à permissão registrada no CRM.
 
 ---
 
@@ -156,7 +160,7 @@ override caiu e os endpoints autenticados vão quebrar no próximo deploy.
 
 ---
 
-## Envio de e-mail (SMTP)
+## E-mail da Hostinger (SMTP + IMAP)
 
 O provedor é configuração, não código — `api/_email.js` monta o transporte a
 partir das variáveis. Para a Hostinger:
@@ -177,6 +181,56 @@ SSL trava a conexão sem erro legível — é o engano mais comum aqui.
 Enquanto `SMTP_HOST` não estiver definido, o envio continua usando
 `GMAIL_USER` / `GMAIL_APP_PASSWORD`, para a troca não derrubar o envio no meio
 do caminho. Depois que a Hostinger estiver funcionando, essas duas podem sair.
+
+O recebimento usa IMAP com `imap.hostinger.com`, porta 993 e SSL. Por padrão o
+CRM reaproveita `SMTP_USER` e `SMTP_PASS`; defina `IMAP_USER` e `IMAP_PASS`
+somente se quiser ler uma caixa diferente. A primeira sincronização traz no
+máximo 30 mensagens recentes e as seguintes somente as novas. O corpo é salvo
+como texto — HTML remoto, scripts, pixels e conteúdo dos anexos não são
+renderizados dentro do CRM. Os anexos continuam disponíveis no webmail.
+
+`crm_data/emailMensagens`, `crm_data/emailSync` e `crm_data/controles` ficam
+fechados pelas regras do navegador. Somente as funções autenticadas do servidor
+podem ler ou gravar essas áreas. O modo campanha foi retirado desta versão: a
+caixa profissional serve a mensagens individuais e respostas, não a disparos
+em massa.
+
+---
+
+## App Check — ativação sem derrubar o CRM
+
+O cliente e as funções da Vercel já estão preparados para o Firebase App
+Check com reCAPTCHA Enterprise. A implantação é gradual por segurança:
+
+1. No Firebase, abra **App Check**, registre o aplicativo Web e use uma chave
+   reCAPTCHA Enterprise baseada em pontuação para `clientesads.vercel.app`.
+2. Na Vercel, adicione a chave pública como
+   `VITE_FIREBASE_APPCHECK_SITE_KEY` em Production e Preview.
+3. Publique o site e valide login, banco, IA, usuários, agenda e e-mail.
+4. Observe as métricas do App Check. Não ative enforcement enquanto houver
+   tráfego legítimo classificado como não verificado.
+5. Somente depois adicione `FIREBASE_APPCHECK_ENFORCE=true` e faça novo deploy.
+
+O servidor verifica tokens recebidos mesmo na fase de observação, mas só
+recusa ausência ou token inválido quando a variável de enforcement é
+explicitamente `true`. Isso impede que erro de domínio ou chave derrube todo o
+CRM. O endpoint `/api/lead-in` continua separado: integrações externas não são
+um navegador Firebase e entram por `LEAD_IN_SECRET`.
+
+Para desenvolvimento local, use `VITE_FIREBASE_APPCHECK_DEBUG=true` somente
+no `.env.local`. O console do navegador exibirá um token de depuração que deve
+ser cadastrado no Firebase. Nunca coloque essa opção em Production ou Preview.
+
+---
+
+## Firewall e robôs
+
+O firewall da Vercel deve entrar por etapas. Primeiro publique em modo `Log`
+as regras de `/api`, Bot Protection e AI Bots; confira o tráfego real e só
+depois mude Bot Protection para `Challenge`, AI Bots para `Deny` e a regra de
+API para um limite compatível com o uso observado. Bloquear logo na primeira
+alteração pode atingir navegador móvel, automação interna ou integração
+legítima confundida com bot.
 
 ---
 

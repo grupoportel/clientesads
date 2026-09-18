@@ -14,17 +14,17 @@ const PAPEIS = ['Admin', 'Editor', 'Viewer'];
 /**
  * Confere se quem chamou pode administrar usuários.
  *
- * Enquanto não existir nenhum usuário cadastrado, qualquer pessoa autenticada
- * é tratada como Admin — é o único jeito de o primeiro cadastro acontecer.
- * A partir do primeiro registro, o portão fecha: quem não tem registro não
- * administra nada. As regras do banco seguem exatamente a mesma lógica.
+ * A conta precisa existir no CRM e ter papel Admin. O antigo atalho de
+ * primeiro acesso foi removido: apagar a lista de usuários não pode transformar
+ * qualquer conta autenticada em administradora.
  */
 async function exigirAdmin(db, uid, res) {
   const snap = await comPrazo(db.ref('crm_data/usuarios').once('value'));
   const usuarios = snap.val();
 
   if (!usuarios || Object.keys(usuarios).length === 0) {
-    return { ok: true, primeiroAcesso: true };
+    res.status(403).json({ error: 'Nenhum administrador está configurado no CRM.' });
+    return { ok: false };
   }
 
   const papel = usuarios[uid]?.role;
@@ -36,7 +36,7 @@ async function exigirAdmin(db, uid, res) {
 }
 
 export default async function handler(req, res) {
-  const usuario = await exigirUsuario(req, res);
+  const usuario = await exigirUsuario(req, res, { papeis: ['Admin'] });
   if (!usuario) return;
 
   let db;

@@ -16,14 +16,11 @@ const GRUPOS = {
   cliente:  { rotulo: 'Clientes',  icone: '🏢', pagina: 'clientes' },
   tarefa:   { rotulo: 'Tarefas',   icone: '✅', pagina: 'tarefas' },
   proposta: { rotulo: 'Propostas', icone: '📋', pagina: 'financeiro' },
-  conversa: { rotulo: 'Conversas', icone: '💬', pagina: 'conversas' },
-  email:    { rotulo: 'E-mails',   icone: '✉️', pagina: 'emails' },
 };
 
 export default function BuscaGlobal({
   aberta, onFechar, onNavegar, onAbrirLead,
-  leads = [], clientes = [], tarefas = [], propostas = [],
-  conversas = [], emails = [], etapas = [],
+  leads = [], clientes = [], tarefas = [], propostas = [], etapas = [],
 }) {
   const [termo, setTermo] = useState('');
   const [selecionado, setSelecionado] = useState(0);
@@ -79,28 +76,8 @@ export default function BuscaGlobal({
       }
     });
 
-    conversas.forEach(c => {
-      if (casa(c.nome, c.telefone, c.ultimaMensagem)) {
-        achados.push({
-          tipo: 'conversa', id: c.id, titulo: c.nome || c.telefone || 'Conversa',
-          subtitulo: c.ultimaMensagem || 'Sem mensagens',
-          extra: c.naoLidas > 0 ? `${c.naoLidas} não lida(s)` : '',
-        });
-      }
-    });
-
-    emails.forEach(e => {
-      if (casa(e.nome, e.email, e.assunto, e.ultimaMensagem)) {
-        achados.push({
-          tipo: 'email', id: e.id, titulo: e.assunto || '(sem assunto)',
-          subtitulo: e.nome || e.email || '',
-          extra: e.naoLidas > 0 ? `${e.naoLidas} não lido(s)` : '',
-        });
-      }
-    });
-
     return achados.slice(0, 40);
-  }, [termo, leads, clientes, tarefas, propostas, conversas, emails, etapas]);
+  }, [termo, leads, clientes, tarefas, propostas, etapas]);
 
   const escolher = (item) => {
     if (!item) return;
@@ -162,7 +139,7 @@ export default function BuscaGlobal({
             value={termo}
             onChange={e => { setTermo(e.target.value); setSelecionado(0); }}
             onKeyDown={aoTeclar}
-            placeholder="Buscar leads, clientes, tarefas, propostas, conversas…"
+            placeholder="Buscar leads, clientes, tarefas e propostas…"
             style={{
               flex: 1, background: 'transparent', border: 'none', outline: 'none',
               color: 'var(--text)', fontSize: 15, fontFamily: 'inherit',
@@ -179,7 +156,7 @@ export default function BuscaGlobal({
           {termo.trim().length < 2 ? (
             <div style={{ padding: '36px 20px', textAlign: 'center', color: 'var(--text3)', fontSize: 13, lineHeight: 1.7 }}>
               Digite ao menos 2 letras.<br />
-              <span style={{ fontSize: 12 }}>Busca por nome, telefone, e-mail, CNPJ, assunto e conteúdo de mensagem.</span>
+              <span style={{ fontSize: 12 }}>Busca por nome, telefone, e-mail, CNPJ e dados comerciais.</span>
             </div>
           ) : resultados.length === 0 ? (
             <div style={{ padding: '36px 20px', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>

@@ -8,7 +8,8 @@ import { normalizarMeta, achatar, extrairCampos, extrairUtm, acharDuplicado, cam
 import { papelDoUsuario, podeEditar, podeAdministrar, podeVer, motivoBloqueio } from '../papeis.js';
 import { configuracaoAgenda, somarMinutos, subtrairHoras, inicioDoEvento, textoDataHora, montarEvento, textoConfirmacao, explicarErroAgenda } from '../../api/_agenda.js';
 import { INTENCOES, acharIntencao, resumirHistorico, montarPromptMensagem, interpretarMensagem, ehTransitorio, atrasoDaTentativa, escolherModelo, configuracaoIa, textoDoHtml, urlDoSite, montarPromptAnalise, interpretarAnalise, CAMPOS_ANALISE, montarPromptProspeccao, interpretarPreparacaoProspeccao } from '../../api/_ia.js';
-import { responderPara, montarHtml, configuracaoSmtp, caixaDeEntrada, explicarErroSmtp } from '../../api/_email.js';
+import { responderPara, montarHtml, montarEmailVisual, configuracaoSmtp, configuracaoImap, caixaDeEntrada, explicarErroSmtp, explicarErroImap, mascararEndereco, normalizarEndereco } from '../../api/_email.js';
+import { acharLeadPorEmail, chaveMensagem, enderecoPrincipal, assuntoDeResposta, textoDoEmail } from '../../api/_emailStore.js';
 import { NICHOS_UI, UFS, nomeDaFatia } from '../prospeccaoNichos.js';
 import { NICHOS, acharNicho, codigosDoNicho, codigosDeVarios, conferirCodigos } from '../../scripts/_nichos.mjs';
 import { ultimaPasta, dividirLinha, montarCnpj, montarTelefone, linhaInteressa, linhaParaLead, formatarData, leadParaCsv, COL, SITUACAO_ATIVA } from '../../scripts/_receita.mjs';
@@ -24,6 +25,7 @@ import { montarPromptReuniao, interpretarPreparacaoReuniao } from '../../api/_ia
 import { criarPreparacaoProspeccao, progressoPreparacaoProspeccao, validarRegistroProspeccao, montarResumoProspeccao, sugestaoManualProspeccao, ETAPAS_LIGACAO, ROTAS_LIGACAO, RESULTADOS_PROSPECCAO } from '../prospeccaoBdr.js';
 import { orientarLigacao } from '../conducaoBdr.js';
 import { leadPassaNosFiltros, opcoesDeFiltro } from '../filtrosLeads.js';
+import { appCheckObrigatorio } from '../../api/_auth.js';
 
 let ok = 0, fail = 0;
 const t = (nome, cond) => { if (cond) { ok++; } else { fail++; console.log('FALHOU:', nome); } };
@@ -519,6 +521,23 @@ t('EAUTH vira aviso de senha', explicarErroSmtp({ code: 'EAUTH' }).includes('SMT
 t('timeout vira aviso de host', explicarErroSmtp({ code: 'ETIMEDOUT' }).includes('SMTP_HOST'));
 t('erro desconhecido nao e sequestrado', explicarErroSmtp({ code: 'XPTO', message: 'deu ruim' }) === null);
 
+const imapHostinger = configuracaoImap(hostinger);
+t('IMAP da Hostinger reaproveita a conta SMTP', imapHostinger.host === 'imap.hostinger.com' && imapHostinger.auth.user === hostinger.SMTP_USER);
+t('IMAP seguro usa a porta 993', imapHostinger.port === 993 && imapHostinger.secure === true);
+t('IMAP dedicado tem prioridade', configuracaoImap({ ...hostinger, IMAP_HOST: 'imap.exemplo.com', IMAP_USER: 'caixa@exemplo.com', IMAP_PASS: 'y' }).auth.user === 'caixa@exemplo.com');
+t('IMAP sem credenciais devolve null', configuracaoImap({}) === null);
+t('erro de login IMAP vira aviso legivel', explicarErroImap({ message: 'AUTHENTICATIONFAILED' }).includes('IMAP_USER'));
+t('endereco e normalizado', normalizarEndereco('  Pessoa@Exemplo.COM ') === 'pessoa@exemplo.com');
+t('endereco mascarado nao revela usuario inteiro', mascararEndereco('contato@grupoportel.com') === 'co•••••@grupoportel.com');
+
+const leadsEmail = { a1: { nome: 'Empresa A', email: 'CONTATO@EMPRESA.COM' } };
+t('mensagem recebida encontra lead sem diferenciar maiusculas', acharLeadPorEmail(leadsEmail, 'contato@empresa.com').id === 'a1');
+t('endereco principal le remetente', enderecoPrincipal({ value: [{ name: 'Ana', address: 'ANA@X.COM' }] }).email === 'ana@x.com');
+t('chave da mensagem e deterministica', chaveMensagem('a@x.com', 10, '<id>') === chaveMensagem('A@X.COM', 10, '<id>'));
+t('assunto de resposta adiciona prefixo uma vez', assuntoDeResposta('Pedido') === 'Re: Pedido' && assuntoDeResposta('RE: Pedido') === 'RE: Pedido');
+const corpoRecebido = textoDoEmail({ html: '<script>roubar()</script><p>Olá &amp; bem-vindo</p>' });
+t('HTML recebido vira texto sem script', corpoRecebido.includes('Olá & bem-vindo') && !corpoRecebido.includes('roubar'));
+
 
 // ── IA ──
 t('sem chave nenhuma devolve null', configuracaoIa({}) === null);
@@ -770,6 +789,15 @@ const perigoso = montarHtml('<script>alert(1)</script> e "aspas" & E-comercial')
 t('escapa marcacao', !perigoso.includes('<script>'));
 t('escapa aspas', perigoso.includes('&quot;'));
 t('escapa e-comercial', perigoso.includes('&amp;'));
+
+const visual = montarEmailVisual('Conteúdo útil.', {
+  imagemUrl: 'https://grupoportel.com/capa.jpg',
+  ctaTexto: 'Ver material', ctaUrl: 'https://grupoportel.com/material',
+  nomeEmpresa: 'Grupo Portel',
+});
+t('email visual inclui imagem https', visual.includes('https://grupoportel.com/capa.jpg'));
+t('email visual inclui CTA', visual.includes('Ver material'));
+t('email visual rejeita javascript', !montarEmailVisual('Oi', { imagemUrl: 'javascript:alert(1)' }).includes('javascript:'));
 
 
 // ── Responder a ──
@@ -1195,6 +1223,11 @@ t('opcoes incluem tipos importados', opcoesDeFiltro([], ['Prospecção escrita']
 t('opcoes preservam o valor selecionado antigo', opcoesDeFiltro(['cold call'], ['Cold Call'])[0] === 'cold call');
 const csvTipo = gerarCSV([leadTipo], [{ titulo: 'Tipo de Prospecção', campo: 'tipoProspeccao' }]);
 t('CSV preserva tipo', lerCSV(csvTipo).linhas[0][0] === 'Cold Call');
+
+// ── App Check: ativação gradual sem bloqueio acidental ──
+t('App Check começa em observação', appCheckObrigatorio({}) === false);
+t('App Check só exige quando explicitamente ativado', appCheckObrigatorio({ FIREBASE_APPCHECK_ENFORCE: 'true' }) === true);
+t('App Check não aceita valores parecidos como ativação', appCheckObrigatorio({ FIREBASE_APPCHECK_ENFORCE: '1' }) === false);
 
 console.log(`\n${ok} passaram, ${fail} falharam`);
 process.exit(fail > 0 ? 1 : 0);

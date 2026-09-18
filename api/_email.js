@@ -55,6 +55,52 @@ export function caixaDeEntrada(env = process.env) {
 }
 
 /**
+ * Configura a leitura da mesma caixa usada no envio.
+ *
+ * Na Hostinger, SMTP e IMAP usam o endereço completo e a mesma senha. As
+ * variáveis IMAP_* continuam separadas para permitir trocar a caixa de
+ * entrada no futuro sem afetar o remetente.
+ */
+export function configuracaoImap(env = process.env) {
+  const user = env.IMAP_USER || env.SMTP_USER || '';
+  const pass = env.IMAP_PASS || env.SMTP_PASS || '';
+  const host = env.IMAP_HOST
+    || (String(env.SMTP_HOST || '').includes('hostinger') ? 'imap.hostinger.com' : '');
+  const port = Number(env.IMAP_PORT) || 993;
+
+  if (!host || !user || !pass) return null;
+  return {
+    host,
+    port,
+    secure: port === 993,
+    auth: { user, pass },
+    caixa: user,
+  };
+}
+
+export function normalizarEndereco(valor = '') {
+  return String(valor).trim().toLowerCase();
+}
+
+export function mascararEndereco(valor = '') {
+  const [nome = '', dominio = ''] = normalizarEndereco(valor).split('@');
+  if (!nome || !dominio) return '';
+  const inicio = nome.slice(0, Math.min(2, nome.length));
+  return `${inicio}${nome.length > 2 ? '•'.repeat(Math.min(5, nome.length - 2)) : ''}@${dominio}`;
+}
+
+export function explicarErroImap(erro) {
+  const texto = `${erro?.code || ''} ${erro?.responseText || ''} ${erro?.message || ''}`;
+  if (/AUTHENTICATIONFAILED|authentication failed|invalid credentials|LOGIN failed/i.test(texto)) {
+    return 'A Hostinger recusou o usuário ou a senha da caixa de entrada. Confira IMAP_USER e IMAP_PASS.';
+  }
+  if (/ETIMEDOUT|ECONNREFUSED|ESOCKET|certificate|TLS/i.test(texto)) {
+    return 'Não foi possível conectar à caixa de entrada. Confira IMAP_HOST e IMAP_PORT (993 com SSL).';
+  }
+  return null;
+}
+
+/**
  * Traduz falhas de SMTP para quem está na tela.
  * "EAUTH" e "ETIMEDOUT" não dizem nada a quem só quer mandar um e-mail.
  */
@@ -104,6 +150,42 @@ export function montarHtml(corpo = '') {
 
   return `<div style="font-family:-apple-system,'Segoe UI',Arial,sans-serif;`
     + `font-size:15px;line-height:1.6;color:#222;">\n${paragrafos}\n</div>`;
+}
+
+/**
+ * Monta um e-mail visual sem aceitar HTML livre do navegador.
+ * Texto, URL da imagem e CTA são escapados/validados separadamente para que o
+ * editor não vire uma porta de injeção de marcação.
+ */
+export function montarEmailVisual(corpo = '', opcoes = {}) {
+  const urlHttps = (valor) => {
+    try {
+      const url = new URL(String(valor || ''));
+      return url.protocol === 'https:' ? url.toString() : '';
+    } catch {
+      return '';
+    }
+  };
+
+  const imagemUrl = urlHttps(opcoes.imagemUrl);
+  const ctaUrl = urlHttps(opcoes.ctaUrl);
+  const ctaTexto = String(opcoes.ctaTexto || '').trim();
+  const nomeEmpresa = String(opcoes.nomeEmpresa || 'Grupo Portel').trim();
+  const conteudo = montarHtml(corpo);
+
+  const imagem = imagemUrl
+    ? `<img src="${escapar(imagemUrl)}" alt="" width="640" style="display:block;width:100%;max-width:640px;height:auto;border:0;">`
+    : '';
+  const botao = ctaUrl && ctaTexto
+    ? `<div style="margin:24px 0 8px;text-align:center;"><a href="${escapar(ctaUrl)}" style="display:inline-block;background:#00b8c8;color:#001b2d;text-decoration:none;font-weight:700;padding:13px 22px;border-radius:7px;">${escapar(ctaTexto)}</a></div>`
+    : '';
+
+  return `<!doctype html><html><body style="margin:0;padding:0;background:#eef3f7;">`
+    + `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef3f7;padding:24px 10px;"><tr><td align="center">`
+    + `<table role="presentation" width="640" cellspacing="0" cellpadding="0" style="width:100%;max-width:640px;background:#ffffff;border:1px solid #dce5ec;border-radius:10px;overflow:hidden;">`
+    + `<tr><td>${imagem}</td></tr><tr><td style="padding:30px 34px 24px;">${conteudo}${botao}</td></tr>`
+    + `<tr><td style="padding:16px 34px;background:#001f33;color:#b9c9d4;font:12px/1.5 Arial,sans-serif;text-align:center;">${escapar(nomeEmpresa)}</td></tr>`
+    + `</table></td></tr></table></body></html>`;
 }
 
 /**

@@ -1,21 +1,10 @@
 import { useState } from 'react';
+import { apiRequest } from '../api';
 import { PAPEIS, rotuloPapel, corPapel } from '../papeis';
 
 // Chamadas ao endpoint de usuários com o token de sessão junto
 async function chamarApi(metodo, dados) {
-  const { auth } = await import('../firebase');
-  const usuario = auth.currentUser;
-  if (!usuario) throw new Error('Faça login novamente.');
-  const token = await usuario.getIdToken();
-
-  const resposta = await fetch('/api/usuarios', {
-    method: metodo,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(dados),
-  });
-  const corpo = await resposta.json().catch(() => ({}));
-  if (!resposta.ok) throw new Error(corpo.error || 'Falha na operação.');
-  return corpo;
+  return apiRequest('/api/usuarios', { metodo, dados });
 }
 
 export default function ConfigUsuarios({ usuarios = [], uidAtual, primeiraConfiguracao }) {
