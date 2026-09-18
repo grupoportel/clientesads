@@ -8,7 +8,7 @@ import { normalizarMeta, achatar, extrairCampos, extrairUtm, acharDuplicado, cam
 import { papelDoUsuario, podeEditar, podeAdministrar, podeVer, motivoBloqueio } from '../papeis.js';
 import { configuracaoAgenda, somarMinutos, subtrairHoras, inicioDoEvento, textoDataHora, montarEvento, textoConfirmacao, explicarErroAgenda } from '../../api/_agenda.js';
 import { INTENCOES, acharIntencao, resumirHistorico, montarPromptMensagem, interpretarMensagem, ehTransitorio, atrasoDaTentativa, escolherModelo, configuracaoIa, textoDoHtml, urlDoSite, montarPromptAnalise, interpretarAnalise, CAMPOS_ANALISE, montarPromptProspeccao, interpretarPreparacaoProspeccao } from '../../api/_ia.js';
-import { responderPara, montarHtml, montarEmailVisual, configuracaoSmtp, configuracaoImap, caixaDeEntrada, explicarErroSmtp, explicarErroImap, mascararEndereco, normalizarEndereco } from '../../api/_email.js';
+import { responderPara, montarHtml, montarEmailVisual, prepararAnexos, prepararImagemInline, configuracaoSmtp, configuracaoImap, caixaDeEntrada, explicarErroSmtp, explicarErroImap, mascararEndereco, normalizarEndereco } from '../../api/_email.js';
 import { acharLeadPorEmail, chaveMensagem, enderecoPrincipal, assuntoDeResposta, textoDoEmail } from '../../api/_emailStore.js';
 import { NICHOS_UI, UFS, nomeDaFatia } from '../prospeccaoNichos.js';
 import { NICHOS, acharNicho, codigosDoNicho, codigosDeVarios, conferirCodigos } from '../../scripts/_nichos.mjs';
@@ -802,6 +802,18 @@ const visual = montarEmailVisual('Conteúdo útil.', {
 t('email visual inclui imagem https', visual.includes('https://grupoportel.com/capa.jpg'));
 t('email visual inclui CTA', visual.includes('Ver material'));
 t('email visual rejeita javascript', !montarEmailVisual('Oi', { imagemUrl: 'javascript:alert(1)' }).includes('javascript:'));
+const imagemInline = prepararImagemInline('data:image/png;base64,iVBORw0KGgo=');
+const visualInline = montarEmailVisual('Conteúdo abaixo.', { imagemCid: imagemInline.cid });
+t('imagem incorporada vira anexo inline', imagemInline.contentType === 'image/png' && imagemInline.contentDisposition === 'inline');
+t('imagem incorporada aparece antes do texto', visualInline.includes('cid:cabecalho-grupo-portel') && visualInline.indexOf('cid:cabecalho-grupo-portel') < visualInline.indexOf('Conteúdo abaixo.'));
+let rejeitouSvg = false;
+try { prepararImagemInline('data:image/svg+xml;base64,PHN2Zz4='); } catch { rejeitouSvg = true; }
+t('imagem incorporada rejeita SVG', rejeitouSvg);
+const anexosEmail = prepararAnexos([{ nome: 'material.pdf', tipo: 'application/pdf', dataUrl: 'data:application/pdf;base64,JVBERi0=' }]);
+t('anexo seguro vira attachment', anexosEmail[0].filename === 'material.pdf' && anexosEmail[0].contentDisposition === 'attachment');
+let rejeitouExecutavel = false;
+try { prepararAnexos([{ nome: 'programa.exe', tipo: 'application/octet-stream', dataUrl: 'data:application/octet-stream;base64,TVqQ' }]); } catch { rejeitouExecutavel = true; }
+t('anexo executavel e rejeitado', rejeitouExecutavel);
 
 
 // ── Responder a ──

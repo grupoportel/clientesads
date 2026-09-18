@@ -128,6 +128,97 @@ const escapar = (texto = '') =>
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
+export const MAX_IMAGEM_INLINE_BYTES = 1500000;
+export const MAX_ANEXO_BYTES = 2000000;
+export const MAX_TOTAL_ARQUIVOS_BYTES = 3000000;
+export const MAX_ANEXOS = 3;
+
+const TIPOS_ANEXO = new Map([
+  ['application/pdf', ['pdf']],
+  ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', ['docx']],
+  ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', ['xlsx']],
+  ['application/vnd.openxmlformats-officedocument.presentationml.presentation', ['pptx']],
+  ['text/plain', ['txt']],
+  ['text/csv', ['csv']],
+]);
+
+const nomeSeguro = (nome = '') => String(nome)
+  .replace(/[\\/\0\r\n]/g, '_')
+  .replace(/[^\p{L}\p{N}._() -]/gu, '_')
+  .trim()
+  .slice(0, 120);
+
+export function prepararImagemInline(dataUrl = '') {
+  const valor = String(dataUrl || '').trim();
+  if (!valor) return null;
+
+  const correspondencia = valor.match(/^data:(image\/(?:jpeg|png|gif));base64,([a-z0-9+/=\r\n]+)$/i);
+  if (!correspondencia) {
+    throw new Error('Use uma imagem JPG, PNG ou GIF válida.');
+  }
+
+  const contentType = correspondencia[1].toLowerCase();
+  const content = Buffer.from(correspondencia[2].replace(/\s/g, ''), 'base64');
+  if (!content.length || content.length > MAX_IMAGEM_INLINE_BYTES) {
+    throw new Error('A imagem deve ter no máximo 1,5 MB.');
+  }
+
+  const extensao = contentType === 'image/jpeg' ? 'jpg' : contentType.split('/')[1];
+  return {
+    filename: `cabecalho.${extensao}`,
+    content,
+    contentType,
+    cid: 'cabecalho-grupo-portel',
+    contentDisposition: 'inline',
+  };
+}
+
+/**
+ * Converte os arquivos lidos pelo navegador em anexos do Nodemailer.
+ * Executáveis, compactados, HTML e documentos com macro ficam fora do CRM.
+ */
+export function prepararAnexos(arquivos = [], bytesJaUsados = 0) {
+  if (!Array.isArray(arquivos)) throw new Error('A lista de anexos é inválida.');
+  if (arquivos.length > MAX_ANEXOS) throw new Error(`Envie no máximo ${MAX_ANEXOS} anexos.`);
+
+  let total = Number(bytesJaUsados) || 0;
+  return arquivos.map((arquivo) => {
+    const nome = nomeSeguro(arquivo?.nome);
+    const tipo = String(arquivo?.tipo || '').toLowerCase();
+    const extensao = nome.split('.').pop()?.toLowerCase() || '';
+    const extensoes = TIPOS_ANEXO.get(tipo);
+    if (!nome || !extensoes?.includes(extensao)) {
+      throw new Error('Use anexos PDF, DOCX, XLSX, PPTX, TXT ou CSV.');
+    }
+
+    const dataUrl = String(arquivo?.dataUrl || '');
+    const prefixo = `data:${tipo};base64,`;
+    if (!dataUrl.toLowerCase().startsWith(prefixo.toLowerCase())) {
+      throw new Error(`O arquivo ${nome} não pôde ser validado.`);
+    }
+    const base64 = dataUrl.slice(prefixo.length);
+    if (!/^[a-z0-9+/=\r\n]+$/i.test(base64)) {
+      throw new Error(`O arquivo ${nome} não pôde ser validado.`);
+    }
+
+    const content = Buffer.from(base64.replace(/\s/g, ''), 'base64');
+    if (!content.length || content.length > MAX_ANEXO_BYTES) {
+      throw new Error(`O arquivo ${nome} deve ter no máximo 2 MB.`);
+    }
+    total += content.length;
+    if (total > MAX_TOTAL_ARQUIVOS_BYTES) {
+      throw new Error('Imagem e anexos juntos devem ter no máximo 3 MB.');
+    }
+
+    return {
+      filename: nome,
+      content,
+      contentType: tipo,
+      contentDisposition: 'attachment',
+    };
+  });
+}
+
 /**
  * Monta o HTML da mensagem.
  *
@@ -168,13 +259,17 @@ export function montarEmailVisual(corpo = '', opcoes = {}) {
   };
 
   const imagemUrl = urlHttps(opcoes.imagemUrl);
+  const imagemCid = /^[a-z0-9._@-]{1,100}$/i.test(String(opcoes.imagemCid || ''))
+    ? String(opcoes.imagemCid)
+    : '';
   const ctaUrl = urlHttps(opcoes.ctaUrl);
   const ctaTexto = String(opcoes.ctaTexto || '').trim();
   const nomeEmpresa = String(opcoes.nomeEmpresa || 'Grupo Portel').trim();
   const conteudo = montarHtml(corpo);
 
-  const imagem = imagemUrl
-    ? `<img src="${escapar(imagemUrl)}" alt="" width="640" style="display:block;width:100%;max-width:640px;height:auto;border:0;">`
+  const imagemSrc = imagemCid ? `cid:${imagemCid}` : imagemUrl;
+  const imagem = imagemSrc
+    ? `<img src="${escapar(imagemSrc)}" alt="" width="640" style="display:block;width:100%;max-width:640px;height:auto;border:0;">`
     : '';
   const botao = ctaUrl && ctaTexto
     ? `<div style="margin:24px 0 8px;text-align:center;"><a href="${escapar(ctaUrl)}" style="display:inline-block;background:#00b8c8;color:#001b2d;text-decoration:none;font-weight:700;padding:13px 22px;border-radius:7px;">${escapar(ctaTexto)}</a></div>`

@@ -7,7 +7,9 @@
 
 import nodemailer from 'nodemailer';
 import { exigirUsuario, obterBanco, comPrazo } from './_auth.js';
-import { configuracaoSmtp, explicarErroSmtp, montarEmailVisual, responderPara } from './_email.js';
+import {
+  configuracaoSmtp, explicarErroSmtp, montarEmailVisual, prepararAnexos, prepararImagemInline, responderPara,
+} from './_email.js';
 import { chaveMensagem } from './_emailStore.js';
 
 const INTERVALO_GLOBAL_MS = 8000;
@@ -52,8 +54,8 @@ export default async function handler(req, res) {
 
   const {
     leadId, para, assunto, corpo,
-    imagemUrl = '', ctaTexto = '', ctaUrl = '', campanha = false,
-    respostaAId = '',
+    imagemUrl = '', imagemDataUrl = '', ctaTexto = '', ctaUrl = '', campanha = false,
+    respostaAId = '', anexos = [],
   } = req.body || {};
 
   if (!leadId) return res.status(400).json({ error: 'Selecione um lead do CRM.' });
@@ -63,10 +65,23 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'O assunto ou a mensagem ultrapassa o limite permitido.' });
   if (String(ctaTexto).length > 60 || String(imagemUrl).length > 2048 || String(ctaUrl).length > 2048)
     return res.status(400).json({ error: 'A imagem ou o botão ultrapassa o limite permitido.' });
+  if (String(imagemDataUrl).length > 2100000)
+    return res.status(400).json({ error: 'A imagem incorporada ultrapassa o limite de 1,5 MB.' });
+  if (!Array.isArray(anexos) || anexos.length > 3 || JSON.stringify(anexos).length > 4200000)
+    return res.status(400).json({ error: 'Os anexos ultrapassam o limite permitido.' });
   if (!httpsValida(imagemUrl) || !httpsValida(ctaUrl))
     return res.status(400).json({ error: 'Imagem e botão devem usar links públicos HTTPS.' });
   if (Boolean(String(ctaTexto).trim()) !== Boolean(String(ctaUrl).trim()))
     return res.status(400).json({ error: 'Preencha o texto e o link do botão, ou deixe ambos vazios.' });
+
+  let imagemInline;
+  let anexosPreparados;
+  try {
+    imagemInline = prepararImagemInline(imagemDataUrl);
+    anexosPreparados = prepararAnexos(anexos, imagemInline?.content.length || 0);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
 
   const db = obterBanco();
   const leadSnap = await comPrazo(db.ref(`crm_data/leads/${leadId}`).once('value'));
@@ -133,7 +148,14 @@ export default async function handler(req, res) {
       inReplyTo: mensagemOrigem?.messageId || undefined,
       references: mensagemOrigem?.messageId ? [mensagemOrigem.messageId] : undefined,
       text: `${corpo}${ctaUrl ? `\n\n${ctaTexto}: ${ctaUrl}` : ''}`,
-      html: montarEmailVisual(corpo, { imagemUrl, ctaTexto, ctaUrl, nomeEmpresa: smtp.nome }),
+      html: montarEmailVisual(corpo, {
+        imagemUrl: imagemInline ? '' : imagemUrl,
+        imagemCid: imagemInline?.cid,
+        ctaTexto,
+        ctaUrl,
+        nomeEmpresa: smtp.nome,
+      }),
+      attachments: [imagemInline, ...anexosPreparados].filter(Boolean),
     });
   } catch (error) {
     // Libera a reserva do lead quando o SMTP falha; assim uma tentativa
@@ -179,6 +201,8 @@ export default async function handler(req, res) {
         destinatarioEmail: String(para).trim().toLowerCase(),
         assunto: String(assunto).trim().slice(0, 250),
         texto: String(corpo).slice(0, 50000),
+        imagemIncluida: Boolean(imagemInline || imagemUrl),
+        anexos: anexosPreparados.map(item => ({ nome: item.filename, tipo: item.contentType })),
         enviadoEm: agora,
         leadId,
         leadNome: lead.nome || '',

@@ -2,7 +2,19 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiPost } from '../api';
 import EscreverComIA from './EscreverComIA';
 
-const VAZIO = { assunto: '', corpo: '', imagemUrl: '', ctaTexto: '', ctaUrl: '' };
+const VAZIO = { assunto: '', corpo: '', imagemUrl: '', imagemDataUrl: '', imagemNome: '', anexos: [], ctaTexto: '', ctaUrl: '' };
+const TIPOS_IMAGEM = ['image/jpeg', 'image/png', 'image/gif'];
+const MAX_IMAGEM_BYTES = 1500000;
+const TIPOS_POR_EXTENSAO = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  txt: 'text/plain',
+  csv: 'text/csv',
+};
+const MAX_ANEXO_BYTES = 2000000;
+const MAX_TOTAL_ARQUIVOS_BYTES = 3000000;
 const formatarData = (valor) => {
   if (!valor) return '';
   const data = new Date(valor);
@@ -99,6 +111,8 @@ export default function EmailEnvioPage({ leads = [], empresa = 'Grupo Portel', m
         assunto: form.assunto,
         corpo: form.corpo,
         imagemUrl: form.imagemUrl,
+        imagemDataUrl: form.imagemDataUrl,
+        anexos: form.anexos.map(({ nome, tipo, dataUrl }) => ({ nome, tipo, dataUrl })),
         ctaTexto: form.ctaTexto,
         ctaUrl: form.ctaUrl,
         respostaAId: respostaA?.id || '',
@@ -115,6 +129,63 @@ export default function EmailEnvioPage({ leads = [], empresa = 'Grupo Portel', m
   };
 
   const mudar = (campo, valor) => setForm(atual => ({ ...atual, [campo]: valor }));
+  const escolherImagem = (arquivo) => {
+    if (!arquivo) {
+      setForm(atual => ({ ...atual, imagemDataUrl: '', imagemNome: '' }));
+      return;
+    }
+    if (!TIPOS_IMAGEM.includes(arquivo.type) || arquivo.size > MAX_IMAGEM_BYTES) {
+      setAviso({ tipo: 'erro', texto: 'Use uma imagem JPG, PNG ou GIF de até 1,5 MB.' });
+      return;
+    }
+    const leitor = new FileReader();
+    leitor.onload = () => {
+      setForm(atual => ({
+        ...atual,
+        imagemDataUrl: String(leitor.result || ''),
+        imagemNome: arquivo.name,
+        imagemUrl: '',
+      }));
+      setAviso(null);
+    };
+    leitor.onerror = () => setAviso({ tipo: 'erro', texto: 'Não foi possível ler a imagem escolhida.' });
+    leitor.readAsDataURL(arquivo);
+  };
+  const escolherAnexos = async (lista) => {
+    const arquivos = Array.from(lista || []);
+    if (!arquivos.length) return;
+    if (form.anexos.length + arquivos.length > 3) {
+      setAviso({ tipo: 'erro', texto: 'Envie no máximo 3 anexos.' });
+      return;
+    }
+    const bytesImagem = form.imagemDataUrl ? Math.ceil(form.imagemDataUrl.length * 0.75) : 0;
+    const total = bytesImagem + form.anexos.reduce((soma, item) => soma + item.tamanho, 0)
+      + arquivos.reduce((soma, item) => soma + item.size, 0);
+    const arquivosTipados = arquivos.map(arquivo => ({
+      arquivo,
+      tipo: TIPOS_POR_EXTENSAO[arquivo.name.split('.').pop()?.toLowerCase()],
+    }));
+    if (arquivosTipados.some(({ arquivo, tipo }) => !tipo || arquivo.size > MAX_ANEXO_BYTES)
+      || total > MAX_TOTAL_ARQUIVOS_BYTES) {
+      setAviso({ tipo: 'erro', texto: 'Use PDF, DOCX, XLSX, PPTX, TXT ou CSV de até 2 MB cada; imagem e anexos juntos podem somar até 3 MB.' });
+      return;
+    }
+    try {
+      const novos = await Promise.all(arquivosTipados.map(({ arquivo, tipo }) => new Promise((resolve, reject) => {
+        const leitor = new FileReader();
+        leitor.onload = () => {
+          const base64 = String(leitor.result || '').split(',')[1] || '';
+          resolve({ nome: arquivo.name, tipo, tamanho: arquivo.size, dataUrl: `data:${tipo};base64,${base64}` });
+        };
+        leitor.onerror = () => reject(new Error('Falha ao ler o arquivo.'));
+        leitor.readAsDataURL(arquivo);
+      })));
+      setForm(atual => ({ ...atual, anexos: [...atual.anexos, ...novos] }));
+      setAviso(null);
+    } catch {
+      setAviso({ tipo: 'erro', texto: 'Não foi possível ler um dos anexos.' });
+    }
+  };
   const pronto = lead && form.assunto.trim() && form.corpo.trim()
     && Boolean(form.ctaTexto.trim()) === Boolean(form.ctaUrl.trim());
 
@@ -229,24 +300,41 @@ export default function EmailEnvioPage({ leads = [], empresa = 'Grupo Portel', m
               <details style={{ marginTop: 12 }}>
                 <summary style={{ cursor: 'pointer', color: 'var(--text2)', fontSize: 13, fontWeight: 600 }}>Imagem e botão (opcional)</summary>
                 <div style={{ marginTop: 12, display: 'grid', gap: 12 }}>
-                  <div className="form-group full"><label className="form-label">URL pública HTTPS da imagem</label><input className="form-control" type="url" value={form.imagemUrl} onChange={e => mudar('imagemUrl', e.target.value)} placeholder="https://.../capa.jpg" disabled={enviando} /></div>
+                  <div className="form-group full">
+                    <label className="form-label">Imagem do cabeçalho</label>
+                    <input key={form.imagemDataUrl ? 'imagem-selecionada' : 'imagem-vazia'} className="form-control" type="file" accept="image/jpeg,image/png,image/gif" onChange={e => escolherImagem(e.target.files?.[0])} disabled={enviando} />
+                    <small style={{ display: 'block', marginTop: 6, color: 'var(--text3)', lineHeight: 1.5 }}>JPG, PNG ou GIF de até 1,5 MB. A imagem será incorporada ao e-mail e exibida no topo.</small>
+                    {form.imagemNome && <div style={{ marginTop: 7, color: 'var(--accent2)', fontSize: 12 }}>{form.imagemNome} <button type="button" onClick={() => setForm(atual => ({ ...atual, imagemDataUrl: '', imagemNome: '' }))} style={{ border: 0, background: 'transparent', color: 'var(--red)', cursor: 'pointer' }}>Remover</button></div>}
+                  </div>
+                  <div className="form-group full"><label className="form-label">Ou use uma URL pública HTTPS</label><input className="form-control" type="url" value={form.imagemUrl} onChange={e => setForm(atual => ({ ...atual, imagemUrl: e.target.value, imagemDataUrl: '', imagemNome: '' }))} placeholder="https://.../capa.jpg" disabled={enviando} /></div>
                   <div className="email-cta-grid">
                     <div className="form-group"><label className="form-label">Texto do botão</label><input className="form-control" maxLength={60} value={form.ctaTexto} onChange={e => mudar('ctaTexto', e.target.value)} placeholder="Acessar material" disabled={enviando} /></div>
                     <div className="form-group"><label className="form-label">Link HTTPS do botão</label><input className="form-control" type="url" value={form.ctaUrl} onChange={e => mudar('ctaUrl', e.target.value)} placeholder="https://..." disabled={enviando} /></div>
                   </div>
                 </div>
               </details>
+              <div className="form-group full" style={{ marginTop: 14 }}>
+                <label className="form-label">Anexar arquivo (opcional)</label>
+                <input key={`anexos-${form.anexos.length}`} className="form-control" type="file" multiple accept=".pdf,.docx,.xlsx,.pptx,.txt,.csv" onChange={e => escolherAnexos(e.target.files)} disabled={enviando || form.anexos.length >= 3} />
+                <small style={{ display: 'block', marginTop: 6, color: 'var(--text3)', lineHeight: 1.5 }}>Até 3 arquivos seguros, com 2 MB cada e 3 MB no total junto da imagem. Em primeira abordagem, anexe somente material relevante e esperado pelo contato.</small>
+                {form.anexos.map((arquivo, indice) => (
+                  <div key={`${arquivo.nome}-${indice}`} style={{ marginTop: 7, color: 'var(--accent2)', fontSize: 12 }}>
+                    {arquivo.nome} <button type="button" onClick={() => setForm(atual => ({ ...atual, anexos: atual.anexos.filter((_, i) => i !== indice) }))} style={{ border: 0, background: 'transparent', color: 'var(--red)', cursor: 'pointer' }}>Remover</button>
+                  </div>
+                ))}
+              </div>
               <button className="btn btn-primary" style={{ marginTop: 16 }} disabled={enviando || !pronto} onClick={enviar}>{enviando ? 'Enviando…' : respostaA ? 'Enviar resposta' : 'Enviar e-mail'}</button>
             </section>
 
             <section className="card" style={{ padding: 18, background: '#eaf0f4', alignSelf: 'start' }}>
               <div style={{ color: '#526574', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>Prévia aproximada</div>
               <div style={{ maxWidth: 640, margin: '0 auto', background: '#fff', border: '1px solid #dce5ec', borderRadius: 10, overflow: 'hidden', color: '#222' }}>
-                {form.imagemUrl && <img src={form.imagemUrl} alt="" style={{ display: 'block', width: '100%', maxHeight: 260, objectFit: 'cover' }} />}
+                {(form.imagemDataUrl || form.imagemUrl) && <img src={form.imagemDataUrl || form.imagemUrl} alt="Prévia do cabeçalho" style={{ display: 'block', width: '100%', maxHeight: 260, objectFit: 'cover' }} />}
                 <div style={{ padding: '28px 30px 24px', fontFamily: 'Arial, sans-serif', fontSize: 15, lineHeight: 1.6 }}>
                   <div style={{ fontWeight: 700, marginBottom: 18 }}>{form.assunto || 'Assunto do e-mail'}</div>
                   <div style={{ whiteSpace: 'pre-wrap', color: form.corpo ? '#222' : '#8b98a1' }}>{form.corpo || 'A mensagem aparecerá aqui conforme você escreve.'}</div>
                   {form.ctaTexto && form.ctaUrl && <div style={{ textAlign: 'center', marginTop: 24 }}><span style={{ display: 'inline-block', background: '#00b8c8', color: '#001b2d', fontWeight: 700, padding: '12px 20px', borderRadius: 7 }}>{form.ctaTexto}</span></div>}
+                  {form.anexos.length > 0 && <div style={{ marginTop: 22, paddingTop: 14, borderTop: '1px solid #dce5ec', color: '#526574', fontSize: 12 }}>Anexos: {form.anexos.map(item => item.nome).join(', ')}</div>}
                 </div>
                 <div style={{ padding: '15px 30px', background: '#001f33', color: '#b9c9d4', font: '12px/1.5 Arial, sans-serif', textAlign: 'center' }}>{empresa}</div>
               </div>
