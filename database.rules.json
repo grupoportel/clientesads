@@ -98,7 +98,8 @@
 
       "emailMensagens": {
         ".read": false,
-        ".write": false
+        ".write": false,
+        ".indexOn": ["recebidoEm"]
       },
 
       "emailSync": {
