@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiPost } from '../api';
 import EscreverComIA from './EscreverComIA';
 
-const BANNER_PADRAO_URL = 'https://clientesads.vercel.app/email/banner-grupo-portel-v1.png';
+const BANNER_PADRAO_URL = 'https://clientesads.vercel.app/email/banner-grupo-portel-v2.jpg';
 const VAZIO = { assunto: '', corpo: '', imagemUrl: BANNER_PADRAO_URL, imagemDataUrl: '', imagemNome: '', anexos: [], ctaTexto: '', ctaUrl: '' };
 const TIPOS_IMAGEM = ['image/jpeg', 'image/png', 'image/gif'];
 const MAX_IMAGEM_BYTES = 1500000;
