@@ -802,6 +802,8 @@ const visual = montarEmailVisual('Conteúdo útil.', {
 });
 t('email visual inclui imagem https', visual.includes('https://grupoportel.com/capa.jpg'));
 t('email visual inclui CTA', visual.includes('Ver material'));
+t('email visual mostra marca antes da imagem', visual.indexOf('GRUPO PORTEL') < visual.indexOf('https://grupoportel.com/capa.jpg'));
+t('email visual reserva o espaco do banner', visual.includes('width="640" height="277"') && visual.includes('background:#06324f'));
 t('email visual rejeita javascript', !montarEmailVisual('Oi', { imagemUrl: 'javascript:alert(1)' }).includes('javascript:'));
 const imagemInline = prepararImagemInline('data:image/png;base64,iVBORw0KGgo=');
 const visualInline = montarEmailVisual('Conteúdo abaixo.', { imagemCid: imagemInline.cid });

@@ -340,7 +340,14 @@ export default function EmailEnvioPage({ leads = [], empresa = 'Grupo Portel', m
             <section className="card" style={{ padding: 18, background: '#eaf0f4', alignSelf: 'start' }}>
               <div style={{ color: '#526574', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>Prévia aproximada</div>
               <div style={{ maxWidth: 640, margin: '0 auto', background: '#fff', border: '1px solid #dce5ec', borderRadius: 10, overflow: 'hidden', color: '#222' }}>
-                {(form.imagemDataUrl || form.imagemUrl) && <img src={form.imagemDataUrl || form.imagemUrl} alt="Prévia do cabeçalho" style={{ display: 'block', width: '100%', maxHeight: 260, objectFit: 'cover' }} />}
+                {(form.imagemDataUrl || form.imagemUrl) && (
+                  <>
+                    <div style={{ padding: '13px 22px', background: '#001f33', borderBottom: '3px solid #00d7df', color: '#fff', font: '700 14px/1.2 Arial, sans-serif', letterSpacing: '1.8px' }}>{empresa.toUpperCase()}</div>
+                    <div style={{ aspectRatio: '640 / 277', background: '#06324f' }}>
+                      <img src={form.imagemDataUrl || form.imagemUrl} alt="Prévia do cabeçalho" width="640" height="277" fetchPriority="high" style={{ display: 'block', width: '100%', height: 'auto' }} />
+                    </div>
+                  </>
+                )}
                 <div style={{ padding: '28px 30px 24px', fontFamily: 'Arial, sans-serif', fontSize: 15, lineHeight: 1.6 }}>
                   <div style={{ fontWeight: 700, marginBottom: 18 }}>{form.assunto || 'Assunto do e-mail'}</div>
                   <div style={{ whiteSpace: 'pre-wrap', color: form.corpo ? '#222' : '#8b98a1' }}>{form.corpo || 'A mensagem aparecerá aqui conforme você escreve.'}</div>

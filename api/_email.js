@@ -269,7 +269,10 @@ export function montarEmailVisual(corpo = '', opcoes = {}) {
 
   const imagemSrc = imagemCid ? `cid:${imagemCid}` : imagemUrl;
   const imagem = imagemSrc
-    ? `<img src="${escapar(imagemSrc)}" alt="" width="640" style="display:block;width:100%;max-width:640px;height:auto;border:0;">`
+    ? `<tr><td style="padding:13px 22px;background:#001f33;border-bottom:3px solid #00d7df;color:#ffffff;font:700 14px/1.2 Arial,sans-serif;letter-spacing:1.8px;">${escapar(nomeEmpresa.toUpperCase())}</td></tr>`
+      + `<tr><td height="277" style="height:277px;background:#06324f;">`
+      + `<img src="${escapar(imagemSrc)}" alt="${escapar(nomeEmpresa)}" width="640" height="277" loading="eager" fetchpriority="high" style="display:block;width:100%;max-width:640px;height:auto;border:0;">`
+      + `</td></tr>`
     : '';
   const botao = ctaUrl && ctaTexto
     ? `<div style="margin:24px 0 8px;text-align:center;"><a href="${escapar(ctaUrl)}" style="display:inline-block;background:#00b8c8;color:#001b2d;text-decoration:none;font-weight:700;padding:13px 22px;border-radius:7px;">${escapar(ctaTexto)}</a></div>`
@@ -278,7 +281,7 @@ export function montarEmailVisual(corpo = '', opcoes = {}) {
   return `<!doctype html><html><body style="margin:0;padding:0;background:#eef3f7;">`
     + `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef3f7;padding:24px 10px;"><tr><td align="center">`
     + `<table role="presentation" width="640" cellspacing="0" cellpadding="0" style="width:100%;max-width:640px;background:#ffffff;border:1px solid #dce5ec;border-radius:10px;overflow:hidden;">`
-    + `<tr><td>${imagem}</td></tr><tr><td style="padding:30px 34px 24px;">${conteudo}${botao}</td></tr>`
+    + `${imagem}<tr><td style="padding:30px 34px 24px;">${conteudo}${botao}</td></tr>`
     + `<tr><td style="padding:16px 34px;background:#001f33;color:#b9c9d4;font:12px/1.5 Arial,sans-serif;text-align:center;">${escapar(nomeEmpresa)}</td></tr>`
     + `</table></td></tr></table></body></html>`;
 }
